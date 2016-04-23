@@ -32,18 +32,18 @@ EchoWithColor(COLOR GREEN "-- Build Type: ${CMAKE_BUILD_TYPE}")
 ## 导入所有 macro 定义
 include_macro_recurse(${PROJECT_3RD_PARTY_ROOT_DIR})
 # atframwork 内有依赖关系，所以不能直接导，要手动导入
-include_macro_recurse("${ATFRAMEWORK_ATFRAME_UTILS_BASE_DIR}/atframework/atframework.macro.cmake")
+include("${ATFRAMEWORK_BASE_DIR}/atframework.macro.cmake")
 
 ## 导入所有工程项目
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/atframework")
-add_project_recurse("${CMAKE_CURRENT_LIST_DIR}/src")
+# add_project_recurse("${CMAKE_CURRENT_LIST_DIR}/src")
 
 # if (PROJECT_ENABLE_SAMPLE)
 #     add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/sample")
 # endif()
-# 
+#
 # if (PROJECT_ENABLE_UNITTEST)
 #     include ("${ATFRAMEWORK_ATFRAME_UTILS_PKG_DIR}/test/test.utils-macro.cmake")
 #     add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/test")
 # endif()
-# 
+#

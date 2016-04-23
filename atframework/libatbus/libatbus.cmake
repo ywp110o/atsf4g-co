@@ -10,7 +10,7 @@ else()
     set (ATFRAMEWORK_ATBUS_PKG_DIR "${ATFRAMEWORK_ATBUS_BASE_DIR}/repo")
     if(NOT EXISTS ${ATFRAMEWORK_ATBUS_PKG_DIR})
         find_package(Git)
-        execute_process(COMMAND ${GIT_EXECUTABLE} clone "https://github.com/atframework/libATBUS.git" ${ATFRAMEWORK_ATBUS_PKG_DIR}
+        execute_process(COMMAND ${GIT_EXECUTABLE} clone "https://github.com/atframework/libatbus.git" ${ATFRAMEWORK_ATBUS_PKG_DIR}
             WORKING_DIRECTORY ${ATFRAMEWORK_ATBUS_BASE_DIR}
         )
     endif()

@@ -26,3 +26,23 @@
 *.exe
 *.out
 *.app
+
+# build directories
+/build
+/build_*
+
+# external libs
+## libiniloader
+/3rd_party/libiniloader/ini_loader.h
+/3rd_party/libiniloader/ini_loader.cpp
+
+## libuv
+/3rd_party/libuv/pkg
+
+## msgpack
+/3rd_party/msgpack/pkg
+/3rd_party/msgpack/prebuilt
+
+## atframework
+/atframework/libatbus/repo
+/atframework/libatframe_utils/repo
