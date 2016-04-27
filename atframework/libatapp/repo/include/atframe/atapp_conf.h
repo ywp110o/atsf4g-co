@@ -18,8 +18,12 @@ namespace atapp {
     struct app_conf {
         // bus configure
         atbus::node::bus_id_t id;
+        std::string conf_file;
+        const char *execute_path;
+
         std::vector<std::string> bus_listen;
         atbus::node::conf_t bus_conf;
+        std::string app_version;
 
         // app configure
         time_t stop_timeout;  // module timeout when receive a stop message
