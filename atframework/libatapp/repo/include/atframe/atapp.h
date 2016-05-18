@@ -90,7 +90,7 @@ namespace atapp {
 
         void setup_atbus();
 
-        int send_last_command();
+        int send_last_command(atbus::adapter::loop_t *ev_loop);
 
         // ============ inner functional handlers ============
     private:
@@ -98,6 +98,7 @@ namespace atapp {
         int prog_option_handler_version(util::cli::callback_param params);
         int prog_option_handler_set_id(util::cli::callback_param params);
         int prog_option_handler_set_conf_file(util::cli::callback_param params);
+        int prog_option_handler_reset_mode(util::cli::callback_param params);
         int prog_option_handler_start(util::cli::callback_param params);
         int prog_option_handler_stop(util::cli::callback_param params);
         int prog_option_handler_reload(util::cli::callback_param params);

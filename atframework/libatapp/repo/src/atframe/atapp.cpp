@@ -55,7 +55,7 @@ namespace atapp {
         case mode_t::CUSTOM:
         case mode_t::STOP:
         case mode_t::RELOAD: {
-            return send_last_command();
+            return send_last_command(ev_loop);
         }
         default: { return 0; }
         }
@@ -64,6 +64,7 @@ namespace atapp {
         setup_log();
         setup_signal();
         setup_atbus();
+        setup_timer();
 
         // TODO step 7. all modules init
 
@@ -216,6 +217,11 @@ namespace atapp {
         return 0;
     }
 
+    int app::prog_option_handler_reset_mode(util::cli::callback_param params) {
+        conf_.reset_mode = true;
+        return 0;
+    }
+
     int app::prog_option_handler_start(util::cli::callback_param params) {
         mode_ = mode_t::START;
         return 0;
@@ -254,8 +260,8 @@ namespace atapp {
 
         util::cli::cmd_option::ptr_type opt_mgr = get_option_manager();
         // show help and exit
-        opt_mgr->bind_cmd("-h, --help", &app::prog_option_handler_help, this, &opt_mgr)
-            ->set_help_msg("-h. --help                             show this help message.");
+        opt_mgr->bind_cmd("-h, --help, help", &app::prog_option_handler_help, this, &opt_mgr)
+            ->set_help_msg("-h. --help, help                       show this help message.");
 
         // show version and exit
         opt_mgr->bind_cmd("-v, --version", &app::prog_option_handler_version, this)
@@ -268,6 +274,10 @@ namespace atapp {
         // set configure file path
         opt_mgr->bind_cmd("-c, --conf, --config", &app::prog_option_handler_set_conf_file, this)
             ->set_help_msg("-c, --conf, --config <file path>       set configure file path.");
+
+        // set configure file path
+        opt_mgr->bind_cmd("-r, --reset", &app::prog_option_handler_reset_mode, this)
+            ->set_help_msg("-r, --reset                            reset all channel data after start.");
 
         // start server
         opt_mgr->bind_cmd("start", &app::prog_option_handler_start, this)
@@ -290,7 +300,8 @@ namespace atapp {
     }
 
     int app::app::command_handler_start(util::cli::callback_param params) {
-        // do nothing
+        // TODO if in a reset mode, reset shm channel
+        // TODO listen to all channel
         return 0;
     }
 
@@ -298,7 +309,9 @@ namespace atapp {
 
     int app::command_handler_reload(util::cli::callback_param params) { reload(); }
 
-    int app::command_handler_invalid(util::cli::callback_param params) { WLOGERROR("invalid command %s", par.get("@Cmd")->to_string()); }
+    int app::command_handler_invalid(util::cli::callback_param params) {
+        WLOGERROR("receive invalid command %s", par.get("@Cmd")->to_string());
+    }
 
     void app::setup_command() {
         util::cli::cmd_option::ptr_type opt_mgr = get_option_manager();
@@ -317,5 +330,15 @@ namespace atapp {
 
         // invalid command
         opt_mgr->bind_cmd("@OnError", &app::command_handler_invalid, this);
+    }
+
+    int app::send_last_command(atbus::adapter::loop_t *ev_loop) {
+        // TODO step 1. using the fastest way to connect to server
+        // TODO step 2. connect failed return error code
+        // TODO step 3. waiting for connect success
+        // TODO step 4. send data
+        // TODO step 5. setup timeout timer
+        // TODO step 6. waiting for send done(for shm, no need to wait, for io_stream fd, waiting write callback)
+        return 0;
     }
 }
