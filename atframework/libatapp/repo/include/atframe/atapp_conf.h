@@ -19,8 +19,9 @@ namespace atapp {
         // bus configure
         atbus::node::bus_id_t id;
         std::string conf_file;
+        std::string pid_file;
         const char *execute_path;
-        bool reset_mode;
+        bool resume_mode;
 
         std::vector<std::string> bus_listen;
         atbus::node::conf_t bus_conf;

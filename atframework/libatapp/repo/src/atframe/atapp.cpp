@@ -1,10 +1,13 @@
+#include <assert.h>
+#include <fstream>
 #include <iostream>
 #include <signal.h>
+
+#include "std/foreach.h"
 
 #include "cli/shell_font.h"
 
 #include "atframe/atapp.h"
-
 
 namespace atapp {
     app *app::last_instance_;
@@ -15,6 +18,10 @@ namespace atapp {
         conf_.execute_path = NULL;
         conf_.stop_timeout = 30000; // 30s
         conf_.tick_interval = 32;   // 32ms
+
+        tick_timer_.sec_update = util::time::time_utility::raw_time_t::zero();
+        tick_timer_.sec = 0;
+        tick_timer_.usec = 0;
     }
 
     app::~app() {
@@ -27,14 +34,11 @@ namespace atapp {
         if (check(flag_t::RUNNING)) {
             return 0;
         }
-        set_flag(flag_t::RUNNING, true);
 
         // step 1. bind default options
+        // step 2. load options from cmd line
         setup_option(argc, argv, priv_data);
         setup_command();
-
-        // step 2. load options from cmd line
-        cmd_opts_.start(argc, argv, false, priv_data);
 
         // step 3. if not in show mode, exit 0
         if (mode_t::INFO == mode_) {
@@ -66,34 +70,79 @@ namespace atapp {
         setup_atbus();
         setup_timer();
 
-        // TODO step 7. all modules init
+        // step 7. all modules init
+        owent_foreach(module_ptr_t & mod, modules_) { mod->init(); }
 
-        // TODO step 8. all modules reload
+        // step 8. all modules reload
+        owent_foreach(module_ptr_t & mod, modules_) { mod->reload(); }
 
-        // TODO step 9. set running
+        // step 9. set running
         return run_ev_loop(ev_loop);
     }
 
     int app::reload() {
-        // TODO step 1. reset configure
-        // TODO step 2. reload from program configure file
-        // TODO step 3. reload from external configure files
-        // TODO step 4. merge configure
+        app_conf old_conf = conf_;
+        WLOGINFO("============ start to load configure ============");
+        // step 1. reset configure
+        cfg_loader_.clear();
+
+        // step 2. reload from program configure file
+        if (conf_.conf_file.empty()) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "missing configure file" << std::endl;
+            print_help();
+            return -1;
+        }
+        if (cfg_loader_.load_file(conf_.conf_file.c_str(), false) < 0) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "load configure file " << conf_.conf_file << " failed"
+                 << std::endl;
+            print_help();
+            return -1;
+        }
+
+        // step 3. reload from external configure files
+        // step 4. merge configure
+        {
+            std::vector<std::string> external_confs;
+            cfg_loader_.dump("atapp.config.external", external_confs);
+            owent_foreach(std::string & conf_fp : external_confs) {
+                if (!conf_fp.empty()) {
+                    if (cfg_loader_.load_file(conf_.conf_file.c_str(), true) < 0) {
+                        if (check(flag_t::RUNNING)) {
+                            WLOGERROR("load external configure file %s failed", conf_fp.c_str());
+                        } else {
+                            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "load external configure file " << conf_fp
+                                 << " failed" << std::endl;
+                            return 1;
+                        }
+                    }
+                }
+            }
+        }
 
         // step 5. if not in start mode, return
         if (mode_t::START != mode_) {
             return 0;
         }
 
-        // TODO step 6. reset log
-        // TODO step 7. if inited, let all modules reload
+        if (check(flag_t::RUNNING)) {
+            // step 6. reset log
+            setup_log();
 
-        // TODO step 8. if running and tick interval changed, reset timer
+            // step 7. if inited, let all modules reload
+            owent_foreach(module_ptr_t & mod, modules_) { mod->reload(); }
 
+            // step 8. if running and tick interval changed, reset timer
+            if (old_conf->tick_interval != conf_->tick_interval) {
+                setup_timer();
+            }
+        }
+
+        WLOGINFO("------------ load configure done ------------");
         return 0;
     }
 
     int app::stop() {
+        WLOGINFO("============ receive stop signal and ready to stop all services ============");
         // step 1. set stop flag.
         bool is_stoping = set_flag(flag_t::STOPING, true);
 
@@ -105,8 +154,46 @@ namespace atapp {
     }
 
     int app::tick() {
-        // TODO step 1. proc atbus
-        // TODO step 2. proc available modules
+        int active_count;
+        util::time::time_utility::update();
+        // record start time point
+        util::time::time_utility::raw_time_t start_tp = util::time::time_utility::now();
+
+        do {
+            if (tick_timer_.sec != util::time::time_utility::get_now()) {
+                tick_timer_.sec = util::time::time_utility::get_now();
+                tick_timer_.usec = 0;
+                tick_timer_.sec_update = util::time::time_utility::now();
+            } else {
+                tick_timer_.usec = static_cast<time_t>(
+                    std::chrono::duration_cast<std::chrono::microseconds>(util::time::time_utility::now() - tick_timer_.sec_update)
+                        .count());
+            }
+
+            active_count = 0;
+            int res;
+            // step 1. proc available modules
+            owent_foreach(module_ptr_t & mod, modules_) {
+                res = mod->tick();
+                if (res < 0) {
+                    WLOGERROR("module %s run tick and return %d", mod->name(), res);
+                } else {
+                    active_count += res;
+                }
+            }
+
+            // step 2. proc atbus
+            res = bus_node_->proc(tick_timer_.sec, tick_timer_.usec);
+            if (res < 0) {
+                WLOGERROR("atbus run tick and return %d", res);
+            } else {
+                active_count += res;
+            }
+
+            // only tick time less than tick interval will run loop again
+            util::time::time_utility::update();
+            util::time::time_utility::raw_time_t end_tp = util::time::time_utility::now();
+        } while (active_count > 0 && (end_tp - start_tp) >= std::chrono::milliseconds(conf_.tick_interval));
         return 0;
     }
 
@@ -116,6 +203,17 @@ namespace atapp {
         }
 
         return flags_.test(f);
+    }
+
+    void app::add_module(module_ptr_t module) {
+        if (this == module->owner_) {
+            return;
+        }
+
+        assert(NULL == module->owner_);
+
+        modules_.push_back(module);
+        module->owner_ = this;
     }
 
     util::cli::cmd_option_ci::ptr_type app::get_command_manager() {
@@ -149,7 +247,22 @@ namespace atapp {
     }
 
     int app::run_ev_loop(atbus::adapter::loop_t *ev_loop) {
-        // TODO setup tick timer
+        set_flag(flag_t::RUNNING, true);
+        // write pid file
+        if (!conf_.pid_file.empty()) {
+            std::fstream pid_file;
+            pid_file.open(conf_.pid_file.c_str(), std::ios::out);
+            if (!pid_file.is_open()) {
+                ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "open and write pif file " << conf_.pid_file << " failed"
+                     << std::endl;
+                return -1;
+            }
+
+            pid_file << atbus::node::get_pid();
+            pid_file.close();
+        }
+
+
         // TODO step X. loop uv_run util stop flag is set
         // TODO step X. notify all modules to finish and wait for all modules stop
         // TODO step X. if stop is blocked, setup stop timeout and waiting for all modules finished
@@ -175,6 +288,17 @@ namespace atapp {
         signal(SIGTTIN, SIG_IGN); // tty input
         signal(SIGTTOU, SIG_IGN); // tty output
 #endif
+    }
+
+    void app::setup_log() {}
+
+    void app::setup_atbus() {}
+
+    void app::setup_timer() {}
+
+    void app::print_help() const {
+        printf("Usage: %s <options> <command> [command paraters...]\n", conf_.execute_path);
+        printf("%s\n", get_option_manager()->get_help_msg().c_str());
     }
 
     int app::prog_option_handler_help(util::cli::callback_param params, util::cli::cmd_option *opt_mgr) {
@@ -217,8 +341,19 @@ namespace atapp {
         return 0;
     }
 
-    int app::prog_option_handler_reset_mode(util::cli::callback_param params) {
-        conf_.reset_mode = true;
+    int app::prog_option_handler_set_pid(util::cli::callback_param params) {
+        if (params.get_params_number() > 0) {
+            conf_.pid_file = params[0]->as_cpp_string();
+        } else {
+            util::cli::shell_stream ss(std::cerr);
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "-p, --pid require 1 parameter" << std::endl;
+        }
+
+        return 0;
+    }
+
+    int app::prog_option_handler_resume_mode(util::cli::callback_param params) {
+        conf_.resume_mode = true;
         return 0;
     }
 
@@ -275,9 +410,13 @@ namespace atapp {
         opt_mgr->bind_cmd("-c, --conf, --config", &app::prog_option_handler_set_conf_file, this)
             ->set_help_msg("-c, --conf, --config <file path>       set configure file path.");
 
+        // set app pid file
+        opt_mgr->bind_cmd("-p, --pid", &app::prog_option_handler_set_pid, this)
+            ->set_help_msg("-p, --pid <pid file>                   set where to store pid.");
+
         // set configure file path
-        opt_mgr->bind_cmd("-r, --reset", &app::prog_option_handler_reset_mode, this)
-            ->set_help_msg("-r, --reset                            reset all channel data after start.");
+        opt_mgr->bind_cmd("-r, --resume", &app::prog_option_handler_resume_mode, this)
+            ->set_help_msg("-r, --resume                           try to resume when start.");
 
         // start server
         opt_mgr->bind_cmd("start", &app::prog_option_handler_start, this)
@@ -300,8 +439,7 @@ namespace atapp {
     }
 
     int app::app::command_handler_start(util::cli::callback_param params) {
-        // TODO if in a reset mode, reset shm channel
-        // TODO listen to all channel
+        // do nothing
         return 0;
     }
 

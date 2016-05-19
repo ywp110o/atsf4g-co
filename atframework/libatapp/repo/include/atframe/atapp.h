@@ -18,8 +18,11 @@
 #include <bitset>
 
 #include "cli/cmd_option.h"
+#include "time/time_utility.h"
 
 #include "libatbus.h"
+
+#include "atapp_module_impl.h"
 
 #define LIBATAPP_VERSION "0.1.0.0"
 
@@ -28,6 +31,7 @@ namespace atapp {
     public:
         typedef atbus::node::bus_id_t app_id_t;
         typedef atbus::protocol::msg_head msg_head_t;
+        typedef std::shared_ptr<module_impl> module_ptr_t;
 
         struct flag_t {
             enum type { RUNNING = 0, STOPING, FLAG_MAX };
@@ -49,6 +53,12 @@ namespace atapp {
         // parameters is (message head, buffer address, buffer size)
         typedef std::function<int(const msg_head_t *, const void *, size_t)> msg_handler_t;
 
+        struct tick_timer_t {
+            util::time::time_utility::raw_time_t sec_update;
+            time_t sec;
+            time_t usec;
+        };
+
     public:
         app();
         ~app();
@@ -62,6 +72,19 @@ namespace atapp {
         int tick();
 
         bool check(flag_t::type f) const;
+
+        /**
+         * @brief add a new module
+         */
+        void add_module(module_ptr_t module);
+
+        /**
+         * @brief convert module type and add a new module
+         */
+        template <typename TModPtr>
+        void add_module(TModPtr module) {
+            add_module(std::dynamic_pointer_cast<module_impl>(module));
+        }
 
         // api: add custom log type
         // api: add custom module
@@ -90,15 +113,19 @@ namespace atapp {
 
         void setup_atbus();
 
+        void setup_timer();
+
         int send_last_command(atbus::adapter::loop_t *ev_loop);
 
+        void print_help() const;
         // ============ inner functional handlers ============
     private:
         int prog_option_handler_help(util::cli::callback_param params, util::cli::cmd_option *opt_mgr);
         int prog_option_handler_version(util::cli::callback_param params);
         int prog_option_handler_set_id(util::cli::callback_param params);
         int prog_option_handler_set_conf_file(util::cli::callback_param params);
-        int prog_option_handler_reset_mode(util::cli::callback_param params);
+        int prog_option_handler_set_pid(util::cli::callback_param params);
+        int prog_option_handler_resume_mode(util::cli::callback_param params);
         int prog_option_handler_start(util::cli::callback_param params);
         int prog_option_handler_stop(util::cli::callback_param params);
         int prog_option_handler_reload(util::cli::callback_param params);
@@ -118,9 +145,12 @@ namespace atapp {
 
         app_conf conf_;
 
-        atbus::node bus_node_;
+        atbus::node::ptr_t bus_node_;
         std::bitset<flag_t::FLAG_MAX> flags_;
         mode_t::type mode_;
+        tick_timer_t tick_timer_;
+
+        std::vector<module_ptr_t> modules_;
     };
 }
 
