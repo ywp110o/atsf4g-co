@@ -24,6 +24,8 @@
 
 #include "atapp_module_impl.h"
 
+#include "uv.h"
+
 #define LIBATAPP_VERSION "0.1.0.0"
 
 namespace atapp {

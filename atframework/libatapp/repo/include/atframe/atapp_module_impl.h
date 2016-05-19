@@ -27,7 +27,14 @@ namespace atapp {
     public:
         virtual int init() = 0;
         virtual int reload();
+
+        /**
+         * @brief try to stop a module
+         * @return if can't be stoped immadiately, return > 0, if there is a error, return < 0, otherwise 0
+         * @note may be called more than once, when the first return <= 0, this module will be disabled.
+         */
         virtual int stop();
+
         virtual const char *name();
 
         /**
@@ -36,7 +43,15 @@ namespace atapp {
          */
         virtual int tick();
 
+    protected:
+        inline bool is_enabled() const { return enabled_(); }
+
+        bool enable();
+
+        bool disable();
+
     private:
+        bool enabled_;
         app *owner_;
 
         friend class app;

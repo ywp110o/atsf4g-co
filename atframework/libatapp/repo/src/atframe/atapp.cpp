@@ -71,10 +71,18 @@ namespace atapp {
         setup_timer();
 
         // step 7. all modules init
-        owent_foreach(module_ptr_t & mod, modules_) { mod->init(); }
+        owent_foreach(module_ptr_t & mod, modules_) {
+            if (mod->is_enabled()) {
+                mod->init();
+            }
+        }
 
         // step 8. all modules reload
-        owent_foreach(module_ptr_t & mod, modules_) { mod->reload(); }
+        owent_foreach(module_ptr_t & mod, modules_) {
+            if (mod->is_enabled()) {
+                mod->reload();
+            }
+        }
 
         // step 9. set running
         return run_ev_loop(ev_loop);
@@ -129,7 +137,11 @@ namespace atapp {
             setup_log();
 
             // step 7. if inited, let all modules reload
-            owent_foreach(module_ptr_t & mod, modules_) { mod->reload(); }
+            owent_foreach(module_ptr_t & mod, modules_) {
+                if (mod->is_enabled()) {
+                    mod->reload();
+                }
+            }
 
             // step 8. if running and tick interval changed, reset timer
             if (old_conf->tick_interval != conf_->tick_interval) {
@@ -174,11 +186,13 @@ namespace atapp {
             int res;
             // step 1. proc available modules
             owent_foreach(module_ptr_t & mod, modules_) {
-                res = mod->tick();
-                if (res < 0) {
-                    WLOGERROR("module %s run tick and return %d", mod->name(), res);
-                } else {
-                    active_count += res;
+                if (mod->is_enabled()) {
+                    res = mod->tick();
+                    if (res < 0) {
+                        WLOGERROR("module %s run tick and return %d", mod->name(), res);
+                    } else {
+                        active_count += res;
+                    }
                 }
             }
 
@@ -262,10 +276,33 @@ namespace atapp {
             pid_file.close();
         }
 
+        bool keep_running = true;
+        while (keep_running) {
 
-        // TODO step X. loop uv_run util stop flag is set
-        // TODO step X. notify all modules to finish and wait for all modules stop
-        // TODO step X. if stop is blocked, setup stop timeout and waiting for all modules finished
+            // step X. loop uv_run util stop flag is set
+            uv_run(bus_node_.get_evloop(), UV_RUN_DEFAULT);
+            if (check_flag(flag_t::STOPING)) {
+                keep_running = false;
+
+                // step X. notify all modules to finish and wait for all modules stop
+                owent_foreach(module_ptr_t & mod, modules_) {
+                    if (mod->is_enabled()) {
+                        int res = mod->stop();
+                        if (0 == res) {
+                            mod->disable();
+                        } else if (res < 0) {
+                            mod->disable();
+                            WLOGERROR("try to stop module %s but failed and return %d", mod->name(), res);
+                        } else {
+                            // any module stop running will make app wait
+                            keep_running = true;
+                        }
+                    }
+                }
+
+                // TODO step X. if stop is blocked and timeout not triggered, setup stop timeout and waiting for all modules finished
+            }
+        }
         return 0;
     }
 

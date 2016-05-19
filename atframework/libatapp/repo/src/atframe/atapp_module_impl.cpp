@@ -8,7 +8,7 @@
 
 
 namespace atapp {
-    module_impl::module_impl() : owner_(NULL) {}
+    module_impl::module_impl() : enabled_(true), owner_(NULL) {}
     module_impl::~module_impl() {}
 
     int module_impl::reload() { return 0; }
@@ -27,6 +27,18 @@ namespace atapp {
         while (ret && *ret >= '0' && *ret <= '9') {
             ++ret;
         }
+        return ret;
+    }
+
+    bool module_impl::enable() {
+        bool ret = enabled_;
+        enabled_ = true;
+        return ret;
+    }
+
+    bool module_impl::disable() {
+        bool ret = enabled_;
+        enabled_ = false;
         return ret;
     }
 }
