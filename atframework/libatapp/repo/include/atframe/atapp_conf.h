@@ -28,8 +28,8 @@ namespace atapp {
         std::string app_version;
 
         // app configure
-        time_t stop_timeout;  // module timeout when receive a stop message
-        time_t tick_interval; // tick interval
+        uint64_t stop_timeout;  // module timeout when receive a stop message, libuv use uint64_t
+        uint64_t tick_interval; // tick interval, libuv use uint64_t
     };
 }
 

@@ -22,6 +22,9 @@ namespace atapp {
         tick_timer_.sec_update = util::time::time_utility::raw_time_t::zero();
         tick_timer_.sec = 0;
         tick_timer_.usec = 0;
+
+        tick_timer_.tick_timer.is_activited = false;
+        tick_timer_.timeout_timer.is_activited = false;
     }
 
     app::~app() {
@@ -68,7 +71,6 @@ namespace atapp {
         setup_log();
         setup_signal();
         setup_atbus();
-        setup_timer();
 
         // step 7. all modules init
         owent_foreach(module_ptr_t & mod, modules_) {
@@ -250,6 +252,15 @@ namespace atapp {
 
     const std::string &app::get_app_version() const { return conf_.app_version； }
 
+    void app::ev_stop_timeout(uv_timer_t *handle) {
+        assert(handle);
+        assert(handle->data);
+
+        app *self = reinterpret_cast<app *>(handle->data);
+        self->set_flag(flag_t::TIMEOUT, true);
+        uv_stop(handle->loop);
+    }
+
     bool app::set_flag(flag_t::type f, bool v) {
         if (f < 0 || f >= flag_t::FLAG_MAX) {
             return false;
@@ -276,6 +287,8 @@ namespace atapp {
             pid_file.close();
         }
 
+        setup_timer();
+
         bool keep_running = true;
         while (keep_running) {
 
@@ -284,25 +297,48 @@ namespace atapp {
             if (check_flag(flag_t::STOPING)) {
                 keep_running = false;
 
-                // step X. notify all modules to finish and wait for all modules stop
-                owent_foreach(module_ptr_t & mod, modules_) {
-                    if (mod->is_enabled()) {
-                        int res = mod->stop();
-                        if (0 == res) {
+                if (check_flag(flag_t::TIMEOUT)) {
+                    // step X. notify all modules timeout
+                    owent_foreach(module_ptr_t & mod, modules_) {
+                        if (mod->is_enabled()) {
+                            WLOGERROR("try to stop module %s but timeout", mod->name());
+                            mod->timeout();
                             mod->disable();
-                        } else if (res < 0) {
-                            mod->disable();
-                            WLOGERROR("try to stop module %s but failed and return %d", mod->name(), res);
-                        } else {
-                            // any module stop running will make app wait
-                            keep_running = true;
+                        }
+                    }
+                } else {
+                    // step X. notify all modules to finish and wait for all modules stop
+                    owent_foreach(module_ptr_t & mod, modules_) {
+                        if (mod->is_enabled()) {
+                            int res = mod->stop();
+                            if (0 == res) {
+                                mod->disable();
+                            } else if (res < 0) {
+                                mod->disable();
+                                WLOGERROR("try to stop module %s but failed and return %d", mod->name(), res);
+                            } else {
+                                // any module stop running will make app wait
+                                keep_running = true;
+                            }
+                        }
+                    }
+
+                    // step X. if stop is blocked and timeout not triggered, setup stop timeout and waiting for all modules finished
+                    if (false == tick_timer_.timeout_timer.is_activited) {
+                        uv_timer_init(bus_node_.get_evloop(), &tick_timer_.timeout_timer.timer);
+                        tick_timer_.timeout_timer.timer.data = this;
+
+                        if (0 == uv_timer_start(&tick_timer_.timeout_timer.timer, ev_stop_timeout, conf_.stop_timeout, 0)) {
+                            tick_timer_.timeout_timer.is_activited = true;
                         }
                     }
                 }
-
-                // TODO step X. if stop is blocked and timeout not triggered, setup stop timeout and waiting for all modules finished
             }
         }
+
+        // close timer
+        close_timer(tick_timer_.tick_timer);
+        close_timer(tick_timer_.timeout_timer);
         return 0;
     }
 
@@ -330,6 +366,14 @@ namespace atapp {
     void app::setup_log() {}
 
     void app::setup_atbus() {}
+
+    void app::close_timer(timer_info_t &t) {
+        if (t.is_activited) {
+            uv_timer_stop(t.timer);
+            uv_close(&t.timer, NULL);
+            t.is_activited = false;
+        }
+    }
 
     void app::setup_timer() {}
 

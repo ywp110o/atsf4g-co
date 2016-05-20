@@ -15,6 +15,8 @@ namespace atapp {
 
     int module_impl::stop() { return 0; }
 
+    int module_impl::timeout() { return 0; }
+
     int module_impl::tick() { return 0; }
 
     const char *module_impl::name() {

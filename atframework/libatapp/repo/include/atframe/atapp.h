@@ -36,7 +36,7 @@ namespace atapp {
         typedef std::shared_ptr<module_impl> module_ptr_t;
 
         struct flag_t {
-            enum type { RUNNING = 0, STOPING, FLAG_MAX };
+            enum type { RUNNING = 0, STOPING, TIMEOUT, FLAG_MAX };
         };
 
         struct mode_t {
@@ -55,10 +55,18 @@ namespace atapp {
         // parameters is (message head, buffer address, buffer size)
         typedef std::function<int(const msg_head_t *, const void *, size_t)> msg_handler_t;
 
+        struct timer_info_t {
+            bool is_activited;
+            uv_timer_t timer;
+        };
+
         struct tick_timer_t {
             util::time::time_utility::raw_time_t sec_update;
             time_t sec;
             time_t usec;
+
+            timer_info_t tick_timer;
+            timer_info_t timeout_timer;
         };
 
     public:
@@ -101,6 +109,8 @@ namespace atapp {
         const std::string &get_app_version() const;
 
     private:
+        static void ev_stop_timeout(uv_timer_t *handle);
+
         bool set_flag(flag_t::type f, bool v);
 
         int run_ev_loop(atbus::adapter::loop_t *ev_loop);
@@ -114,6 +124,8 @@ namespace atapp {
         void setup_log();
 
         void setup_atbus();
+
+        void close_timer(timer_info_t &t);
 
         void setup_timer();
 

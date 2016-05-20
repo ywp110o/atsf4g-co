@@ -35,6 +35,8 @@ namespace atapp {
          */
         virtual int stop();
 
+        virtual int timeout();
+
         virtual const char *name();
 
         /**
