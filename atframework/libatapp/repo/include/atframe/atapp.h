@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,7 @@
 
 #include "libatbus.h"
 
+#include "atapp_log_sink_maker.h"
 #include "atapp_module_impl.h"
 
 #include "uv.h"
@@ -167,6 +169,8 @@ namespace atapp {
         tick_timer_t tick_timer_;
 
         std::vector<module_ptr_t> modules_;
+        std::map<std::string, log_sink_maker::log_reg_t>
+            log_reg_; // log reg will not changed or be checked outside the init, so std::map is enough
     };
 }
 

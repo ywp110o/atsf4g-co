@@ -432,7 +432,18 @@ namespace atapp {
     }
 
     void app::setup_log() {
-        // TODO register inner log module
+        // register inner log module
+        if (log_reg_.find(log_sink_maker::get_file_sink_name()) == log_reg_.end()) {
+            log_reg_[log_sink_maker::get_file_sink_name()] = log_sink_maker::get_file_sink_reg();
+        }
+
+        if (log_reg_.find(log_sink_maker::get_stdout_sink_name()) == log_reg_.end()) {
+            log_reg_[log_sink_maker::get_stdout_sink_name()] = log_sink_maker::get_stdout_sink_reg();
+        }
+
+        if (log_reg_.find(log_sink_maker::get_stderr_sink_name()) == log_reg_.end()) {
+            log_reg_[log_sink_maker::get_stderr_sink_name()] = log_sink_maker::get_stderr_sink_reg();
+        }
 
         // load configure
         uint32_t log_cat_number = LOG_WRAPPER_CATEGORIZE_SIZE;
@@ -485,7 +496,14 @@ namespace atapp {
                 UTIL_STRFUNC_SNPRINTF(log_path, sizeof(log_path), "atapp.log.%s.%u", log_name.c_str(), j);
                 util::config::ini_value &cfg_set = cfg_loader_.get_node(log_path);
 
-                // TODO register log sink
+                // register log sink
+                std::map<std::string, log_sink_maker::log_reg_t>::iterator iter = log_reg_.find(sink_type);
+                if (iter != log_reg_.end()) {
+                    iter->second(log_name, *WLOG_GETCAT(i), j, cfg_set);
+                } else {
+                    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "unavailable log type " << sink_type
+                         << ", you can add log type register handle before init." << std::endl;
+                }
             }
         }
     }
@@ -495,6 +513,11 @@ namespace atapp {
         // TODO init listen
 
         // TODO if has father node, block and connect to father node
+
+        // TODO setup recv callback
+        // TODO setup error callback
+        // TODO setup send failed callback
+        // TODO setup custom cmd callback
     }
 
     void app::close_timer(timer_info_t &t) {

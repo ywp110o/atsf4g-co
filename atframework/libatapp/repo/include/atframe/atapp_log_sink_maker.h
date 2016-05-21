@@ -1,5 +1,5 @@
 /**
- * atapp_log_sink.h
+ * atapp_log_sink_maker.h
  *
  *  Created on: 2016年05月21日
  *      Author: owent
