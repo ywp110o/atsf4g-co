@@ -113,6 +113,8 @@ namespace atapp {
 
         bool set_flag(flag_t::type f, bool v);
 
+        int apply_configure();
+
         int run_ev_loop(atbus::adapter::loop_t *ev_loop);
 
         void setup_signal();
@@ -127,7 +129,7 @@ namespace atapp {
 
         void close_timer(timer_info_t &t);
 
-        void setup_timer();
+        int setup_timer();
 
         int send_last_command(atbus::adapter::loop_t *ev_loop);
 

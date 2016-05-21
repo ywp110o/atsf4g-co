@@ -49,6 +49,7 @@ namespace atapp {
         }
 
         // step 4. load options from cmd line
+        conf_.bus_node_.ev_loop = ev_loop;
         int ret = reload();
         if (ret < 0) {
             return ret;
@@ -129,6 +130,9 @@ namespace atapp {
             }
         }
 
+        // apply ini configure
+        apply_configure();
+
         // step 5. if not in start mode, return
         if (mode_t::START != mode_) {
             return 0;
@@ -156,14 +160,15 @@ namespace atapp {
     }
 
     int app::stop() {
-        WLOGINFO("============ receive stop signal and ready to stop all services ============");
+        WLOGINFO("============ receive stop signal and ready to stop all modules ============");
         // step 1. set stop flag.
-        bool is_stoping = set_flag(flag_t::STOPING, true);
+        set_flag(flag_t::STOPING, true);
+        // bool is_stoping = set_flag(flag_t::STOPING, true);
 
         // step 2. stop libuv and return from uv_run
-        if (!is_stoping) {
-            uv_stop(bus_node_.get_evloop());
-        }
+        // if (!is_stoping) {
+        uv_stop(bus_node_.get_evloop());
+        //}
         return 0;
     }
 
@@ -271,8 +276,66 @@ namespace atapp {
         return ret;
     }
 
+    int app::apply_configure() {
+        // id
+        if (0 == conf_.id) {
+            cfg_loader_.dump_to("atapp.id", conf_.id);
+        }
+
+        // hostname
+        {
+            std::string hostname;
+            cfg_loader_.dump_to("atapp.hostname", hostname);
+            if (!hostname.empty()) {
+                atbus::node::set_hostname(hostname);
+            }
+        }
+
+        conf_.bus_listen.clear();
+        cfg_loader_.dump_to("atapp.bus.listen", conf_.bus_listen);
+
+        // conf_.stop_timeout = 30000; // use last available value
+        cfg_loader_.dump_to("atapp.timer.stop_timeout", conf_.stop_timeout);
+
+        // conf_.tick_interval = 32; // use last available value
+        cfg_loader_.dump_to("atapp.timer.tick_interval", conf_.tick_interval);
+
+        // atbus configure
+        atbus::node::default_conf(&conf_.bus_node_);
+
+        cfg_loader_.dump_to("atapp.bus.children_mask", conf_.bus_node_.children_mask);
+        {
+            bool optv = false;
+            cfg_loader_.dump_to("atapp.bus.options.global_router", optv);
+            conf_.bus_node_.flags.set(atbus::node::conf_flag_t::EN_CONF_GLOBAL_ROUTER, optv);
+        }
+
+        cfg_loader_.dump_to("atapp.bus.proxy", conf_.bus_node_.father_address);
+        cfg_loader_.dump_to("atapp.bus.loop_times", conf_.bus_node_.loop_times);
+        cfg_loader_.dump_to("atapp.bus.ttl", conf_.bus_node_.ttl);
+        cfg_loader_.dump_to("atapp.bus.backlog", conf_.bus_node_.backlog);
+        cfg_loader_.dump_to("atapp.bus.first_idle_timeout", conf_.bus_node_.first_idle_timeout);
+        cfg_loader_.dump_to("atapp.bus.ping_interval", conf_.bus_node_.ping_interval);
+        cfg_loader_.dump_to("atapp.bus.retry_interval", conf_.bus_node_.retry_interval);
+        cfg_loader_.dump_to("atapp.bus.fault_tolerant", conf_.bus_node_.fault_tolerant);
+        cfg_loader_.dump_to("atapp.bus.msg_size", conf_.bus_node_.msg_size);
+        cfg_loader_.dump_to("atapp.bus.recv_buffer_size", conf_.bus_node_.recv_buffer_size);
+        cfg_loader_.dump_to("atapp.bus.send_buffer_size", conf_.bus_node_.send_buffer_size);
+        cfg_loader_.dump_to("atapp.bus.send_buffer_number", conf_.bus_node_.send_buffer_number);
+
+        return 0;
+    }
+
     int app::run_ev_loop(atbus::adapter::loop_t *ev_loop) {
+        bool keep_running = true;
+
         set_flag(flag_t::RUNNING, true);
+
+        if (setup_timer() < 0) {
+            set_flag(flag_t::RUNNING, false);
+            return -1;
+        }
+
         // write pid file
         if (!conf_.pid_file.empty()) {
             std::fstream pid_file;
@@ -280,18 +343,16 @@ namespace atapp {
             if (!pid_file.is_open()) {
                 ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "open and write pif file " << conf_.pid_file << " failed"
                      << std::endl;
-                return -1;
-            }
 
-            pid_file << atbus::node::get_pid();
-            pid_file.close();
+                // failed and skip running
+                keep_running = false;
+            } else {
+                pid_file << atbus::node::get_pid();
+                pid_file.close();
+            }
         }
 
-        setup_timer();
-
-        bool keep_running = true;
         while (keep_running) {
-
             // step X. loop uv_run util stop flag is set
             uv_run(bus_node_.get_evloop(), UV_RUN_DEFAULT);
             if (check_flag(flag_t::STOPING)) {
@@ -328,8 +389,12 @@ namespace atapp {
                         uv_timer_init(bus_node_.get_evloop(), &tick_timer_.timeout_timer.timer);
                         tick_timer_.timeout_timer.timer.data = this;
 
-                        if (0 == uv_timer_start(&tick_timer_.timeout_timer.timer, ev_stop_timeout, conf_.stop_timeout, 0)) {
+                        int res = uv_timer_start(&tick_timer_.timeout_timer.timer, ev_stop_timeout, conf_.stop_timeout, 0);
+                        if (0 == res) {
                             tick_timer_.timeout_timer.is_activited = true;
+                        } else {
+                            WLOGERROR("setup stop timeout failed, res: %d", res);
+                            set_flag(flag_t::TIMEOUT, false);
                         }
                     }
                 }
@@ -339,6 +404,9 @@ namespace atapp {
         // close timer
         close_timer(tick_timer_.tick_timer);
         close_timer(tick_timer_.timeout_timer);
+
+        // not running now
+        set_flag(flag_t::RUNNING, false);
         return 0;
     }
 
@@ -363,9 +431,71 @@ namespace atapp {
 #endif
     }
 
-    void app::setup_log() {}
+    void app::setup_log() {
+        // TODO register inner log module
 
-    void app::setup_atbus() {}
+        // load configure
+        uint32_t log_cat_number = LOG_WRAPPER_CATEGORIZE_SIZE;
+        cfg_loader_.dump_to("atapp.log.cat.number", log_cat_number);
+        if (log_cat_number > LOG_WRAPPER_CATEGORIZE_SIZE) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "log categorize should not be greater than "
+                 << LOG_WRAPPER_CATEGORIZE_SIZE << ". you can define LOG_WRAPPER_CATEGORIZE_SIZE to a greater number and rebuild atapp."
+                 << std::endl;
+            log_cat_number = LOG_WRAPPER_CATEGORIZE_SIZE;
+        }
+        int log_level_id = util::log::log_wrapper::level_t::LOG_LW_INFO;
+        cfg_loader_.dump_to("atapp.log.level", log_level_id);
+
+        char log_path[256] = {0};
+
+        for (uint32_t i = 0; i < log_cat_number; ++i) {
+            std::string log_name, log_prefix;
+            UTIL_STRFUNC_SNPRINTF(log_path, sizeof(log_path), "atapp.log.cat.%u.name", i);
+            cfg_loader_.dump_to(log_path, log_name);
+
+            if (log_name.empty()) {
+                continue;
+            }
+
+            UTIL_STRFUNC_SNPRINTF(log_path, sizeof(log_path), "atapp.log.cat.%u.prefix", i);
+            cfg_loader_.dump_to(log_path, log_prefix);
+
+            // init and set prefix
+            WLOG_INIT(i, WLOG_LEVELID(log_level_id));
+            if (!log_prefix.empty()) {
+                WLOG_GETCAT(i)->set_prefix_format(log_prefix);
+            }
+
+            // TODO For now, log can not be reload. we may make it available someday in the future
+            if (!WLOG_GETCAT(i)->get_sinks().empty()) {
+                continue;
+            }
+
+            // register log handles
+            for (uint32_t j = 0;; ++j) {
+                std::string sink_type;
+                UTIL_STRFUNC_SNPRINTF(log_path, sizeof(log_path), "atapp.log.%s.%u.type", log_name.c_str(), j);
+                cfg_loader_.dump_to(log_path, sink_type);
+
+                if (sink_type.empty()) {
+                    break;
+                }
+
+                // already read log cat name, sink type name
+                UTIL_STRFUNC_SNPRINTF(log_path, sizeof(log_path), "atapp.log.%s.%u", log_name.c_str(), j);
+                util::config::ini_value &cfg_set = cfg_loader_.get_node(log_path);
+
+                // TODO register log sink
+            }
+        }
+    }
+
+    void app::setup_atbus() {
+        // TODO if in resume mode, try resume shm channel first
+        // TODO init listen
+
+        // TODO if has father node, block and connect to father node
+    }
 
     void app::close_timer(timer_info_t &t) {
         if (t.is_activited) {
@@ -375,7 +505,30 @@ namespace atapp {
         }
     }
 
-    void app::setup_timer() {}
+    static void _app_tick_timer_handle(uv_timer_t *handle) {
+        assert(handle);
+        assert(handle->data);
+
+        app *self = reinterpret_cast<app *>(handle->data);
+        self->tick();
+    }
+
+    int app::setup_timer() {
+        close_timer(tick_timer_.tick_timer);
+
+        uv_timer_init(bus_node_.get_evloop(), &tick_timer_.tick_timer.timer);
+        tick_timer_.tick_timer.timer.data = this;
+
+        int res = uv_timer_start(&tick_timer_.tick_timer.timer, _app_tick_timer_handle, conf_.tick_interval, conf_.tick_interval);
+        if (0 == res) {
+            tick_timer_.tick_timer.is_activited = true;
+        } else {
+            WLOGERROR("setup tick timer failed, res: %d", res);
+            return -1;
+        }
+
+        return 0;
+    }
 
     void app::print_help() const {
         printf("Usage: %s <options> <command> [command paraters...]\n", conf_.execute_path);

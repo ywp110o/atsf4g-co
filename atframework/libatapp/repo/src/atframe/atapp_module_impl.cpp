@@ -43,4 +43,8 @@ namespace atapp {
         enabled_ = false;
         return ret;
     }
+
+    app *module_impl::get_app() { return owner_; }
+
+    const app *module_impl::get_app() const { return owner_; }
 }

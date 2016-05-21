@@ -46,6 +46,19 @@ namespace atapp {
         virtual int tick();
 
     protected:
+        /**
+         * @brief get owner atapp object
+         * @return return owner atapp object, NULL if not added
+         */
+        app *get_app();
+
+        /**
+         * @brief get owner atapp object
+         * @return return owner atapp object, NULL if not added
+         */
+        const app *get_app() const;
+
+    protected:
         inline bool is_enabled() const { return enabled_(); }
 
         bool enable();
