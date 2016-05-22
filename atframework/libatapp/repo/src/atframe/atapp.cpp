@@ -162,8 +162,12 @@ namespace atapp {
     int app::stop() {
         WLOGINFO("============ receive stop signal and ready to stop all modules ============");
         // step 1. set stop flag.
-        set_flag(flag_t::STOPING, true);
-        // bool is_stoping = set_flag(flag_t::STOPING, true);
+        bool is_stoping = set_flag(flag_t::STOPING, true);
+
+        // TODO stop reason = manual stop
+        if (!is_stop && bus_node_) {
+            bus_node_->shutdown(0);
+        }
 
         // step 2. stop libuv and return from uv_run
         // if (!is_stoping) {
@@ -331,6 +335,9 @@ namespace atapp {
 
         set_flag(flag_t::RUNNING, true);
 
+        // TODO if atbus is reset, init it again
+
+
         if (setup_timer() < 0) {
             set_flag(flag_t::RUNNING, false);
             return -1;
@@ -399,6 +406,11 @@ namespace atapp {
                     }
                 }
             }
+
+            // if atbus is at shutdown state, loop
+            if (bus_node_->check(atbus::node::flag_t::EN_FT_SHUTDOWN)) {
+                uv_run(bus_node_.get_evloop(), UV_RUN_DEFAULT);
+            }
         }
 
         // close timer
@@ -407,6 +419,7 @@ namespace atapp {
 
         // not running now
         set_flag(flag_t::RUNNING, false);
+
         return 0;
     }
 
