@@ -119,15 +119,15 @@ namespace atapp {
 
         int run_ev_loop(atbus::adapter::loop_t *ev_loop);
 
-        void setup_signal();
+        int setup_signal();
 
         void setup_option(int argc, const char *argv[], void *priv_data);
 
         void setup_command();
 
-        void setup_log();
+        int setup_log();
 
-        void setup_atbus();
+        int setup_atbus();
 
         void close_timer(timer_info_t &t);
 
