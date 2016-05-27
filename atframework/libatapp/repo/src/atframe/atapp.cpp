@@ -539,6 +539,11 @@ namespace atapp {
     int app::setup_timer() {
         close_timer(tick_timer_.tick_timer);
 
+        if (conf_.tick_interval < 4) {
+            conf_.tick_interval = 4;
+            WLOGWARNING("tick interval can not smaller than 4ms, we use 4ms now.");
+        }
+
         uv_timer_init(bus_node_.get_evloop(), &tick_timer_.tick_timer.timer);
         tick_timer_.tick_timer.timer.data = this;
 
