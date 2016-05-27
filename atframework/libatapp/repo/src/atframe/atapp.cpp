@@ -48,10 +48,12 @@ namespace atapp {
             return 0;
         }
 
+        util::cli::shell_stream ss(std::cerr);
         // step 4. load options from cmd line
         conf_.bus_node_.ev_loop = ev_loop;
         int ret = reload();
         if (ret < 0) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "load configure failed" << std::endl;
             return ret;
         }
 
@@ -69,21 +71,44 @@ namespace atapp {
         }
 
         // step 6. setup log & signal
-        setup_log();
-        setup_signal();
-        setup_atbus();
+        ret = setup_log();
+        if (ret < 0) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "setup log failed" << std::endl;
+            return ret;
+        }
+
+        ret = setup_signal();
+        if (ret < 0) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "setup signal failed" << std::endl;
+            return ret;
+        }
+
+        ret = setup_atbus();
+        if (ret < 0) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "setup atbus failed" << std::endl;
+            return ret;
+        }
 
         // step 7. all modules init
         owent_foreach(module_ptr_t & mod, modules_) {
             if (mod->is_enabled()) {
-                mod->init();
+                ret = mod->init();
+                if (ret < 0) {
+                    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "initialze " << mod->name() << " failed" << std::endl;
+                    return ret;
+                }
             }
         }
 
         // step 8. all modules reload
         owent_foreach(module_ptr_t & mod, modules_) {
             if (mod->is_enabled()) {
-                mod->reload();
+                ret = mod->reload();
+                if (ret < 0) {
+                    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "load configure of " << mod->name() << " failed"
+                         << std::endl;
+                    return ret;
+                }
             }
         }
 
@@ -93,6 +118,8 @@ namespace atapp {
 
     int app::reload() {
         app_conf old_conf = conf_;
+        util::cli::shell_stream ss(std::cerr);
+
         WLOGINFO("============ start to load configure ============");
         // step 1. reset configure
         cfg_loader_.clear();
@@ -332,11 +359,11 @@ namespace atapp {
 
     int app::run_ev_loop(atbus::adapter::loop_t *ev_loop) {
         bool keep_running = true;
+        util::cli::shell_stream ss(std::cerr);
 
         set_flag(flag_t::RUNNING, true);
 
         // TODO if atbus is reset, init it again
-
 
         if (setup_timer() < 0) {
             set_flag(flag_t::RUNNING, false);
@@ -430,7 +457,7 @@ namespace atapp {
         }
     }
 
-    void app::setup_signal() {
+    int app::setup_signal() {
         // block signals
         detail::last_atapp_ = this;
         signal(SIGTERM, _app_setup_signal_term);
@@ -444,7 +471,9 @@ namespace atapp {
 #endif
     }
 
-    void app::setup_log() {
+    int app::setup_log() {
+        util::cli::shell_stream ss(std::cerr);
+
         // register inner log module
         if (log_reg_.find(log_sink_maker::get_file_sink_name()) == log_reg_.end()) {
             log_reg_[log_sink_maker::get_file_sink_name()] = log_sink_maker::get_file_sink_reg();
@@ -521,7 +550,7 @@ namespace atapp {
         }
     }
 
-    void app::setup_atbus() {
+    int app::setup_atbus() {
         // TODO if in resume mode, try resume shm channel first
         // TODO init listen
 
