@@ -535,13 +535,24 @@ namespace atapp {
                 }
 
                 // already read log cat name, sink type name
+                int log_handle_min = util::log::log_wrapper::level_t::LOG_LW_FATAL,
+                    log_handle_max = util::log::log_wrapper::level_t::LOG_LW_DEBUG;
                 UTIL_STRFUNC_SNPRINTF(log_path, sizeof(log_path), "atapp.log.%s.%u", log_name.c_str(), j);
                 util::config::ini_value &cfg_set = cfg_loader_.get_node(log_path);
+
+                UTIL_STRFUNC_SNPRINTF(log_path, sizeof(log_path), "atapp.log.%s.%u.level.min", log_name.c_str(), j);
+                cfg_loader_.dump_to(log_path, log_handle_min);
+
+                UTIL_STRFUNC_SNPRINTF(log_path, sizeof(log_path), "atapp.log.%s.%u.level.max", log_name.c_str(), j);
+                cfg_loader_.dump_to(log_path, log_handle_max);
 
                 // register log sink
                 std::map<std::string, log_sink_maker::log_reg_t>::iterator iter = log_reg_.find(sink_type);
                 if (iter != log_reg_.end()) {
-                    iter->second(log_name, *WLOG_GETCAT(i), j, cfg_set);
+                    util::log::log_wrapper::log_handler_t log_handler = iter->second(log_name, *WLOG_GETCAT(i), j, cfg_set);
+                    WLOG_GETCAT(i)
+                        ->add_sink(log_handler, static_cast<util::log::log_wrapper::level_t::type>(log_handle_min),
+                                   static_cast<util::log::log_wrapper::level_t::type>(log_handle_max));
                 } else {
                     ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "unavailable log type " << sink_type
                          << ", you can add log type register handle before init." << std::endl;
