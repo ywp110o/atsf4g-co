@@ -83,6 +83,8 @@ namespace atapp {
 
         int tick();
 
+        app_id_t get_id() const;
+
         bool check(flag_t::type f) const;
 
         /**
@@ -155,6 +157,20 @@ namespace atapp {
         int command_handler_invalid(util::cli::callback_param params);
 
     private:
+        int bus_evt_callback_on_recv_msg(const atbus::node &, const atbus::endpoint *, const atbus::connection *,
+                                         const atbus::protocol::msg_head *, const void *, size_t);
+        int bus_evt_callback_on_send_failed(const atbus::node &, const atbus::endpoint *, const atbus::connection *, const atbus::protocol::msg *m);
+        int bus_evt_callback_on_error(const atbus::node &, const atbus::endpoint *, const atbus::connection *, int, int);
+        int bus_evt_callback_on_reg(const atbus::node &, const atbus::endpoint *, const atbus::connection *, int);
+        int bus_evt_callback_on_shutdown(const atbus::node &, int);
+        int bus_evt_callback_on_available(const atbus::node &, int);
+        int bus_evt_callback_on_invalid_connection(const atbus::node &, const atbus::connection *, int);
+        int bus_evt_callback_on_custom_cmd(const atbus::node &, const atbus::endpoint *, const atbus::connection *, atbus::node::bus_id_t,
+                                           const std::vector<std::pair<const void *, size_t> > &);
+        int bus_evt_callback_on_add_endpoint(const atbus::node &, atbus::endpoint *, int);
+        int bus_evt_callback_on_remove_endpoint(const atbus::node &, atbus::endpoint *, int);
+
+    private:
         static app *last_instance_;
         util::config::ini_loader cfg_loader_;
         util::cli::cmd_option::ptr_type app_option_;
@@ -171,6 +187,10 @@ namespace atapp {
         std::vector<module_ptr_t> modules_;
         std::map<std::string, log_sink_maker::log_reg_t>
             log_reg_; // log reg will not changed or be checked outside the init, so std::map is enough
+
+        // callbacks
+        std::function<int (app&, const msg_head_t *, const void *, size_t)> evt_on_recv_msg_;
+        std::function<int (app&, app_id_t src_pd, app_id_t dst_pd, const atbus::protocol::msg& m)> evt_on_send_fail_;
     };
 }
 

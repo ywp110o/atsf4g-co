@@ -86,6 +86,7 @@ namespace atapp {
         ret = setup_atbus();
         if (ret < 0) {
             ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "setup atbus failed" << std::endl;
+            bus_node_.reset();
             return ret;
         }
 
@@ -199,7 +200,7 @@ namespace atapp {
         // step 2. stop libuv and return from uv_run
         // if (!is_stoping) {
         uv_stop(bus_node_.get_evloop());
-        //}
+        // }
         return 0;
     }
 
@@ -248,6 +249,8 @@ namespace atapp {
         } while (active_count > 0 && (end_tp - start_tp) >= std::chrono::milliseconds(conf_.tick_interval));
         return 0;
     }
+
+    app::app_id_t app::get_id() const { return conf_.id; }
 
     bool app::check(flag_t::type f) const {
         if (f < 0 || f >= flag_t::FLAG_MAX) {
@@ -435,7 +438,7 @@ namespace atapp {
             }
 
             // if atbus is at shutdown state, loop
-            if (bus_node_->check(atbus::node::flag_t::EN_FT_SHUTDOWN)) {
+            if (keep_running && bus_node_->check(atbus::node::flag_t::EN_FT_SHUTDOWN)) {
                 uv_run(bus_node_.get_evloop(), UV_RUN_DEFAULT);
             }
         }
@@ -519,7 +522,7 @@ namespace atapp {
                 WLOG_GETCAT(i)->set_prefix_format(log_prefix);
             }
 
-            // TODO For now, log can not be reload. we may make it available someday in the future
+            // FIXME: For now, log can not be reload. we may make it available someday in the future
             if (!WLOG_GETCAT(i)->get_sinks().empty()) {
                 continue;
             }
@@ -562,15 +565,109 @@ namespace atapp {
     }
 
     int app::setup_atbus() {
-        // TODO if in resume mode, try resume shm channel first
-        // TODO init listen
+        int ret = 0, res = 0;
+        if (bus_node_) {
+            bus_node_->reset();
+            bus_node_.reset();
+        }
 
-        // TODO if has father node, block and connect to father node
+        atbus::node::ptr_t connection_node = atbus::node::create();
+        if (!connection_node) {
+            WLOGERROR("create bus node failed.");
+            return -1;
+        }
 
-        // TODO setup recv callback
-        // TODO setup error callback
-        // TODO setup send failed callback
-        // TODO setup custom cmd callback
+        ret = connection_node->init(conf_.id, &conf_.bus_conf);
+        if (ret < 0) {
+            WLOGERROR("init bus node failed. ret: %d", ret);
+            return -1;
+        }
+
+        // TODO if not in resume mode, destroy shm
+        // if (false == conf_.resume_mode) {}
+
+        // init listen
+        for (size_t i = 0; i < conf_.bus_listen.size(); ++i) {
+            res = connection_node->listen(conf_.bus_listen[i].c_str());
+            if (res < 0) {
+                WLOGERROR("bus node listen %s failed. res: %d", conf_.bus_listen[i].c_str(), res);
+                ret = res;
+            }
+        }
+
+        if (ret < 0) {
+            WLOGERROR("bus node listen failed");
+            return ret;
+        }
+
+        // start
+        ret = connection_node->start();
+        if (ret < 0) {
+            WLOGERROR("bus node start failed, ret: %d", ret);
+            return ret;
+        }
+
+        // if has father node, block and connect to father node
+        if (atbus::node::state_t::CONNECTING_PARENT == connection_node->get_state() ||
+            atbus::node::state_t::LOST_PARENT == connection_node->get_state()) {
+            // setup timeout and waiting for parent connected
+            if (false == tick_timer_.timeout_timer.is_activited) {
+                uv_timer_init(connection_node.get_evloop(), &tick_timer_.timeout_timer.timer);
+                tick_timer_.timeout_timer.timer.data = this;
+
+                res = uv_timer_start(&tick_timer_.timeout_timer.timer, ev_stop_timeout, conf_.stop_timeout, 0);
+                if (0 == res) {
+                    tick_timer_.timeout_timer.is_activited = true;
+                } else {
+                    WLOGERROR("setup stop timeout failed, res: %d", res);
+                    set_flag(flag_t::TIMEOUT, false);
+                }
+
+                while (NULL == connection_node->get_parent_endpoint()) {
+                    if (check_flag(flag_t::TIMEOUT)) {
+                        WLOGERROR("connection to parent node %s timeout", conf_.bus_conf.father_address.c_str());
+                        ret = -1;
+                        break;
+                    }
+
+                    uv_run(connection_node.get_evloop(), UV_RUN_ONCE);
+                }
+
+                // if connected, do not trigger timeout
+                close_timer(tick_timer_.timeout_timer);
+
+                if (ret < 0) {
+                    WLOGERROR("connect to parent node failed");
+                    return ret;
+                }
+            }
+        }
+
+        // setup all callbacks
+        connection_node->set_on_recv_handle(std::bind(&app::bus_evt_callback_on_recv_msg, this, std::placeholders::_1,
+                                                      std::placeholders::_2, std::placeholders::_3, std::placeholders::_4,
+                                                      std::placeholders::_5, std::placeholders::_6));
+        connection_node->set_on_send_data_failed_handle(std::bind(&app::bus_evt_callback_on_, this, std::placeholders::_1,
+                                                                  std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+        connection_node->set_on_error_handle(std::bind(&app::bus_evt_callback_on_error, this, std::placeholders::_1, std::placeholders::_2,
+                                                       std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
+        connection_node->set_on_register_handle(std::bind(&app::bus_evt_callback_on_reg, this, std::placeholders::_1, std::placeholders::_2,
+                                                          std::placeholders::_3, std::placeholders::_4));
+        connection_node->set_on_shutdown_handle(
+            std::bind(&app::bus_evt_callback_on_shutdown, this, std::placeholders::_1, std::placeholders::_2));
+        connection_node->set_on_available_handle(
+            std::bind(&app::bus_evt_callback_on_available, this, std::placeholders::_1, std::placeholders::_2));
+        connection_node->set_on_invalid_connection_handle(std::bind(&app::bus_evt_callback_on_invalid_connection, this,
+                                                                    std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        connection_node->set_on_custom_cmd_handle(std::bind(&app::bus_evt_callback_on_custom_cmd, this, std::placeholders::_1,
+                                                            std::placeholders::_2, std::placeholders::_3, std::placeholders::_4,
+                                                            std::placeholders::_5));
+        connection_node->set_on_add_endpoint_handle(
+            std::bind(&app::bus_evt_callback_on_add_endpoint, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        connection_node->set_on_remove_endpoint_handle(std::bind(&app::bus_evt_callback_on_remove_endpoint, this, std::placeholders::_1,
+                                                                 std::placeholders::_2, std::placeholders::_3));
+
+        bus_node_ = connection_node;
     }
 
     void app::close_timer(timer_info_t &t) {
@@ -758,12 +855,142 @@ namespace atapp {
         return 0;
     }
 
-    int app::command_handler_stop(util::cli::callback_param params) { stop(); }
+    int app::command_handler_stop(util::cli::callback_param params) {
+        WLOGINFO("app node %llx run stop command", get_id());
+        return stop();
+    }
 
-    int app::command_handler_reload(util::cli::callback_param params) { reload(); }
+    int app::command_handler_reload(util::cli::callback_param params) {
+        WLOGINFO("app node %llx run reload command", get_id());
+        return reload();
+    }
 
     int app::command_handler_invalid(util::cli::callback_param params) {
         WLOGERROR("receive invalid command %s", par.get("@Cmd")->to_string());
+        return 0;
+    }
+
+    int app::bus_evt_callback_on_recv_msg(const atbus::node &, const atbus::endpoint *, const atbus::connection *,
+                                          const atbus::protocol::msg_head *head, const void *buffer, size_t len) {
+        // call recv callback
+        if (evt_on_recv_msg_) {
+            return evt_on_recv_msg_(std::ref(*this), head, buffer, len);
+        }
+
+        return 0;
+    }
+
+    int app::bus_evt_callback_on_send_failed(const atbus::node &, const atbus::endpoint *, const atbus::connection *,
+                                             const atbus::protocol::msg *m) {
+        // call failed callback if it's message transfer
+        if (NULL == m) {
+            WLOGERROR("app %llx receive a send failure without message", get_id());
+            return -1;
+        }
+
+        WLOGERROR("app %llx receive a send failure from %llx, message cmd: %d, type: %d, ret: %d, sequence: %u", get_id(),
+                  m->head.src_bus_id, static_cast<int>(m->head.cmd), m->head.type, m->head.ret, m->head.sequence);
+
+        if ((ATBUS_CMD_DATA_TRANSFORM_REQ == m->head.cmd || ATBUS_CMD_DATA_TRANSFORM_RSP == m->head.cmd) && evt_on_send_fail_) {
+            return evt_on_send_fail_(std::ref(*this), m->body.forward->from, m->body.forward->to, std::cref(*m));
+        }
+
+        return 0;
+    }
+
+    int app::bus_evt_callback_on_error(const atbus::node &n, const atbus::endpoint *ep, const atbus::connection *conn, int status,
+                                       int errcode) {
+        if (NULL != conn) {
+            if (NULL != ep) {
+                WLOGERROR("bus node %llx endpoint %llx connection %s error, status: %d, error code: %d", n.get_id(), ep->get_id(),
+                          conn->get_address().address.c_str(), status, errcode);
+            } else {
+                WLOGERROR("bus node %llx connection %s error, status: %d, error code: %d", n.get_id(), conn->get_address().address.c_str(),
+                          status, errcode);
+            }
+
+        } else {
+            if (NULL != ep) {
+                WLOGERROR("bus node %llx endpoint %llx error, status: %d, error code: %d", n.get_id(), ep->get_id(), status, errcode);
+            } else {
+                WLOGERROR("bus node %llx error, status: %d, error code: %d", n.get_id(), status, errcode);
+            }
+        }
+
+        return 0;
+    }
+
+    int app::bus_evt_callback_on_reg(const atbus::node &n, const atbus::endpoint *ep, const atbus::connection *conn, int res) {
+        if (NULL != conn) {
+            if (NULL != ep) {
+                WLOGINFO("bus node %llx endpoint %llx connection %s rigistered, res: %d", n.get_id(), ep->get_id(),
+                         conn->get_address().address.c_str(), res);
+            } else {
+                WLOGINFO("bus node %llx connection %s rigistered, res: %d", n.get_id(), conn->get_address().address.c_str(), res);
+            }
+
+        } else {
+            if (NULL != ep) {
+                WLOGINFO("bus node %llx endpoint %llx rigistered, res: %d", n.get_id(), ep->get_id(), res);
+            } else {
+                WLOGINFO("bus node %llx rigistered, res: %d", n.get_id(), res);
+            }
+        }
+
+        return 0;
+    }
+
+    int app::bus_evt_callback_on_shutdown(const atbus::node &n, int reason) {
+        WLOGINFO("bus node %llx shutdown, reason: %d", n.get_id(), reason);
+        return stop();
+    }
+
+    int app::bus_evt_callback_on_available(const atbus::node &, int res) {
+        WLOGINFO("bus node %llx initialze done, res: %d", n.get_id(), res);
+        return res;
+    }
+
+    int app::bus_evt_callback_on_invalid_connection(const atbus::node &n, const atbus::connection *conn, int res) {
+        if (NULL == conn) {
+            WLOGERROR("bus node %llx recv a invalid NULL connection , res: %d", n.get_id(), res);
+        } else {
+            WLOGERROR("bus node %llx make connection to %llx done, res: %d", n.get_id(), conn->get_address().address.c_str(), res);
+        }
+        return 0;
+    }
+
+    int app::bus_evt_callback_on_custom_cmd(const atbus::node &, const atbus::endpoint *, const atbus::connection *,
+                                            atbus::node::bus_id_t src_id, const std::vector<std::pair<const void *, size_t> > &args) {
+        if (args.empty()) {
+            return 0;
+        }
+
+        std::vector<std::string> args_str;
+        args_str.resize(args.size());
+
+        for (size_t i = 0; i < args_str.size(); ++i) {
+            args_str[i].assign(reinterpret_cast<const char *>(args[i].first), args[i].second);
+        }
+
+        return opt_mgr->start(args_str, true, this);
+    }
+
+    int app::bus_evt_callback_on_add_endpoint(const atbus::node &n, atbus::endpoint *ep, int res) {
+        if (NULL == ep) {
+            WLOGINFO("bus node %llx make connection to NULL, res: %d", n.get_id(), res);
+        } else {
+            WLOGERROR("bus node %llx make connection to %llx done, res: %d", n.get_id(), ep->get_id(), res);
+        }
+        return 0;
+    }
+
+    int app::bus_evt_callback_on_remove_endpoint(const atbus::node &n, atbus::endpoint *ep, int res) {
+        if (NULL == ep) {
+            WLOGINFO("bus node %llx release connection to NULL, res: %d", n.get_id(), res);
+        } else {
+            WLOGERROR("bus node %llx release connection to %llx done, res: %d", n.get_id(), ep->get_id(), res);
+        }
+        return 0;
     }
 
     void app::setup_command() {
@@ -786,12 +1013,107 @@ namespace atapp {
     }
 
     int app::send_last_command(atbus::adapter::loop_t *ev_loop) {
-        // TODO step 1. using the fastest way to connect to server
-        // TODO step 2. connect failed return error code
-        // TODO step 3. waiting for connect success
-        // TODO step 4. send data
-        // TODO step 5. setup timeout timer
+        // step 1. using the fastest way to connect to server
+
+        int use_level = 0;
+        atbus::channel::channel_address_t use_addr;
+
+        for (size_t i = 0; i < conf_.bus_listen.size(); ++i) {
+            atbus::channel::channel_address_t parsed_addr;
+            make_address(conf_.bus_listen[i].c_str(), parsed_addr);
+            int parsed_level = 0;
+            if (0 == UTIL_STRFUNC_STRNCASE_CMP("shm", parsed_addr.scheme.c_str(), 3)) {
+                parsed_level = 5;
+            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("unix", parsed_addr.scheme.c_str(), 4)) {
+                parsed_level = 4;
+            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv6", parsed_addr.scheme.c_str(), 4)) {
+                parsed_level = 3;
+            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv4", parsed_addr.scheme.c_str(), 4)) {
+                parsed_level = 2;
+            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("dns", parsed_addr.scheme.c_str(), 3)) {
+                parsed_level = 1;
+            }
+
+            if (parsed_level > use_level) {
+                use_addr = parsed_addr;
+            }
+        }
+
+        if (0 == use_level) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "there is no available listener address to send command." << std::endl;
+            return -1;
+        }
+
+        if (bus_node_) {
+            bus_node_->reset();
+            bus_node_.reset();
+        }
+
+        // command mode , must no concurrence 
+        bus_node_ = atbus::node::create();
+        if (!bus_node_) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "create bus node failed" << std::endl;
+            return -1;
+        }
+
+        // no need to connect to parent node
+        conf_.bus_conf.father_address.clear();
+
+        // using 0 for command sender
+        int ret = bus_node_->init(0, &conf_.bus_conf);
+        if (ret < 0) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "init bus node failed. ret: "<< ret << std::endl;
+            return ret;
+        }
+
+        ret = bus_node_->start();
+        if (ret < 0) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "start bus node failed. ret: "<< ret << std::endl;
+            return ret;
+        }
+
+        // step 2. connect failed return error code
+        ret = bus_node_->connect(use_addr.address.c_str());
+        if (ret < 0) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "connect to " << use_addr.address<< " failed. ret: "<< ret << std::endl;
+            return ret;
+        }
+
+        // step 3. setup timeout timer
+        if (false == tick_timer_.timeout_timer.is_activited) {
+            uv_timer_init(ev_loop, &tick_timer_.timeout_timer.timer);
+            tick_timer_.timeout_timer.timer.data = this;
+
+            int res = uv_timer_start(&tick_timer_.timeout_timer.timer, ev_stop_timeout, conf_.stop_timeout, 0);
+            if (0 == res) {
+                tick_timer_.timeout_timer.is_activited = true;
+            } else {
+                ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "setup timeout timer failed, res: " << res << std::endl;
+                set_flag(flag_t::TIMEOUT, false);
+            }
+        }
+
+        // step 4. waiting for connect success
+        atbus::endpoint* ep = NULL;
+        while(NULL == ep) {
+            uv_run(ev_loop, UV_RUN_ONCE);
+
+            if (check_flag(flag_t::TIMEOUT)) {
+                break;
+            }
+            ep = node2->get_endpoint(conf_.id);
+        }
+
+        if (NULL == ep) {
+            close_timer(tick_timer_.timeout_timer);
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "connect to " << use_addr.address<< " timeout." << std::endl;
+            return -1;
+        }
+
+        // TODO step 5. send data
         // TODO step 6. waiting for send done(for shm, no need to wait, for io_stream fd, waiting write callback)
-        return 0;
+
+        close_timer(tick_timer_.timeout_timer);
+        return ret;
     }
 }
