@@ -191,6 +191,8 @@ namespace atapp {
         // callbacks
         std::function<int (app&, const msg_head_t *, const void *, size_t)> evt_on_recv_msg_;
         std::function<int (app&, app_id_t src_pd, app_id_t dst_pd, const atbus::protocol::msg& m)> evt_on_send_fail_;
+        std::function<int (app&, atbus::endpoint&， int)> evt_on_app_connected_;
+        std::function<int (app&, atbus::endpoint&， int)> evt_on_app_disconnected_;
     };
 }
 

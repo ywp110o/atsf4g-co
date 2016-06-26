@@ -977,18 +977,26 @@ namespace atapp {
 
     int app::bus_evt_callback_on_add_endpoint(const atbus::node &n, atbus::endpoint *ep, int res) {
         if (NULL == ep) {
-            WLOGINFO("bus node %llx make connection to NULL, res: %d", n.get_id(), res);
+            WLOGERROR("bus node %llx make connection to NULL, res: %d", n.get_id(), res);
         } else {
-            WLOGERROR("bus node %llx make connection to %llx done, res: %d", n.get_id(), ep->get_id(), res);
+            WLOGINFO("bus node %llx make connection to %llx done, res: %d", n.get_id(), ep->get_id(), res);
+
+            if(evt_on_app_connected_) {
+                evt_on_app_connected_(std::ref(*this), *ep, res);
+            }
         }
         return 0;
     }
 
     int app::bus_evt_callback_on_remove_endpoint(const atbus::node &n, atbus::endpoint *ep, int res) {
         if (NULL == ep) {
-            WLOGINFO("bus node %llx release connection to NULL, res: %d", n.get_id(), res);
+            WLOGERROR("bus node %llx release connection to NULL, res: %d", n.get_id(), res);
         } else {
-            WLOGERROR("bus node %llx release connection to %llx done, res: %d", n.get_id(), ep->get_id(), res);
+            WLOGINFO("bus node %llx release connection to %llx done, res: %d", n.get_id(), ep->get_id(), res);
+
+            if(evt_on_app_disconnected_) {
+                evt_on_app_disconnected_(std::ref(*this), *ep, res);
+            }
         }
         return 0;
     }
@@ -1013,8 +1021,12 @@ namespace atapp {
     }
 
     int app::send_last_command(atbus::adapter::loop_t *ev_loop) {
-        // step 1. using the fastest way to connect to server
+        if (last_command_.empty()) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "command is empty." << std::endl;
+            return -1;
+        }
 
+        // step 1. using the fastest way to connect to server
         int use_level = 0;
         atbus::channel::channel_address_t use_addr;
 
@@ -1101,7 +1113,7 @@ namespace atapp {
             if (check_flag(flag_t::TIMEOUT)) {
                 break;
             }
-            ep = node2->get_endpoint(conf_.id);
+            ep = bus_node_->get_endpoint(conf_.id);
         }
 
         if (NULL == ep) {
@@ -1110,8 +1122,26 @@ namespace atapp {
             return -1;
         }
 
-        // TODO step 5. send data
-        // TODO step 6. waiting for send done(for shm, no need to wait, for io_stream fd, waiting write callback)
+        // step 5. send data
+        std::vector<const void *> arr_buff;
+        std::vector<size_t> arr_size;
+        arr_buff.resize(last_command_.size());
+        arr_size.resize(last_command_.size());
+        for (size_t i = 0; i < last_command_.size(); ++ i) {
+            arr_buff[i] = last_command_[i].data();
+            arr_size[i] = last_command_[i].size();
+        }
+        
+        ret = bus_node_->send_custom_cmd(ep->get_id(), &arr_buff[0], &arr_size[0], last_command_.size());
+        if (ret < 0) {
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "send command failed. ret: "<< ret << std::endl;
+            return ret;
+        }
+
+        // step 6. waiting for send done(for shm, no need to wait, for io_stream fd, waiting write callback)
+        if (parsed_level < 5) {
+            // TODO 可以根据统计发送成功和失败的次数来确定是否发送完成
+        }
 
         close_timer(tick_timer_.timeout_timer);
         return ret;
