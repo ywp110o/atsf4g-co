@@ -1,4 +1,4 @@
-#include <iostream>
+﻿#include <iostream>
 
 #include "cli/shell_font.h"
 #include "log/log_sink_file_backend.h"
@@ -45,7 +45,7 @@ namespace atapp {
             file_sink.set_check_interval(check_interval);
 
             if (ini_cfg.get_children().end() != ini_cfg.get_children().find("auto_flush")) {
-                std::string cfg_val = rotate_conf["auto_flush"].as_cpp_string();
+                std::string cfg_val = ini_cfg["auto_flush"].as_cpp_string();
                 if (cfg_val.empty() || "no" == cfg_val || "false" == cfg_val || "disabled" == cfg_val) {
                     file_sink.set_auto_flush(false);
                 } else {
@@ -87,19 +87,19 @@ namespace atapp {
         return ret;
     }
 
-    log_reg_t &log_sink_maker::get_file_sink_reg() { return detail::_log_sink_file; }
+    log_sink_maker::log_reg_t log_sink_maker::get_file_sink_reg() { return detail::_log_sink_file; }
 
     const std::string &log_sink_maker::get_stdout_sink_name() {
         static std::string ret = "stdout";
         return ret;
     }
 
-    log_reg_t &log_sink_maker::get_stdout_sink_reg() { return detail::_log_sink_stdout; }
+    log_sink_maker::log_reg_t log_sink_maker::get_stdout_sink_reg() { return detail::_log_sink_stdout; }
 
     const std::string &log_sink_maker::get_stderr_sink_name() {
         static std::string ret = "stderr";
         return ret;
     }
 
-    log_reg_t &log_sink_maker::get_stderr_sink_reg() { return detail::_log_sink_stderr; }
+    log_sink_maker::log_reg_t log_sink_maker::get_stderr_sink_reg() { return detail::_log_sink_stderr; }
 }

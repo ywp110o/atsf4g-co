@@ -6,9 +6,10 @@
 #include <sstream>
 #include <vector>
 
+#include <uv.h>
+
 #include <atframe/atapp.h>
 #include <time/time_utility.h>
-#include <uv.h>
 
 
 class echo_module : public atapp::module_impl {
@@ -45,7 +46,7 @@ public:
 static int app_command_handler_echo(util::cli::callback_param params) {
     std::stringstream ss;
     for (size_t i = 0; i < params.get_params_number(); ++i) {
-        ss << " " << params[i]->as_cpp_string();
+        ss << " " << params[i]->to_cpp_string();
     }
 
     WLOGINFO("echo commander:%s", ss.str().c_str());
@@ -55,16 +56,16 @@ static int app_command_handler_echo(util::cli::callback_param params) {
 static int app_option_handler_echo(util::cli::callback_param params) {
     std::stringstream ss;
     for (size_t i = 0; i < params.get_params_number(); ++i) {
-        ss << " " << params[i]->as_cpp_string();
+        ss << " " << params[i]->to_cpp_string();
     }
 
     std::cout << "echo option: " << ss.str() << std::endl;
     return 0;
 }
 
-static int app_handle_on_msg(atapp::app &app, const atapp::msg_head_t *head, const void *buffer, size_t len) {
+static int app_handle_on_msg(atapp::app &app, const atapp::app::msg_head_t *head, const void *buffer, size_t len) {
     std::string data;
-    data.assign(reinterpret_cast<char *>(buffer), len);
+    data.assign(reinterpret_cast<const char *>(buffer), len);
     WLOGINFO("receive a message %s", data.c_str());
 
     if (NULL != head && 0 != head->src_bus_id) {
@@ -74,17 +75,17 @@ static int app_handle_on_msg(atapp::app &app, const atapp::msg_head_t *head, con
     return 0;
 }
 
-static int app_handle_on_send_fail(atapp::app &app, atapp::app_id_t src_pd, atapp::app_id_t dst_pd, const atbus::protocol::msg &m) {
+static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
     WLOGERROR("send data from %llx to %llx failed", src_pd, dst_pd);
     return 0;
 }
 
-static int app_handle_on_connected(atapp::app &app, atbus::endpoint &ep， int status) {
+static int app_handle_on_connected(atapp::app &app, atbus::endpoint &ep, int status) {
     WLOGINFO("app %llx connected, status: %d", ep.get_id(), status);
     return 0;
 }
 
-static int app_handle_on_disconnected(atapp::app &app, atbus::endpoint &ep， int status) {
+static int app_handle_on_disconnected(atapp::app &app, atbus::endpoint &ep, int status) {
     WLOGINFO("app %llx disconnected, status: %d", ep.get_id(), status);
     return 0;
 }
@@ -109,5 +110,5 @@ int main(int argc, char *argv[]) {
     app.set_evt_on_app_disconnected(app_handle_on_disconnected);
 
     // run
-    return app.run(uv_default_loop(), argc, argv, NULL);
+    return app.run(uv_default_loop(), argc, (const char**)argv, NULL);
 }

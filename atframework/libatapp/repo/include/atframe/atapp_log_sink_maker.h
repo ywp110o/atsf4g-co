@@ -1,4 +1,4 @@
-/**
+﻿/**
  * atapp_log_sink_maker.h
  *
  *  Created on: 2016年05月21日
@@ -11,6 +11,7 @@
 
 #include <string>
 
+#include "ini_loader.h"
 #include "log/log_wrapper.h"
 
 namespace atapp {
@@ -27,15 +28,15 @@ namespace atapp {
     public:
         static const std::string &get_file_sink_name();
 
-        static log_reg_t &get_file_sink_reg();
+        static log_reg_t get_file_sink_reg();
 
         static const std::string &get_stdout_sink_name();
 
-        static log_reg_t &get_stdout_sink_reg();
+        static log_reg_t get_stdout_sink_reg();
 
         static const std::string &get_stderr_sink_name();
 
-        static log_reg_t &get_stderr_sink_reg();
+        static log_reg_t get_stderr_sink_reg();
     };
 }
 

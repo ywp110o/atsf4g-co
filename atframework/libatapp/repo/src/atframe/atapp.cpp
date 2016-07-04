@@ -1,13 +1,15 @@
-#include <assert.h>
+﻿#include <assert.h>
 #include <fstream>
 #include <iostream>
 #include <signal.h>
 
 #include "std/foreach.h"
 
-#include "cli/shell_font.h"
-
 #include "atframe/atapp.h"
+
+#include "common/string_oprs.h"
+
+#include "cli/shell_font.h"
 
 namespace atapp {
     app *app::last_instance_;
@@ -19,7 +21,7 @@ namespace atapp {
         conf_.stop_timeout = 30000; // 30s
         conf_.tick_interval = 32;   // 32ms
 
-        tick_timer_.sec_update = util::time::time_utility::raw_time_t::zero();
+        tick_timer_.sec_update = util::time::time_utility::raw_time_t::min();
         tick_timer_.sec = 0;
         tick_timer_.usec = 0;
 
@@ -33,7 +35,7 @@ namespace atapp {
         }
     }
 
-    int app::run(atbus::adapter::loop_t *ev_loop, int argc, const char *argv[], void *priv_data) {
+    int app::run(atbus::adapter::loop_t *ev_loop, int argc, const char **argv, void *priv_data) {
         if (check(flag_t::RUNNING)) {
             return 0;
         }
@@ -50,7 +52,7 @@ namespace atapp {
 
         util::cli::shell_stream ss(std::cerr);
         // step 4. load options from cmd line
-        conf_.bus_node_.ev_loop = ev_loop;
+        conf_.bus_conf.ev_loop = ev_loop;
         int ret = reload();
         if (ret < 0) {
             ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "load configure failed" << std::endl;
@@ -142,8 +144,8 @@ namespace atapp {
         // step 4. merge configure
         {
             std::vector<std::string> external_confs;
-            cfg_loader_.dump("atapp.config.external", external_confs);
-            owent_foreach(std::string & conf_fp : external_confs) {
+            cfg_loader_.dump_to("atapp.config.external", external_confs);
+            owent_foreach(std::string & conf_fp, external_confs) {
                 if (!conf_fp.empty()) {
                     if (cfg_loader_.load_file(conf_.conf_file.c_str(), true) < 0) {
                         if (check(flag_t::RUNNING)) {
@@ -160,6 +162,10 @@ namespace atapp {
 
         // apply ini configure
         apply_configure();
+        // reuse ev loop if not configued
+        if (NULL == conf_.bus_conf.ev_loop) {
+            conf_.bus_conf.ev_loop = old_conf.bus_conf.ev_loop;
+        }
 
         // step 5. if not in start mode, return
         if (mode_t::START != mode_) {
@@ -178,7 +184,7 @@ namespace atapp {
             }
 
             // step 8. if running and tick interval changed, reset timer
-            if (old_conf->tick_interval != conf_->tick_interval) {
+            if (old_conf.tick_interval != conf_.tick_interval) {
                 setup_timer();
             }
         }
@@ -193,13 +199,15 @@ namespace atapp {
         bool is_stoping = set_flag(flag_t::STOPING, true);
 
         // TODO stop reason = manual stop
-        if (!is_stop && bus_node_) {
+        if (!is_stoping && bus_node_) {
             bus_node_->shutdown(0);
         }
 
         // step 2. stop libuv and return from uv_run
         // if (!is_stoping) {
-        uv_stop(bus_node_.get_evloop());
+        if (bus_node_) {
+            uv_stop(bus_node_->get_evloop());
+        }
         // }
         return 0;
     }
@@ -209,7 +217,7 @@ namespace atapp {
         util::time::time_utility::update();
         // record start time point
         util::time::time_utility::raw_time_t start_tp = util::time::time_utility::now();
-
+        util::time::time_utility::raw_time_t end_tp = start_tp;
         do {
             if (tick_timer_.sec != util::time::time_utility::get_now()) {
                 tick_timer_.sec = util::time::time_utility::get_now();
@@ -245,7 +253,7 @@ namespace atapp {
 
             // only tick time less than tick interval will run loop again
             util::time::time_utility::update();
-            util::time::time_utility::raw_time_t end_tp = util::time::time_utility::now();
+            end_tp = util::time::time_utility::now();
         } while (active_count > 0 && (end_tp - start_tp) >= std::chrono::milliseconds(conf_.tick_interval));
         return 0;
     }
@@ -289,7 +297,7 @@ namespace atapp {
 
     void app::set_app_version(const std::string &ver) { conf_.app_version = ver; }
 
-    const std::string &app::get_app_version() const { return conf_.app_version； }
+    const std::string &app::get_app_version() const { return conf_.app_version; }
 
     atbus::node::ptr_t app::get_bus_node() { return bus_node_; }
     const atbus::node::ptr_t app::get_bus_node() const { return bus_node_; }
@@ -323,6 +331,14 @@ namespace atapp {
         return ret;
     }
 
+    bool app::check_flag(flag_t::type f) const {
+        if (f < 0 || f >= flag_t::FLAG_MAX) {
+            return false;
+        }
+
+        return flags_.test(f);
+    }
+
     int app::apply_configure() {
         // id
         if (0 == conf_.id) {
@@ -348,27 +364,27 @@ namespace atapp {
         cfg_loader_.dump_to("atapp.timer.tick_interval", conf_.tick_interval);
 
         // atbus configure
-        atbus::node::default_conf(&conf_.bus_node_);
+        atbus::node::default_conf(&conf_.bus_conf);
 
-        cfg_loader_.dump_to("atapp.bus.children_mask", conf_.bus_node_.children_mask);
+        cfg_loader_.dump_to("atapp.bus.children_mask", conf_.bus_conf.children_mask);
         {
             bool optv = false;
             cfg_loader_.dump_to("atapp.bus.options.global_router", optv);
-            conf_.bus_node_.flags.set(atbus::node::conf_flag_t::EN_CONF_GLOBAL_ROUTER, optv);
+            conf_.bus_conf.flags.set(atbus::node::conf_flag_t::EN_CONF_GLOBAL_ROUTER, optv);
         }
 
-        cfg_loader_.dump_to("atapp.bus.proxy", conf_.bus_node_.father_address);
-        cfg_loader_.dump_to("atapp.bus.loop_times", conf_.bus_node_.loop_times);
-        cfg_loader_.dump_to("atapp.bus.ttl", conf_.bus_node_.ttl);
-        cfg_loader_.dump_to("atapp.bus.backlog", conf_.bus_node_.backlog);
-        cfg_loader_.dump_to("atapp.bus.first_idle_timeout", conf_.bus_node_.first_idle_timeout);
-        cfg_loader_.dump_to("atapp.bus.ping_interval", conf_.bus_node_.ping_interval);
-        cfg_loader_.dump_to("atapp.bus.retry_interval", conf_.bus_node_.retry_interval);
-        cfg_loader_.dump_to("atapp.bus.fault_tolerant", conf_.bus_node_.fault_tolerant);
-        cfg_loader_.dump_to("atapp.bus.msg_size", conf_.bus_node_.msg_size);
-        cfg_loader_.dump_to("atapp.bus.recv_buffer_size", conf_.bus_node_.recv_buffer_size);
-        cfg_loader_.dump_to("atapp.bus.send_buffer_size", conf_.bus_node_.send_buffer_size);
-        cfg_loader_.dump_to("atapp.bus.send_buffer_number", conf_.bus_node_.send_buffer_number);
+        cfg_loader_.dump_to("atapp.bus.proxy", conf_.bus_conf.father_address);
+        cfg_loader_.dump_to("atapp.bus.loop_times", conf_.bus_conf.loop_times);
+        cfg_loader_.dump_to("atapp.bus.ttl", conf_.bus_conf.ttl);
+        cfg_loader_.dump_to("atapp.bus.backlog", conf_.bus_conf.backlog);
+        cfg_loader_.dump_to("atapp.bus.first_idle_timeout", conf_.bus_conf.first_idle_timeout);
+        cfg_loader_.dump_to("atapp.bus.ping_interval", conf_.bus_conf.ping_interval);
+        cfg_loader_.dump_to("atapp.bus.retry_interval", conf_.bus_conf.retry_interval);
+        cfg_loader_.dump_to("atapp.bus.fault_tolerant", conf_.bus_conf.fault_tolerant);
+        cfg_loader_.dump_to("atapp.bus.msg_size", conf_.bus_conf.msg_size);
+        cfg_loader_.dump_to("atapp.bus.recv_buffer_size", conf_.bus_conf.recv_buffer_size);
+        cfg_loader_.dump_to("atapp.bus.send_buffer_size", conf_.bus_conf.send_buffer_size);
+        cfg_loader_.dump_to("atapp.bus.send_buffer_number", conf_.bus_conf.send_buffer_number);
 
         return 0;
     }
@@ -402,9 +418,9 @@ namespace atapp {
             }
         }
 
-        while (keep_running) {
+        while (keep_running && bus_node_) {
             // step X. loop uv_run util stop flag is set
-            uv_run(bus_node_.get_evloop(), UV_RUN_DEFAULT);
+            uv_run(bus_node_->get_evloop(), UV_RUN_DEFAULT);
             if (check_flag(flag_t::STOPING)) {
                 keep_running = false;
 
@@ -436,7 +452,7 @@ namespace atapp {
 
                     // step X. if stop is blocked and timeout not triggered, setup stop timeout and waiting for all modules finished
                     if (false == tick_timer_.timeout_timer.is_activited) {
-                        uv_timer_init(bus_node_.get_evloop(), &tick_timer_.timeout_timer.timer);
+                        uv_timer_init(bus_node_->get_evloop(), &tick_timer_.timeout_timer.timer);
                         tick_timer_.timeout_timer.timer.data = this;
 
                         int res = uv_timer_start(&tick_timer_.timeout_timer.timer, ev_stop_timeout, conf_.stop_timeout, 0);
@@ -452,7 +468,7 @@ namespace atapp {
 
             // if atbus is at shutdown state, loop
             if (keep_running && bus_node_->check(atbus::node::flag_t::EN_FT_SHUTDOWN)) {
-                uv_run(bus_node_.get_evloop(), UV_RUN_DEFAULT);
+                uv_run(bus_node_->get_evloop(), UV_RUN_DEFAULT);
             }
         }
 
@@ -475,7 +491,7 @@ namespace atapp {
 
     int app::setup_signal() {
         // block signals
-        detail::last_atapp_ = this;
+        app::last_instance_ = this;
         signal(SIGTERM, _app_setup_signal_term);
 
 #ifndef _MSC_VER
@@ -485,6 +501,8 @@ namespace atapp {
         signal(SIGTTIN, SIG_IGN); // tty input
         signal(SIGTTOU, SIG_IGN); // tty output
 #endif
+
+        return 0;
     }
 
     int app::setup_log() {
@@ -575,6 +593,8 @@ namespace atapp {
                 }
             }
         }
+
+        return 0;
     }
 
     int app::setup_atbus() {
@@ -625,7 +645,7 @@ namespace atapp {
             atbus::node::state_t::LOST_PARENT == connection_node->get_state()) {
             // setup timeout and waiting for parent connected
             if (false == tick_timer_.timeout_timer.is_activited) {
-                uv_timer_init(connection_node.get_evloop(), &tick_timer_.timeout_timer.timer);
+                uv_timer_init(connection_node->get_evloop(), &tick_timer_.timeout_timer.timer);
                 tick_timer_.timeout_timer.timer.data = this;
 
                 res = uv_timer_start(&tick_timer_.timeout_timer.timer, ev_stop_timeout, conf_.stop_timeout, 0);
@@ -643,7 +663,7 @@ namespace atapp {
                         break;
                     }
 
-                    uv_run(connection_node.get_evloop(), UV_RUN_ONCE);
+                    uv_run(connection_node->get_evloop(), UV_RUN_ONCE);
                 }
 
                 // if connected, do not trigger timeout
@@ -660,33 +680,43 @@ namespace atapp {
         connection_node->set_on_recv_handle(std::bind(&app::bus_evt_callback_on_recv_msg, this, std::placeholders::_1,
                                                       std::placeholders::_2, std::placeholders::_3, std::placeholders::_4,
                                                       std::placeholders::_5, std::placeholders::_6));
-        connection_node->set_on_send_data_failed_handle(std::bind(&app::bus_evt_callback_on_, this, std::placeholders::_1,
+
+        connection_node->set_on_send_data_failed_handle(std::bind(&app::bus_evt_callback_on_send_failed, this, std::placeholders::_1,
                                                                   std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+
         connection_node->set_on_error_handle(std::bind(&app::bus_evt_callback_on_error, this, std::placeholders::_1, std::placeholders::_2,
                                                        std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
+
         connection_node->set_on_register_handle(std::bind(&app::bus_evt_callback_on_reg, this, std::placeholders::_1, std::placeholders::_2,
                                                           std::placeholders::_3, std::placeholders::_4));
+
         connection_node->set_on_shutdown_handle(
             std::bind(&app::bus_evt_callback_on_shutdown, this, std::placeholders::_1, std::placeholders::_2));
+
         connection_node->set_on_available_handle(
             std::bind(&app::bus_evt_callback_on_available, this, std::placeholders::_1, std::placeholders::_2));
+
         connection_node->set_on_invalid_connection_handle(std::bind(&app::bus_evt_callback_on_invalid_connection, this,
                                                                     std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+
         connection_node->set_on_custom_cmd_handle(std::bind(&app::bus_evt_callback_on_custom_cmd, this, std::placeholders::_1,
                                                             std::placeholders::_2, std::placeholders::_3, std::placeholders::_4,
                                                             std::placeholders::_5));
         connection_node->set_on_add_endpoint_handle(
             std::bind(&app::bus_evt_callback_on_add_endpoint, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+
         connection_node->set_on_remove_endpoint_handle(std::bind(&app::bus_evt_callback_on_remove_endpoint, this, std::placeholders::_1,
                                                                  std::placeholders::_2, std::placeholders::_3));
 
         bus_node_ = connection_node;
+
+        return 0;
     }
 
     void app::close_timer(timer_info_t &t) {
         if (t.is_activited) {
-            uv_timer_stop(t.timer);
-            uv_close(&t.timer, NULL);
+            uv_timer_stop(&t.timer);
+            uv_close(reinterpret_cast<uv_handle_t*>(&t.timer), NULL);
             t.is_activited = false;
         }
     }
@@ -707,7 +737,7 @@ namespace atapp {
             WLOGWARNING("tick interval can not smaller than 4ms, we use 4ms now.");
         }
 
-        uv_timer_init(bus_node_.get_evloop(), &tick_timer_.tick_timer.timer);
+        uv_timer_init(bus_node_->get_evloop(), &tick_timer_.tick_timer.timer);
         tick_timer_.tick_timer.timer.data = this;
 
         int res = uv_timer_start(&tick_timer_.tick_timer.timer, _app_tick_timer_handle, conf_.tick_interval, conf_.tick_interval);
@@ -721,7 +751,7 @@ namespace atapp {
         return 0;
     }
 
-    void app::print_help() const {
+    void app::print_help() {
         printf("Usage: %s <options> <command> [command paraters...]\n", conf_.execute_path);
         printf("%s\n", get_option_manager()->get_help_msg().c_str());
     }
@@ -746,7 +776,7 @@ namespace atapp {
 
     int app::prog_option_handler_set_id(util::cli::callback_param params) {
         if (params.get_params_number() > 0) {
-            conf_.id = params[0]->as<app_id_t>();
+            conf_.id = params[0]->to<app_id_t>();
         } else {
             util::cli::shell_stream ss(std::cerr);
             ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "-id require 1 parameter" << std::endl;
@@ -757,7 +787,7 @@ namespace atapp {
 
     int app::prog_option_handler_set_conf_file(util::cli::callback_param params) {
         if (params.get_params_number() > 0) {
-            conf_.conf_file = params[0]->as_cpp_string();
+            conf_.conf_file = params[0]->to_cpp_string();
         } else {
             util::cli::shell_stream ss(std::cerr);
             ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "-c, --conf, --config require 1 parameter" << std::endl;
@@ -768,7 +798,7 @@ namespace atapp {
 
     int app::prog_option_handler_set_pid(util::cli::callback_param params) {
         if (params.get_params_number() > 0) {
-            conf_.pid_file = params[0]->as_cpp_string();
+            conf_.pid_file = params[0]->to_cpp_string();
         } else {
             util::cli::shell_stream ss(std::cerr);
             ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "-p, --pid require 1 parameter" << std::endl;
@@ -790,21 +820,21 @@ namespace atapp {
     int app::prog_option_handler_stop(util::cli::callback_param params) {
         mode_ = mode_t::STOP;
         last_command_.clear();
-        last_command_.push_pack("stop");
+        last_command_.push_back("stop");
         return 0;
     }
 
     int app::prog_option_handler_reload(util::cli::callback_param params) {
         mode_ = mode_t::RELOAD;
         last_command_.clear();
-        last_command_.push_pack("reload");
+        last_command_.push_back("reload");
         return 0;
     }
 
     int app::prog_option_handler_run(util::cli::callback_param params) {
         mode_ = mode_t::CUSTOM;
         for (size_t i = 0; i < params.get_params_number(); ++i) {
-            last_command_.push_pack(params[i]->as_cpp_string());
+            last_command_.push_back(params[i]->to_cpp_string());
         }
 
         if (0 == params.get_params_number()) {
@@ -820,7 +850,7 @@ namespace atapp {
 
         util::cli::cmd_option::ptr_type opt_mgr = get_option_manager();
         // show help and exit
-        opt_mgr->bind_cmd("-h, --help, help", &app::prog_option_handler_help, this, &opt_mgr)
+        opt_mgr->bind_cmd("-h, --help, help", &app::prog_option_handler_help, this, opt_mgr.get())
             ->set_help_msg("-h. --help, help                       show this help message.");
 
         // show version and exit
@@ -860,7 +890,7 @@ namespace atapp {
             ->set_help_msg("run <command> [parameters...]          send custom command and parameters to server.");
 
         conf_.execute_path = argv[0];
-        opt_mgr->start(argc - 1, argv, false, priv_data);
+        opt_mgr->start(argc - 1, &argv[1], false, priv_data);
     }
 
     int app::app::command_handler_start(util::cli::callback_param params) {
@@ -879,7 +909,7 @@ namespace atapp {
     }
 
     int app::command_handler_invalid(util::cli::callback_param params) {
-        WLOGERROR("receive invalid command %s", par.get("@Cmd")->to_string());
+        WLOGERROR("receive invalid command %s", params.get("@Cmd")->to_string());
         return 0;
     }
 
@@ -958,7 +988,7 @@ namespace atapp {
         return stop();
     }
 
-    int app::bus_evt_callback_on_available(const atbus::node &, int res) {
+    int app::bus_evt_callback_on_available(const atbus::node & n, int res) {
         WLOGINFO("bus node %llx initialze done, res: %d", n.get_id(), res);
         return res;
     }
@@ -985,7 +1015,9 @@ namespace atapp {
             args_str[i].assign(reinterpret_cast<const char *>(args[i].first), args[i].second);
         }
 
-        return opt_mgr->start(args_str, true, this);
+        util::cli::cmd_option_ci::ptr_type cmd_mgr = get_command_manager();
+        cmd_mgr->start(args_str, true, this);
+        return 0;
     }
 
     int app::bus_evt_callback_on_add_endpoint(const atbus::node &n, atbus::endpoint *ep, int res) {
@@ -995,7 +1027,7 @@ namespace atapp {
             WLOGINFO("bus node %llx make connection to %llx done, res: %d", n.get_id(), ep->get_id(), res);
 
             if (evt_on_app_connected_) {
-                evt_on_app_connected_(std::ref(*this), *ep, res);
+                evt_on_app_connected_(std::ref(*this), std::ref(*ep), res);
             }
         }
         return 0;
@@ -1008,32 +1040,34 @@ namespace atapp {
             WLOGINFO("bus node %llx release connection to %llx done, res: %d", n.get_id(), ep->get_id(), res);
 
             if (evt_on_app_disconnected_) {
-                evt_on_app_disconnected_(std::ref(*this), *ep, res);
+                evt_on_app_disconnected_(std::ref(*this), std::ref(*ep), res);
             }
         }
         return 0;
     }
 
     void app::setup_command() {
-        util::cli::cmd_option::ptr_type opt_mgr = get_option_manager();
+        util::cli::cmd_option_ci::ptr_type cmd_mgr = get_command_manager();
         // dump all connected nodes to default log collector
-        // opt_mgr->bind_cmd("dump");
+        // cmd_mgr->bind_cmd("dump");
         // dump all nodes to default log collector
-        // opt_mgr->bind_cmd("dump");
+        // cmd_mgr->bind_cmd("dump");
         // dump state
 
         // start server
-        opt_mgr->bind_cmd("start", &app::app::command_handler_start, this);
+        cmd_mgr->bind_cmd("start", &app::app::command_handler_start, this);
         // stop server
-        opt_mgr->bind_cmd("stop", &app::app::command_handler_stop, this);
+        cmd_mgr->bind_cmd("stop", &app::app::command_handler_stop, this);
         // reload all configures
-        opt_mgr->bind_cmd("reload", &app::app::command_handler_reload, this);
+        cmd_mgr->bind_cmd("reload", &app::app::command_handler_reload, this);
 
         // invalid command
-        opt_mgr->bind_cmd("@OnError", &app::command_handler_invalid, this);
+        cmd_mgr->bind_cmd("@OnError", &app::command_handler_invalid, this);
     }
 
     int app::send_last_command(atbus::adapter::loop_t *ev_loop) {
+        util::cli::shell_stream ss(std::cerr);
+
         if (last_command_.empty()) {
             ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "command is empty." << std::endl;
             return -1;
@@ -1061,6 +1095,7 @@ namespace atapp {
 
             if (parsed_level > use_level) {
                 use_addr = parsed_addr;
+                use_level = parsed_level;
             }
         }
 
@@ -1154,7 +1189,7 @@ namespace atapp {
         }
 
         // step 6. waiting for send done(for shm, no need to wait, for io_stream fd, waiting write callback)
-        if (parsed_level < 5) {
+        if (use_level < 5) {
             do {
                 size_t start_times = ep->get_stat_push_start_times();
                 size_t end_times = ep->get_stat_push_success_times() + ep->get_stat_push_failed_times();

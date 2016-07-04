@@ -1,4 +1,4 @@
-/**
+﻿/**
  * atapp_module_impl.h
  *
  *  Created on: 2016年05月18日
@@ -18,7 +18,7 @@ namespace atapp {
     class module_impl {
     protected:
         module_impl();
-        ~module_impl;
+        ~module_impl();
 
     private:
         module_impl(const module_impl &) FUNC_DELETE;
@@ -59,7 +59,7 @@ namespace atapp {
         const app *get_app() const;
 
     protected:
-        inline bool is_enabled() const { return enabled_(); }
+        inline bool is_enabled() const { return enabled_; }
 
         bool enable();
 

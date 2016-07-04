@@ -1,4 +1,4 @@
-/**
+﻿/**
  * atapp.h
  *
  *  Created on: 2016年04月23日
@@ -13,20 +13,18 @@
 #include <string>
 #include <vector>
 
+#include "libatbus.h"
+
 #include "std/functional.h"
 
-#include "ini_loader.h"
 #include <bitset>
 
 #include "cli/cmd_option.h"
 #include "time/time_utility.h"
 
-#include "libatbus.h"
-
+#include "atapp_conf.h"
 #include "atapp_log_sink_maker.h"
 #include "atapp_module_impl.h"
-
-#include "uv.h"
 
 #define LIBATAPP_VERSION "0.1.0.0"
 
@@ -74,14 +72,14 @@ namespace atapp {
 
         typedef std::function<int(app &, const msg_head_t *, const void *, size_t)> callback_fn_on_msg_t;
         typedef std::function<int(app &, app_id_t src_pd, app_id_t dst_pd, const atbus::protocol::msg &m)> callback_fn_on_send_fail_t;
-        typedef std::function<int(app &, atbus::endpoint &， int)> callback_fn_on_connected_t;
-        typedef std::function<int(app &, atbus::endpoint &， int)> callback_fn_on_disconnected_t;
+        typedef std::function<int(app &, atbus::endpoint &, int)> callback_fn_on_connected_t;
+        typedef std::function<int(app &, atbus::endpoint &, int)> callback_fn_on_disconnected_t;
 
     public:
         app();
         ~app();
 
-        int run(atbus::adapter::loop_t *ev_loop, int argc, const char *argv[], void *priv_data = NULL);
+        int run(atbus::adapter::loop_t *ev_loop, int argc, const char **argv, void *priv_data = NULL);
 
         int reload();
 
@@ -135,6 +133,7 @@ namespace atapp {
         static void ev_stop_timeout(uv_timer_t *handle);
 
         bool set_flag(flag_t::type f, bool v);
+        bool check_flag(flag_t::type f) const;
 
         int apply_configure();
 
@@ -156,7 +155,7 @@ namespace atapp {
 
         int send_last_command(atbus::adapter::loop_t *ev_loop);
 
-        void print_help() const;
+        void print_help();
         // ============ inner functional handlers ============
     private:
         int prog_option_handler_help(util::cli::callback_param params, util::cli::cmd_option *opt_mgr);
@@ -190,6 +189,8 @@ namespace atapp {
         int bus_evt_callback_on_add_endpoint(const atbus::node &, atbus::endpoint *, int);
         int bus_evt_callback_on_remove_endpoint(const atbus::node &, atbus::endpoint *, int);
 
+
+        friend void _app_setup_signal_term(int signo);
     private:
         static app *last_instance_;
         util::config::ini_loader cfg_loader_;

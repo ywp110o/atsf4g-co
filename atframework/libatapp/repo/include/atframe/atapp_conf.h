@@ -1,4 +1,4 @@
-/**
+﻿/**
  * atapp_conf.h
  *
  *  Created on: 2016年04月23日
@@ -11,7 +11,6 @@
 
 #include "libatbus.h"
 #include <string>
-#include <time_t>
 #include <vector>
 
 namespace atapp {
