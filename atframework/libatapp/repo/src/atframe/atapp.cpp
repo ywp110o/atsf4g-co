@@ -483,7 +483,7 @@ namespace atapp {
     }
 
     // graceful Exits
-    static void _app_setup_signal_term(int signo) {
+    void app::_app_setup_signal_term(int signo) {
         if (NULL != app::last_instance_) {
             app::last_instance_->stop();
         }
@@ -494,7 +494,7 @@ namespace atapp {
         app::last_instance_ = this;
         signal(SIGTERM, _app_setup_signal_term);
 
-#ifndef _MSC_VER
+#ifndef WIN32
         signal(SIGHUP, SIG_IGN);  // lost parent process
         signal(SIGPIPE, SIG_IGN); // close stdin, stdout or stderr
         signal(SIGTSTP, SIG_IGN); // close tty
@@ -716,7 +716,7 @@ namespace atapp {
     void app::close_timer(timer_info_t &t) {
         if (t.is_activited) {
             uv_timer_stop(&t.timer);
-            uv_close(reinterpret_cast<uv_handle_t*>(&t.timer), NULL);
+            uv_close(reinterpret_cast<uv_handle_t *>(&t.timer), NULL);
             t.is_activited = false;
         }
     }
@@ -988,7 +988,7 @@ namespace atapp {
         return stop();
     }
 
-    int app::bus_evt_callback_on_available(const atbus::node & n, int res) {
+    int app::bus_evt_callback_on_available(const atbus::node &n, int res) {
         WLOGINFO("bus node %llx initialze done, res: %d", n.get_id(), res);
         return res;
     }
@@ -997,7 +997,7 @@ namespace atapp {
         if (NULL == conn) {
             WLOGERROR("bus node %llx recv a invalid NULL connection , res: %d", n.get_id(), res);
         } else {
-            WLOGERROR("bus node %llx make connection to %llx done, res: %d", n.get_id(), conn->get_address().address.c_str(), res);
+            WLOGERROR("bus node %llx make connection to %s done, res: %d", n.get_id(), conn->get_address().address.c_str(), res);
         }
         return 0;
     }

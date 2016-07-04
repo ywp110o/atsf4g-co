@@ -16,7 +16,6 @@ namespace atapp {
             }
             size_t max_file_size = 0; // 64KB
             uint32_t rotate_size = 0; // 0-9
-            bool auto_flush = true;
             time_t check_interval = 0;
 
             util::log::log_sink_file_backend file_sink;

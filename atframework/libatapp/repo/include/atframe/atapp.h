@@ -190,7 +190,9 @@ namespace atapp {
         int bus_evt_callback_on_remove_endpoint(const atbus::node &, atbus::endpoint *, int);
 
 
-        friend void _app_setup_signal_term(int signo);
+        /** this function should always not be used outside atapp.cpp **/
+        static void _app_setup_signal_term(int signo);
+
     private:
         static app *last_instance_;
         util::config::ini_loader cfg_loader_;
