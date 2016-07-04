@@ -71,6 +71,12 @@ namespace atapp {
             timer_info_t timeout_timer;
         };
 
+
+        typedef std::function<int(app &, const msg_head_t *, const void *, size_t)> callback_fn_on_msg_t;
+        typedef std::function<int(app &, app_id_t src_pd, app_id_t dst_pd, const atbus::protocol::msg &m)> callback_fn_on_send_fail_t;
+        typedef std::function<int(app &, atbus::endpoint &， int)> callback_fn_on_connected_t;
+        typedef std::function<int(app &, atbus::endpoint &， int)> callback_fn_on_disconnected_t;
+
     public:
         app();
         ~app();
@@ -111,6 +117,19 @@ namespace atapp {
         void set_app_version(const std::string &ver);
 
         const std::string &get_app_version() const;
+
+        atbus::node::ptr_t get_bus_node();
+        const atbus::node::ptr_t get_bus_node() const;
+
+        void set_evt_on_recv_msg(callback_fn_on_msg_t fn);
+        void set_evt_on_send_fail(callback_fn_on_send_fail_t fn);
+        void set_evt_on_app_connected(callback_fn_on_connected_t fn);
+        void set_evt_on_app_disconnected(callback_fn_on_disconnected_t fn);
+
+        const callback_fn_on_msg_t &get_evt_on_recv_msg() const;
+        const callback_fn_on_send_fail_t &get_evt_on_send_fail() const;
+        const callback_fn_on_connected_t &get_evt_on_app_connected() const;
+        const callback_fn_on_disconnected_t &get_evt_on_app_disconnected() const;
 
     private:
         static void ev_stop_timeout(uv_timer_t *handle);
@@ -159,7 +178,8 @@ namespace atapp {
     private:
         int bus_evt_callback_on_recv_msg(const atbus::node &, const atbus::endpoint *, const atbus::connection *,
                                          const atbus::protocol::msg_head *, const void *, size_t);
-        int bus_evt_callback_on_send_failed(const atbus::node &, const atbus::endpoint *, const atbus::connection *, const atbus::protocol::msg *m);
+        int bus_evt_callback_on_send_failed(const atbus::node &, const atbus::endpoint *, const atbus::connection *,
+                                            const atbus::protocol::msg *m);
         int bus_evt_callback_on_error(const atbus::node &, const atbus::endpoint *, const atbus::connection *, int, int);
         int bus_evt_callback_on_reg(const atbus::node &, const atbus::endpoint *, const atbus::connection *, int);
         int bus_evt_callback_on_shutdown(const atbus::node &, int);
@@ -189,10 +209,10 @@ namespace atapp {
             log_reg_; // log reg will not changed or be checked outside the init, so std::map is enough
 
         // callbacks
-        std::function<int (app&, const msg_head_t *, const void *, size_t)> evt_on_recv_msg_;
-        std::function<int (app&, app_id_t src_pd, app_id_t dst_pd, const atbus::protocol::msg& m)> evt_on_send_fail_;
-        std::function<int (app&, atbus::endpoint&， int)> evt_on_app_connected_;
-        std::function<int (app&, atbus::endpoint&， int)> evt_on_app_disconnected_;
+        callback_fn_on_msg_t evt_on_recv_msg_;
+        callback_fn_on_send_fail_t evt_on_send_fail_;
+        callback_fn_on_connected_t evt_on_app_connected_;
+        callback_fn_on_disconnected_t evt_on_app_disconnected_;
     };
 }
 

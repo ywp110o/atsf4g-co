@@ -291,6 +291,19 @@ namespace atapp {
 
     const std::string &app::get_app_version() const { return conf_.app_version； }
 
+    atbus::node::ptr_t app::get_bus_node() { return bus_node_; }
+    const atbus::node::ptr_t app::get_bus_node() const { return bus_node_; }
+
+    void app::set_evt_on_recv_msg(callback_fn_on_msg_t fn) { evt_on_recv_msg_ = fn; }
+    void app::set_evt_on_send_fail(callback_fn_on_send_fail_t fn) { evt_on_send_fail_ = fn; }
+    void app::set_evt_on_app_connected(callback_fn_on_connected_t fn) { evt_on_app_connected_ = fn; }
+    void app::set_evt_on_app_disconnected(callback_fn_on_disconnected_t fn) { evt_on_app_disconnected_ = fn; }
+
+    const app::callback_fn_on_msg_t &app::get_evt_on_recv_msg() const { return evt_on_recv_msg_; }
+    const app::callback_fn_on_send_fail_t &app::get_evt_on_send_fail() const { return evt_on_send_fail_; }
+    const app::callback_fn_on_connected_t &app::get_evt_on_app_connected() const { return evt_on_app_connected_; }
+    const app::callback_fn_on_disconnected_t &app::get_evt_on_app_disconnected() const { return evt_on_app_disconnected_; }
+
     void app::ev_stop_timeout(uv_timer_t *handle) {
         assert(handle);
         assert(handle->data);
@@ -981,7 +994,7 @@ namespace atapp {
         } else {
             WLOGINFO("bus node %llx make connection to %llx done, res: %d", n.get_id(), ep->get_id(), res);
 
-            if(evt_on_app_connected_) {
+            if (evt_on_app_connected_) {
                 evt_on_app_connected_(std::ref(*this), *ep, res);
             }
         }
@@ -994,7 +1007,7 @@ namespace atapp {
         } else {
             WLOGINFO("bus node %llx release connection to %llx done, res: %d", n.get_id(), ep->get_id(), res);
 
-            if(evt_on_app_disconnected_) {
+            if (evt_on_app_disconnected_) {
                 evt_on_app_disconnected_(std::ref(*this), *ep, res);
             }
         }
@@ -1052,7 +1065,8 @@ namespace atapp {
         }
 
         if (0 == use_level) {
-            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "there is no available listener address to send command." << std::endl;
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "there is no available listener address to send command."
+                 << std::endl;
             return -1;
         }
 
@@ -1061,7 +1075,7 @@ namespace atapp {
             bus_node_.reset();
         }
 
-        // command mode , must no concurrence 
+        // command mode , must no concurrence
         bus_node_ = atbus::node::create();
         if (!bus_node_) {
             ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "create bus node failed" << std::endl;
@@ -1074,20 +1088,21 @@ namespace atapp {
         // using 0 for command sender
         int ret = bus_node_->init(0, &conf_.bus_conf);
         if (ret < 0) {
-            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "init bus node failed. ret: "<< ret << std::endl;
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "init bus node failed. ret: " << ret << std::endl;
             return ret;
         }
 
         ret = bus_node_->start();
         if (ret < 0) {
-            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "start bus node failed. ret: "<< ret << std::endl;
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "start bus node failed. ret: " << ret << std::endl;
             return ret;
         }
 
         // step 2. connect failed return error code
         ret = bus_node_->connect(use_addr.address.c_str());
         if (ret < 0) {
-            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "connect to " << use_addr.address<< " failed. ret: "<< ret << std::endl;
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "connect to " << use_addr.address << " failed. ret: " << ret
+                 << std::endl;
             return ret;
         }
 
@@ -1106,8 +1121,8 @@ namespace atapp {
         }
 
         // step 4. waiting for connect success
-        atbus::endpoint* ep = NULL;
-        while(NULL == ep) {
+        atbus::endpoint *ep = NULL;
+        while (NULL == ep) {
             uv_run(ev_loop, UV_RUN_ONCE);
 
             if (check_flag(flag_t::TIMEOUT)) {
@@ -1118,7 +1133,7 @@ namespace atapp {
 
         if (NULL == ep) {
             close_timer(tick_timer_.timeout_timer);
-            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "connect to " << use_addr.address<< " timeout." << std::endl;
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "connect to " << use_addr.address << " timeout." << std::endl;
             return -1;
         }
 
@@ -1127,20 +1142,33 @@ namespace atapp {
         std::vector<size_t> arr_size;
         arr_buff.resize(last_command_.size());
         arr_size.resize(last_command_.size());
-        for (size_t i = 0; i < last_command_.size(); ++ i) {
+        for (size_t i = 0; i < last_command_.size(); ++i) {
             arr_buff[i] = last_command_[i].data();
             arr_size[i] = last_command_[i].size();
         }
-        
+
         ret = bus_node_->send_custom_cmd(ep->get_id(), &arr_buff[0], &arr_size[0], last_command_.size());
         if (ret < 0) {
-            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "send command failed. ret: "<< ret << std::endl;
+            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "send command failed. ret: " << ret << std::endl;
             return ret;
         }
 
         // step 6. waiting for send done(for shm, no need to wait, for io_stream fd, waiting write callback)
         if (parsed_level < 5) {
-            // TODO 可以根据统计发送成功和失败的次数来确定是否发送完成
+            do {
+                size_t start_times = ep->get_stat_push_start_times();
+                size_t end_times = ep->get_stat_push_success_times() + ep->get_stat_push_failed_times();
+                if (end_times >= start_times) {
+                    break;
+                }
+
+                uv_run(ev_loop, UV_RUN_ONCE);
+                if (check_flag(flag_t::TIMEOUT)) {
+                    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "send command timeout" << std::endl;
+                    ret = -1;
+                    break;
+                }
+            } while (true);
         }
 
         close_timer(tick_timer_.timeout_timer);

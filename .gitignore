@@ -46,3 +46,6 @@
 ## atframework
 /atframework/libatbus/repo
 /atframework/libatframe_utils/repo
+
+# editors
+.vscode
