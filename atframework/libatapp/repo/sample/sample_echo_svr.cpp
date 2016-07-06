@@ -37,7 +37,13 @@ public:
     virtual const char *name() { return "echo_module"; }
 
     virtual int tick() {
-        WLOGINFO("echo module tick");
+        time_t cur_print = util::time::time_utility::get_now() / 20;
+        static time_t print_per_sec = cur_print;
+        if (print_per_sec != cur_print) {
+            WLOGINFO("echo module tick");
+            print_per_sec = cur_print;
+        }
+
         return 0;
     }
 };
@@ -75,7 +81,8 @@ static int app_handle_on_msg(atapp::app &app, const atapp::app::msg_head_t *head
     return 0;
 }
 
-static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
+static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd,
+                                   const atbus::protocol::msg &m) {
     WLOGERROR("send data from %llx to %llx failed", src_pd, dst_pd);
     return 0;
 }
@@ -110,5 +117,5 @@ int main(int argc, char *argv[]) {
     app.set_evt_on_app_disconnected(app_handle_on_disconnected);
 
     // run
-    return app.run(uv_default_loop(), argc, (const char**)argv, NULL);
+    return app.run(uv_default_loop(), argc, (const char **)argv, NULL);
 }

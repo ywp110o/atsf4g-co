@@ -40,6 +40,9 @@ namespace atapp {
             return 0;
         }
 
+        // update time first
+        util::time::time_utility::update();
+
         // step 1. bind default options
         // step 2. load options from cmd line
         setup_option(argc, argv, priv_data);
@@ -943,6 +946,28 @@ namespace atapp {
 
     int app::bus_evt_callback_on_error(const atbus::node &n, const atbus::endpoint *ep, const atbus::connection *conn, int status,
                                        int errcode) {
+
+        // meet eof or reset by peer is not a error
+        if (UV_EOF == errcode || UV_ECONNRESET == errcode) {
+            const char* msg = UV_EOF == errcode ? "got EOF" : "reset by peer";
+            if (NULL != conn) {
+                if (NULL != ep) {
+                    WLOGINFO("bus node %llx endpoint %llx connection %s closed: %s", n.get_id(), ep->get_id(),
+                        conn->get_address().address.c_str(), msg);
+                } else {
+                    WLOGINFO("bus node %llx connection %s closed: %s", n.get_id(), conn->get_address().address.c_str(), msg);
+                }
+
+            } else {
+                if (NULL != ep) {
+                    WLOGINFO("bus node %llx endpoint %llx closed: %s", n.get_id(), ep->get_id(), msg);
+                } else {
+                    WLOGINFO("bus node %llx closed: %s", n.get_id(), msg);
+                }
+            }
+            return 0;
+        }
+
         if (NULL != conn) {
             if (NULL != ep) {
                 WLOGERROR("bus node %llx endpoint %llx connection %s error, status: %d, error code: %d", n.get_id(), ep->get_id(),
@@ -997,7 +1022,10 @@ namespace atapp {
         if (NULL == conn) {
             WLOGERROR("bus node %llx recv a invalid NULL connection , res: %d", n.get_id(), res);
         } else {
-            WLOGERROR("bus node %llx make connection to %s done, res: %d", n.get_id(), conn->get_address().address.c_str(), res);
+            // already disconncted finished.
+            if (atbus::connection::state_t::DISCONNECTED != conn->get_status()) {
+                WLOGERROR("bus node %llx make connection to %s done, res: %d", n.get_id(), conn->get_address().address.c_str(), res);
+            }
         }
         return 0;
     }
@@ -1105,13 +1133,11 @@ namespace atapp {
             return -1;
         }
 
-        if (bus_node_) {
-            bus_node_->reset();
-            bus_node_.reset();
+        if (!bus_node_) {
+            bus_node_ = atbus::node::create();
         }
 
         // command mode , must no concurrence
-        bus_node_ = atbus::node::create();
         if (!bus_node_) {
             ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "create bus node failed" << std::endl;
             return -1;
@@ -1133,6 +1159,13 @@ namespace atapp {
             return ret;
         }
 
+        // check if listen address is a loopback address
+        if ("ipv4" == use_addr.scheme && "0.0.0.0" == use_addr.host) {
+            make_address("ipv4", "127.0.0.1", use_addr.port, use_addr);
+        } else if ("ipv6" == use_addr.scheme && "::" == use_addr.host) {
+            make_address("ipv6", "::1", use_addr.port, use_addr);
+        }
+
         // step 2. connect failed return error code
         ret = bus_node_->connect(use_addr.address.c_str());
         if (ret < 0) {
@@ -1145,7 +1178,7 @@ namespace atapp {
         if (false == tick_timer_.timeout_timer.is_activited) {
             uv_timer_init(ev_loop, &tick_timer_.timeout_timer.timer);
             tick_timer_.timeout_timer.timer.data = this;
-
+        
             int res = uv_timer_start(&tick_timer_.timeout_timer.timer, ev_stop_timeout, conf_.stop_timeout, 0);
             if (0 == res) {
                 tick_timer_.timeout_timer.is_activited = true;
@@ -1207,6 +1240,11 @@ namespace atapp {
         }
 
         close_timer(tick_timer_.timeout_timer);
+
+        if (bus_node_) {
+            bus_node_->reset();
+            bus_node_.reset();
+        }
         return ret;
     }
 }
