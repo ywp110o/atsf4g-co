@@ -119,6 +119,9 @@ namespace atapp {
         atbus::node::ptr_t get_bus_node();
         const atbus::node::ptr_t get_bus_node() const;
 
+        util::config::ini_loader& get_configure();
+        const util::config::ini_loader& get_configure() const;
+
         void set_evt_on_recv_msg(callback_fn_on_msg_t fn);
         void set_evt_on_send_fail(callback_fn_on_send_fail_t fn);
         void set_evt_on_app_connected(callback_fn_on_connected_t fn);

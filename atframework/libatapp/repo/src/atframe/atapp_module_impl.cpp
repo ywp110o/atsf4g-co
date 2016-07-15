@@ -19,7 +19,7 @@ namespace atapp {
 
     int module_impl::tick() { return 0; }
 
-    const char *module_impl::name() {
+    const char *module_impl::name() const {
         const char *ret = typeid(*this).name();
         if (NULL == ret) {
             return "RTTI Unavailable";

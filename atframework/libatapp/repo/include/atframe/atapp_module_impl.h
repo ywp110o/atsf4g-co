@@ -37,7 +37,7 @@ namespace atapp {
 
         virtual int timeout();
 
-        virtual const char *name();
+        virtual const char *name() const;
 
         /**
          * @brief run tick handle and return active action number

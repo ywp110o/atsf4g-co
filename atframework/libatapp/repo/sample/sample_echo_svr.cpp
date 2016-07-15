@@ -34,7 +34,7 @@ public:
         return 0;
     }
 
-    virtual const char *name() { return "echo_module"; }
+    virtual const char *name() const { return "echo_module"; }
 
     virtual int tick() {
         time_t cur_print = util::time::time_utility::get_now() / 20;

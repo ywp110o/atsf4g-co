@@ -11,4 +11,4 @@ option(PROJECT_ENABLE_SAMPLE "Enable build sample." OFF)
 option(PROJECT_ENABLE_UNITTEST "Enable build unit test." OFF)
 
 # project name
-set(PROJECT_NAME "hello_project" CACHE STRING "Project name")
+set(PROJECT_BUILD_NAME "hello_project" CACHE STRING "Project name")

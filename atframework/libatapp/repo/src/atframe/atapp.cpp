@@ -95,24 +95,24 @@ namespace atapp {
             return ret;
         }
 
-        // step 7. all modules init
-        owent_foreach(module_ptr_t & mod, modules_) {
-            if (mod->is_enabled()) {
-                ret = mod->init();
-                if (ret < 0) {
-                    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "initialze " << mod->name() << " failed" << std::endl;
-                    return ret;
-                }
-            }
-        }
-
-        // step 8. all modules reload
+        // step 7. all modules reload
         owent_foreach(module_ptr_t & mod, modules_) {
             if (mod->is_enabled()) {
                 ret = mod->reload();
                 if (ret < 0) {
                     ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "load configure of " << mod->name() << " failed"
-                         << std::endl;
+                        << std::endl;
+                    return ret;
+                }
+            }
+        }
+
+        // step 8. all modules init
+        owent_foreach(module_ptr_t & mod, modules_) {
+            if (mod->is_enabled()) {
+                ret = mod->init();
+                if (ret < 0) {
+                    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "initialze " << mod->name() << " failed" << std::endl;
                     return ret;
                 }
             }
@@ -304,6 +304,9 @@ namespace atapp {
 
     atbus::node::ptr_t app::get_bus_node() { return bus_node_; }
     const atbus::node::ptr_t app::get_bus_node() const { return bus_node_; }
+
+    util::config::ini_loader& app::get_configure() { return cfg_loader_; }
+    const util::config::ini_loader& app::get_configure() const { return cfg_loader_; }
 
     void app::set_evt_on_recv_msg(callback_fn_on_msg_t fn) { evt_on_recv_msg_ = fn; }
     void app::set_evt_on_send_fail(callback_fn_on_send_fail_t fn) { evt_on_send_fail_ = fn; }
