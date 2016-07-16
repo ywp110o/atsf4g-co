@@ -1,11 +1,9 @@
 #include <sstream>
 
-#include "rapidjson/document.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
 
 #include <random/random_generator.h>
-#include <string/tquerystring.h>
 #include <common/string_oprs.h>
 
 #include <atframe/atapp.h>
@@ -194,15 +192,10 @@ namespace atframe {
             setup_http_request(rpc_keepalive_);
             rpc_keepalive_->set_opt_timeout(conf_.http_renew_ttl_timeout);
 
-            char int_str[32] = {0};
-            UTIL_STRFUNC_SNPRINTF(int_str, sizeof(int_str), "%d", static_cast<int>(conf_.keepalive_timeout / 1000));
-
-            util::tquerystring qs;
-            qs.set("ttl", int_str);
-
+            rpc_keepalive_->add_form_field("ttl", conf_.keepalive_timeout / 1000);
             if (refresh) {
-                qs.set("refresh", "true");
-                qs.set("prevExist", "true");
+                rpc_keepalive_->add_form_field("refresh", "true");
+                rpc_keepalive_->add_form_field("prevExist", "true");
             } else {
                 std::string val;
                 node_info_t ni;
@@ -216,10 +209,8 @@ namespace atframe {
                 ni.listens = app->get_bus_node()->get_listen_list();
                 pack(ni, val);
 
-                qs.set("value", val);
+                rpc_keepalive_->add_form_field("value", val);
             }
-
-            qs.encode(rpc_keepalive_->post_data());
 
             rpc_keepalive_->set_on_complete(
                 std::bind(
@@ -306,7 +297,134 @@ namespace atframe {
             return 0;
         }
 
-        void etcd_v2_module::unpack(std::vector<node_info_t>& out, const std::string& json) {
+        void etcd_v2_module::unpack(node_info_t& out, rapidjson::Value& node, bool reset_data) {
+            if (reset_data) {
+                out.action = node_action_t::EN_NAT_NONE;
+                out.created_index = 0;
+                out.modify_index = 0;
+                out.id = 0;
+                out.error_code = 0;
+                out.listens.clear();
+            }
+
+            if (!node.IsObject()) {
+                return;
+            }
+
+            if (node.HasMember("action")) {
+                const char* action = node["action"].GetString();
+                if (0 == UTIL_STRFUNC_STRNCASE_CMP("get", action, 3)) {
+                    out.action = node_action_t::EN_NAT_ADD;
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("set", action, 3)) {
+                    out.action = node_action_t::EN_NAT_ADD;
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("create", action, 6)) {
+                    out.action = node_action_t::EN_NAT_ADD;
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("delete", action, 6)) {
+                    out.action = node_action_t::EN_NAT_REMOVE;
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("expire", action, 6)) {
+                    out.action = node_action_t::EN_NAT_REMOVE;
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("update", action, 6)) {
+                    out.action = node_action_t::EN_NAT_MOD;
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("compareAndSwap", action, 14)) {
+                    out.action = node_action_t::EN_NAT_MOD;
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("compareAndDelete", action, 16)) {
+                    out.action = node_action_t::EN_NAT_REMOVE;
+                }
+            }
+
+            if (node.HasMember("modifiedIndex")) {
+                out.modify_index = node["modifiedIndex"].GetUint64();
+            }
+
+            if (node.HasMember("createdIndex")) {
+                out.created_index = node["createdIndex"].GetUint64();
+            }
+
+            if (node.HasMember("errorCode")) {
+                out.error_code = node["errorCode"].GetInt();
+            }
+
+            if (node.HasMember("value")) {
+                rapidjson::Document doc;
+                doc.Parse(node["value"].GetString());
+                if (doc.IsObject()) {
+                    rapidjson::Value val = doc.GetObjectA();
+                    if (val.HasMember("id")) {
+                        out.id = val["id"].GetUint64();
+                    }
+
+                    if (val.HasMember("listen")) {
+                        rapidjson::Document::Array nodes = val["listen"].GetArray();
+                        for (rapidjson::Document::Array::ValueIterator iter = nodes.begin();
+                            iter != nodes.end();
+                            ++iter) {
+                            out.listens.push_back(iter->GetString());
+                        }
+                    }
+                }
+            } else if (node.HasMember("node")) {
+                unpack(out, node["node"], false);
+            }
+        }
+
+        void etcd_v2_module::unpack(node_list_t& out, rapidjson::Value& node, bool reset_data) {
+            if (reset_data) {
+                out.created_index = 0;
+                out.modify_index = 0;
+                out.error_code = 0;
+            }
+
+            if (!node.IsObject()) {
+                return;
+            }
+
+            if (node.HasMember("modifiedIndex")) {
+                out.modify_index = node["modifiedIndex"].GetUint64();
+            }
+
+            if (node.HasMember("createdIndex")) {
+                out.created_index = node["createdIndex"].GetUint64();
+            }
+
+            if (node.HasMember("errorCode")) {
+                out.error_code = node["errorCode"].GetInt();
+            }
+
+            if (node.HasMember("nodes")) {
+                rapidjson::Document::Array nodes = node["nodes"].GetArray();
+                for (rapidjson::Document::Array::ValueIterator iter = nodes.begin();
+                    iter != nodes.end();
+                    ++iter) {
+                    out.nodes.push_back(node_info_t());
+                    unpack(out.nodes.back(), *iter, true);
+                }
+            } else if (node.HasMember("node")) {
+                unpack(out, node["node"], false);
+            }
+        }
+
+        void etcd_v2_module::unpack(node_info_t& out, const std::string& json) {
+            if (json.empty()) {
+                return;
+            }
+
+            rapidjson::Document doc;
+            doc.Parse(json.c_str());
+
+            rapidjson::Value v = doc.GetObjectA();
+            unpack(out, v, true);
+        }
+
+        void etcd_v2_module::unpack(node_list_t& out, const std::string& json) {
+            if (json.empty()) {
+                return;
+            }
+
+            rapidjson::Document doc;
+            doc.Parse(json.c_str());
+
+            rapidjson::Value v = doc.GetObjectA();
+            unpack(out, v, true);
         }
 
         void etcd_v2_module::pack(const node_info_t& src, std::string& json) {
@@ -338,8 +456,23 @@ namespace atframe {
         int etcd_v2_module::on_keepalive_complete(util::network::http_request& req) {
             // if not found, keepalive(false)
 
-            next_keepalive_refresh = false;
+            if (util::network::http_request::status_code_t::EN_SCT_NOT_FOUND == req.get_response_code()) {
+                next_keepalive_refresh = false;
+            } else {
+                next_keepalive_refresh = true;
+            }
+
+            node_info_t ni;
+            unpack(ni, req.get_response_stream().str());
+
+            // 100 == etcd not found
+            if (100 == ni.error_code) {
+                next_keepalive_refresh = false;
+            }
+
             rpc_keepalive_.reset();
+            conf_.last_keepalive_tp = util::time::time_utility::now();
+
             return 0;
         }
     }

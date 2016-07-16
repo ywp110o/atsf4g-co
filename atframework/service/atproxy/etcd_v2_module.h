@@ -9,6 +9,8 @@
 #include <ctime>
 #include <std/smart_ptr.h>
 
+#include "rapidjson/document.h"
+
 #include <time/time_utility.h>
 #include <network/http_request.h>
 
@@ -36,7 +38,8 @@ namespace atframe {
 
             struct node_action_t {
                 enum type {
-                    EN_NAT_ADD = 1,
+                    EN_NAT_NONE = 0,
+                    EN_NAT_ADD,
                     EN_NAT_MOD,
                     EN_NAT_REMOVE,
                 };
@@ -46,6 +49,18 @@ namespace atframe {
                 std::list<std::string> listens;
 
                 node_action_t::type action;
+                size_t created_index;
+                size_t modify_index;
+
+                int error_code;
+            };
+
+            struct node_list_t {
+                std::list<node_info_t> nodes;
+                uint64_t created_index;
+                uint64_t modify_index;
+
+                int error_code;
             };
         public:
             etcd_v2_module();
@@ -74,8 +89,12 @@ namespace atframe {
             void  setup_http_request(util::network::http_request::ptr_t& req);
             int select_host(const std::string& json_data);
 
+            void unpack(node_info_t& out, rapidjson::Value& node, bool reset_data);
+            void unpack(node_list_t& out, rapidjson::Value& node, bool reset_data);
+
             void unpack(node_info_t& out, const std::string& json);
-            void unpack(std::vector<node_info_t>& out, const std::string& json);
+            void unpack(node_list_t& out, const std::string& json);
+
             void pack(const node_info_t& out, std::string& json);
 
             int on_keepalive_complete(util::network::http_request& req);
