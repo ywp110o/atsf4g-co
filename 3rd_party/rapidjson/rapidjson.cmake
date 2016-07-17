@@ -31,7 +31,7 @@ if(NOT Rapidjson_FOUND)
     )
 
     file(COPY "${3RD_PARTY_RAPIDJSON_PKG_DIR}/rapidjson/include" 
-        DESTINATION "${3RD_PARTY_RAPIDJSON_ROOT_DIR}/include"
+        DESTINATION "${3RD_PARTY_RAPIDJSON_ROOT_DIR}"
         USE_SOURCE_PERMISSIONS
     )
 

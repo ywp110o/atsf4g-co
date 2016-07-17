@@ -43,6 +43,14 @@
 /3rd_party/msgpack/pkg
 /3rd_party/msgpack/prebuilt
 
+## libcurl
+/3rd_party/libcurl/pkg
+/3rd_party/libcurl/prebuilt
+
+## rapidjson
+/3rd_party/rapidjson/pkg
+/3rd_party/rapidjson/prebuilt
+
 ## atframework
 /atframework/libatbus/repo
 /atframework/libatframe_utils/repo

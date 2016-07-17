@@ -67,4 +67,61 @@ endif()
 
 set (3RD_PARTY_LIBCURL_INC_DIR ${CURL_INCLUDE_DIRS})
 set (3RD_PARTY_LIBCURL_LINK_NAME ${CURL_LIBRARIES})
+if(WIN32 OR MINGW)
+    # curl has so many dependency libraries, so use dynamic library first
+    string(REGEX REPLACE "\\.a" ".dll.a" 3RD_PARTY_LIBCURL_LINK_DYN_NAME ${3RD_PARTY_LIBCURL_LINK_NAME})
+    if(3RD_PARTY_LIBCURL_LINK_DYN_NAME AND NOT ${3RD_PARTY_LIBCURL_LINK_DYN_NAME} STREQUAL ${3RD_PARTY_LIBCURL_LINK_NAME})
+        if (EXISTS ${3RD_PARTY_LIBCURL_LINK_DYN_NAME})
+            set (3RD_PARTY_LIBCURL_LINK_NAME ${3RD_PARTY_LIBCURL_LINK_DYN_NAME})
+        endif()
+    endif()
+endif()
 include_directories(${3RD_PARTY_LIBCURL_INC_DIR})
+
+set(3RD_PARTY_LIBCURL_TEST_SRC "#include <curl/curl.h>
+#include <stdio.h>
+
+int main () {
+    curl_global_init(CURL_GLOBAL_ALL)\;
+    printf(\"libcurl version: %s\", LIBCURL_VERSION)\;
+    return 0\; 
+}")
+
+file(WRITE "${CMAKE_BINARY_DIR}/try_run_libcurl_test.c" ${3RD_PARTY_LIBCURL_TEST_SRC})
+
+try_run(3RD_PARTY_LIBCURL_TRY_RUN_RESULT 3RD_PARTY_LIBCURL_TRY_COMPILE_RESULT
+    ${CMAKE_BINARY_DIR} "${CMAKE_BINARY_DIR}/try_run_libcurl_test.c"
+    LINK_LIBRARIES ${3RD_PARTY_LIBCURL_LINK_NAME}
+    COMPILE_OUTPUT_VARIABLE 3RD_PARTY_LIBCURL_TRY_COMPILE_DYN_MSG
+    RUN_OUTPUT_VARIABLE 3RD_PARTY_LIBCURL_TRY_RUN_OUT
+)
+
+if (NOT 3RD_PARTY_LIBCURL_TRY_COMPILE_RESULT)
+    EchoWithColor(COLOR YELLOW "-- Libcurl: Dynamic symbol test in ${3RD_PARTY_LIBCURL_LINK_NAME} failed, try static symbols")
+
+    if ( NOT MSVC )
+        set(3RD_PARTY_LIBCURL_STATIC_DEF -DCURL_STATICLIB)
+    else()
+        set(3RD_PARTY_LIBCURL_STATIC_DEF /D CURL_STATICLIB)
+    endif()
+    try_run(3RD_PARTY_LIBCURL_TRY_RUN_RESULT 3RD_PARTY_LIBCURL_TRY_COMPILE_RESULT
+        ${CMAKE_BINARY_DIR} "${CMAKE_BINARY_DIR}/try_run_libcurl_test.c"
+        COMPILE_DEFINITIONS ${3RD_PARTY_LIBCURL_STATIC_DEF}
+        LINK_LIBRARIES ${3RD_PARTY_LIBCURL_LINK_NAME}
+        COMPILE_OUTPUT_VARIABLE 3RD_PARTY_LIBCURL_TRY_COMPILE_STA_MSG
+        RUN_OUTPUT_VARIABLE 3RD_PARTY_LIBCURL_TRY_RUN_OUT
+    )
+
+    if (NOT 3RD_PARTY_LIBCURL_TRY_COMPILE_RESULT)
+        message(STATUS ${3RD_PARTY_LIBCURL_TRY_COMPILE_DYN_MSG})
+        message(STATUS ${3RD_PARTY_LIBCURL_TRY_COMPILE_STA_MSG})
+        message(FATAL_ERROR "Libcurl: try compile with ${3RD_PARTY_LIBCURL_LINK_NAME} failed")
+    else()
+        EchoWithColor(COLOR GREEN "-- Libcurl: use static symbols")
+        message(STATUS ${3RD_PARTY_LIBCURL_TRY_RUN_OUT})
+        add_compiler_define(CURL_STATICLIB)
+    endif()
+else()
+    EchoWithColor(COLOR GREEN "-- Libcurl: use dynamic symbols")
+    message(STATUS ${3RD_PARTY_LIBCURL_TRY_RUN_OUT})
+endif()
