@@ -38,6 +38,7 @@
 
 ## libuv
 /3rd_party/libuv/pkg
+/3rd_party/libuv/prebuilt
 
 ## msgpack
 /3rd_party/msgpack/pkg

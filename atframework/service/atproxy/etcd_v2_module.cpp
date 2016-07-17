@@ -1,10 +1,12 @@
 #include <sstream>
 
-#include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
 
-#include <random/random_generator.h>
+
 #include <common/string_oprs.h>
+#include <random/random_generator.h>
+
 
 #include <atframe/atapp.h>
 
@@ -24,7 +26,7 @@
 
 namespace atframe {
     namespace proxy {
-        etcd_v2_module::etcd_v2_module(): curl_handle_(NULL), next_keepalive_refresh(false) {
+        etcd_v2_module::etcd_v2_module() : curl_handle_(NULL), next_keepalive_refresh(false) {
             conf_.hosts.clear();
             conf_.path = "/";
             conf_.http_renew_ttl_timeout = 5000;
@@ -37,9 +39,7 @@ namespace atframe {
             conf_.host_index = 0;
         }
 
-        etcd_v2_module::~etcd_v2_module() {
-            reset();
-        }
+        etcd_v2_module::~etcd_v2_module() { reset(); }
 
         void etcd_v2_module::reset() {
             if (rpc_keepalive_) {
@@ -85,12 +85,9 @@ namespace atframe {
                 tmp_req->set_opt_timeout(conf_.keepalive_timeout);
 
                 tmp_req->start(util::network::http_request::method_t::EN_MT_GET, true);
-                if (util::network::http_request::status_code_t::EN_ECG_SUCCESS != 
+                if (util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
                     util::network::http_request::get_status_code_group(tmp_req->get_response_code())) {
-                    WLOGERROR("get etcd member failed, http code: %d\n%s", 
-                        tmp_req->get_response_code(),
-                        tmp_req->get_error_msg()
-                    );
+                    WLOGERROR("get etcd member failed, http code: %d\n%s", tmp_req->get_response_code(), tmp_req->get_error_msg());
                     return -1;
                 }
 
@@ -126,7 +123,7 @@ namespace atframe {
 
         int etcd_v2_module::reload() {
             // load init cluster member from configure
-            util::config::ini_loader& cfg = get_app()->get_configure();
+            util::config::ini_loader &cfg = get_app()->get_configure();
             cfg.dump_to("atproxy.etcd.hosts", conf_.hosts);
             cfg.dump_to("atproxy.etcd.timeout", conf_.keepalive_timeout);
             cfg.dump_to("atproxy.etcd.ticktime", conf_.keepalive_interval);
@@ -160,7 +157,7 @@ namespace atframe {
             return 0;
         }
 
-        const char * etcd_v2_module::name() const { return "etcd module"; }
+        const char *etcd_v2_module::name() const { return "etcd module"; }
 
         int etcd_v2_module::tick() {
             // TODO if there is no running refresh request, refresh ttl witout set
@@ -199,7 +196,7 @@ namespace atframe {
             } else {
                 std::string val;
                 node_info_t ni;
-                ::atapp::app* app = get_app();
+                ::atapp::app *app = get_app();
                 if (NULL == app) {
                     WLOGERROR("owner app not found");
                     return -1;
@@ -212,14 +209,9 @@ namespace atframe {
                 rpc_keepalive_->add_form_field("value", val);
             }
 
-            rpc_keepalive_->set_on_complete(
-                std::bind(
-                    &etcd_v2_module::on_keepalive_complete,
-                    this,
-                    std::placeholders::_1
-                )
-            );
+            rpc_keepalive_->set_on_complete(std::bind(&etcd_v2_module::on_keepalive_complete, this, std::placeholders::_1));
 
+            // etcd must use PUT method
             int ret = rpc_keepalive_->start(util::network::http_request::method_t::EN_MT_PUT, false);
             if (0 != ret) {
                 rpc_keepalive_->set_on_complete(NULL);
@@ -239,7 +231,7 @@ namespace atframe {
             return 0;
         }
 
-        void etcd_v2_module::setup_http_request(util::network::http_request::ptr_t& req) {
+        void etcd_v2_module::setup_http_request(util::network::http_request::ptr_t &req) {
             if (!req) {
                 return;
             }
@@ -250,7 +242,7 @@ namespace atframe {
             req->set_user_agent("etcd client");
         }
 
-        int etcd_v2_module::select_host(const std::string& json_data) {
+        int etcd_v2_module::select_host(const std::string &json_data) {
             util::random::mt19937 rnd;
 
             {
@@ -297,7 +289,7 @@ namespace atframe {
             return 0;
         }
 
-        void etcd_v2_module::unpack(node_info_t& out, rapidjson::Value& node, bool reset_data) {
+        void etcd_v2_module::unpack(node_info_t &out, rapidjson::Value &node, bool reset_data) {
             if (reset_data) {
                 out.action = node_action_t::EN_NAT_NONE;
                 out.created_index = 0;
@@ -312,7 +304,7 @@ namespace atframe {
             }
 
             if (node.HasMember("action")) {
-                const char* action = node["action"].GetString();
+                const char *action = node["action"].GetString();
                 if (0 == UTIL_STRFUNC_STRNCASE_CMP("get", action, 3)) {
                     out.action = node_action_t::EN_NAT_ADD;
                 } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("set", action, 3)) {
@@ -355,9 +347,7 @@ namespace atframe {
 
                     if (val.HasMember("listen")) {
                         rapidjson::Document::Array nodes = val["listen"].GetArray();
-                        for (rapidjson::Document::Array::ValueIterator iter = nodes.begin();
-                            iter != nodes.end();
-                            ++iter) {
+                        for (rapidjson::Document::Array::ValueIterator iter = nodes.begin(); iter != nodes.end(); ++iter) {
                             out.listens.push_back(iter->GetString());
                         }
                     }
@@ -367,7 +357,7 @@ namespace atframe {
             }
         }
 
-        void etcd_v2_module::unpack(node_list_t& out, rapidjson::Value& node, bool reset_data) {
+        void etcd_v2_module::unpack(node_list_t &out, rapidjson::Value &node, bool reset_data) {
             if (reset_data) {
                 out.created_index = 0;
                 out.modify_index = 0;
@@ -392,9 +382,7 @@ namespace atframe {
 
             if (node.HasMember("nodes")) {
                 rapidjson::Document::Array nodes = node["nodes"].GetArray();
-                for (rapidjson::Document::Array::ValueIterator iter = nodes.begin();
-                    iter != nodes.end();
-                    ++iter) {
+                for (rapidjson::Document::Array::ValueIterator iter = nodes.begin(); iter != nodes.end(); ++iter) {
                     out.nodes.push_back(node_info_t());
                     unpack(out.nodes.back(), *iter, true);
                 }
@@ -403,7 +391,7 @@ namespace atframe {
             }
         }
 
-        void etcd_v2_module::unpack(node_info_t& out, const std::string& json) {
+        void etcd_v2_module::unpack(node_info_t &out, const std::string &json) {
             if (json.empty()) {
                 return;
             }
@@ -415,7 +403,7 @@ namespace atframe {
             unpack(out, v, true);
         }
 
-        void etcd_v2_module::unpack(node_list_t& out, const std::string& json) {
+        void etcd_v2_module::unpack(node_list_t &out, const std::string &json) {
             if (json.empty()) {
                 return;
             }
@@ -427,21 +415,16 @@ namespace atframe {
             unpack(out, v, true);
         }
 
-        void etcd_v2_module::pack(const node_info_t& src, std::string& json) {
+        void etcd_v2_module::pack(const node_info_t &src, std::string &json) {
             rapidjson::Document doc;
             doc.SetObject();
 
             doc.AddMember("id", src.id, doc.GetAllocator());
-            
+
             rapidjson::Value listens;
             listens.SetArray();
-            for (std::list<std::string>::const_iterator iter = src.listens.begin();
-                iter != src.listens.end();
-                ++iter) {
-                listens.PushBack(
-                    rapidjson::StringRef((*iter).c_str(), (*iter).size()),
-                    doc.GetAllocator()
-                );
+            for (std::list<std::string>::const_iterator iter = src.listens.begin(); iter != src.listens.end(); ++iter) {
+                listens.PushBack(rapidjson::StringRef((*iter).c_str(), (*iter).size()), doc.GetAllocator());
             }
             doc.AddMember("listen", listens, doc.GetAllocator());
 
@@ -453,7 +436,7 @@ namespace atframe {
             json.assign(buffer.GetString(), buffer.GetSize());
         }
 
-        int etcd_v2_module::on_keepalive_complete(util::network::http_request& req) {
+        int etcd_v2_module::on_keepalive_complete(util::network::http_request &req) {
             // if not found, keepalive(false)
 
             if (util::network::http_request::status_code_t::EN_SCT_NOT_FOUND == req.get_response_code()) {
