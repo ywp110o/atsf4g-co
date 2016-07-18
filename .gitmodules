@@ -10,3 +10,6 @@
 [submodule "atframework/libatbus/repo"]
 	path = atframework/libatbus/repo
 	url = https://github.com/atframework/libatbus.git
+[submodule "atframework/libatapp/repo"]
+	path = atframework/libatapp/repo
+	url = https://github.com/atframework/libatapp.git
