@@ -33,8 +33,6 @@
 
 # external libs
 ## libiniloader
-/3rd_party/libiniloader/ini_loader.h
-/3rd_party/libiniloader/ini_loader.cpp
 
 ## libuv
 /3rd_party/libuv/pkg
@@ -49,12 +47,8 @@
 /3rd_party/libcurl/prebuilt
 
 ## rapidjson
-/3rd_party/rapidjson/pkg
-/3rd_party/rapidjson/prebuilt
 
 ## atframework
-/atframework/libatbus/repo
-/atframework/libatframe_utils/repo
 
 # editors
 .vscode

@@ -4,11 +4,7 @@ if(NOT 3RD_PARTY_RAPIDJSON_BASE_DIR)
     set (3RD_PARTY_RAPIDJSON_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})
 endif()
 
-set (3RD_PARTY_RAPIDJSON_PKG_DIR "${3RD_PARTY_RAPIDJSON_BASE_DIR}/pkg")
-
-set (3RD_PARTY_RAPIDJSON_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/prebuilt")
-
-set (3RD_PARTY_RAPIDJSON_GIT_URL "https://github.com/miloyip/rapidjson.git")
+set (3RD_PARTY_RAPIDJSON_REPO_DIR "${3RD_PARTY_RAPIDJSON_BASE_DIR}/repo")
 
 if (Rapidjson_ROOT)
     set(RAPIDJSON_ROOT ${Rapidjson_ROOT})
@@ -16,27 +12,29 @@ endif()
 
 find_package(Rapidjson)
 if(NOT Rapidjson_FOUND)
-    if(NOT EXISTS ${3RD_PARTY_RAPIDJSON_PKG_DIR})
-        message(STATUS "mkdir 3RD_PARTY_RAPIDJSON_PKG_DIR=${3RD_PARTY_RAPIDJSON_PKG_DIR}")
-        file(MAKE_DIRECTORY ${3RD_PARTY_RAPIDJSON_PKG_DIR})
+    if(NOT EXISTS ${3RD_PARTY_RAPIDJSON_BASE_DIR})
+        message(STATUS "mkdir 3RD_PARTY_RAPIDJSON_BASE_DIR=${3RD_PARTY_RAPIDJSON_BASE_DIR}")
+        file(MAKE_DIRECTORY ${3RD_PARTY_RAPIDJSON_BASE_DIR})
     endif()
 
-    find_package(Git)
-    if(NOT GIT_FOUND)
-        message(FATAL_ERROR "git not found")
+    if(NOT EXISTS ${3RD_PARTY_RAPIDJSON_REPO_DIR})
+        find_package(Git)
+        if(NOT GIT_FOUND)
+            message(FATAL_ERROR "git not found")
+        endif()
+
+        file(RELATIVE_PATH 3RD_PARTY_RAPIDJSON_GIT_SUBMODULE_PATH ${CMAKE_SOURCE_DIR} ${3RD_PARTY_RAPIDJSON_REPO_DIR})
+        execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init ${3RD_PARTY_RAPIDJSON_GIT_SUBMODULE_PATH}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        )
     endif()
 
-    execute_process(COMMAND ${GIT_EXECUTABLE} clone -b master ${3RD_PARTY_RAPIDJSON_GIT_URL} rapidjson
-        WORKING_DIRECTORY ${3RD_PARTY_RAPIDJSON_PKG_DIR}
-    )
-
-    file(COPY "${3RD_PARTY_RAPIDJSON_PKG_DIR}/rapidjson/include" 
-        DESTINATION "${3RD_PARTY_RAPIDJSON_ROOT_DIR}"
-        USE_SOURCE_PERMISSIONS
-    )
-
-    set(Rapidjson_ROOT ${3RD_PARTY_RAPIDJSON_ROOT_DIR})
+    set(Rapidjson_ROOT ${3RD_PARTY_RAPIDJSON_REPO_DIR})
+    set(RAPIDJSON_ROOT ${3RD_PARTY_RAPIDJSON_REPO_DIR})
+    set (3RD_PARTY_RAPIDJSON_ROOT_DIR ${3RD_PARTY_RAPIDJSON_REPO_DIR})
     find_package(Rapidjson)
+else()
+    set(3RD_PARTY_RAPIDJSON_ROOT_DIR ${RAPIDJSON_ROOT})
 endif()
 
 if(Rapidjson_FOUND)
