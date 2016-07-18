@@ -8,7 +8,7 @@ include("${CMAKE_SOURCE_DIR}/atframework/atframework.prepare.cmake")
 
 ########################################################################
 # CMake 模块 (递归包含模块, 带颜色输出模块, 平台检测模块)
-set (PROJECT_CMAKE_MODULE_DIR "${ATFRAMEWORK_ATFRAME_UTILS_PKG_DIR}/project/cmake")
+set (PROJECT_CMAKE_MODULE_DIR "${ATFRAME_UTILS_ROOT}/project/cmake")
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_CMAKE_MODULE_DIR}/modules")
 
 
@@ -48,7 +48,7 @@ add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/atframework")
 # endif()
 #
 # if (PROJECT_ENABLE_UNITTEST)
-#     include ("${ATFRAMEWORK_ATFRAME_UTILS_PKG_DIR}/test/test.utils-macro.cmake")
+#     include ("${ATFRAME_UTILS_ROOT}/test/test.utils-macro.cmake")
 #     add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/test")
 # endif()
 #

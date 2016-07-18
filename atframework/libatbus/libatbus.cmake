@@ -19,6 +19,8 @@ else()
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         )
     endif()
+
+    set(LIBATBUS_ROOT ${ATFRAMEWORK_ATBUS_REPO_DIR})
 endif()
 
 set (ATFRAMEWORK_ATBUS_INC_DIR "${ATFRAMEWORK_ATBUS_REPO_DIR}/include")

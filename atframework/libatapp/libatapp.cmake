@@ -19,6 +19,8 @@ else()
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         )
     endif()
+
+    set(LIBATAPP_ROOT ${ATFRAMEWORK_ATAPP_REPO_DIR})
 endif()
 
 set (ATFRAMEWORK_ATAPP_INC_DIR "${ATFRAMEWORK_ATAPP_REPO_DIR}/include")

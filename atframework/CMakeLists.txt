@@ -1,8 +1,8 @@
 
 # 基本框架程序
-add_subdirectory(${ATFRAMEWORK_ATFRAME_UTILS_PKG_DIR})
-add_subdirectory(${ATFRAMEWORK_ATBUS_PKG_DIR})
-add_subdirectory(${ATFRAMEWORK_ATAPP_PKG_DIR})
+add_subdirectory(${ATFRAME_UTILS_ROOT})
+add_subdirectory(${LIBATBUS_ROOT})
+add_subdirectory(${LIBATAPP_ROOT})
 
 # 基础服务
 add_subdirectory("${ATFRAMEWORK_BASE_DIR}/service")
