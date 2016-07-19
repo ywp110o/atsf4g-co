@@ -6,22 +6,24 @@
 namespace atframe {
     namespace proxy {
         int atproxy_manager::tick(const ::atapp::app& app) {
-            if (check_list_.empty()) {
-                return 0;
-            }
-
             time_t now = util::time::time_utility::get_now();
-            if (now <= check_list_.front().timeout_sec) {
-                return 0;
-            }
 
             int ret = 0;
             do {
+                if (check_list_.empty()) {
+                    break;
+                }
+
                 check_info_t ci = check_list_.front();
                 if (now <= check_list_.front().timeout_sec) {
                     break;
                 }
                 check_list_.pop_front();
+
+                // skip self
+                if (ci.proxy_id == app.get_id()) {
+                    continue;
+                }
 
                 std::map<::atapp::app::app_id_t, node_info_t>::iterator iter = proxy_set_.find(ci.proxy_id);
                 // already removed, skip
