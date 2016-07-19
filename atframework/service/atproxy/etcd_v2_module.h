@@ -16,6 +16,8 @@
 
 #include <atframe/atapp_module_impl.h>
 
+#include "atproxy_manager.h"
+
 namespace atframe {
     namespace proxy {
         class etcd_v2_module : public ::atapp::module_impl {
@@ -37,37 +39,9 @@ namespace atframe {
                 std::chrono::system_clock::time_point last_keepalive_tp;
             };
 
-            struct node_action_t {
-                enum type {
-                    EN_NAT_UNKNOWN = 0,
-                    EN_NAT_GET,
-                    EN_NAT_SET,
-                    EN_NAT_CREATE,
-                    EN_NAT_MODIFY,
-                    EN_NAT_REMOVE,
-                    EN_NAT_EXPIRE,
-                };
-            };
-            struct node_info_t {
-                ::atapp::app::app_id_t id;
-                std::list<std::string> listens;
-
-                node_action_t::type action;
-                size_t created_index;
-                size_t modify_index;
-
-                int error_code;
-            };
-
-            struct node_list_t {
-                std::list<node_info_t> nodes;
-
-                node_action_t::type action;
-                uint64_t created_index;
-                uint64_t modify_index;
-
-                int error_code;
-            };
+            typedef atproxy_manager::node_action_t node_action_t;
+            typedef atproxy_manager::node_info_t node_info_t;
+            typedef atproxy_manager::node_list_t node_list_t;
         public:
             etcd_v2_module();
             virtual ~etcd_v2_module();
@@ -110,6 +84,10 @@ namespace atframe {
             int on_watch_header(util::network::http_request& req, const char* key, size_t keylen, const char* val, size_t vallen);
             int on_update_etcd_complete(util::network::http_request& req);
 
+        public:
+            inline atproxy_manager& get_proxy_manager() { return proxy_mgr_; }
+            inline const atproxy_manager& get_proxy_manager() const { return proxy_mgr_; }
+
         private:
             util::network::http_request::curl_m_bind_ptr_t curl_multi_;
             CURLM *curl_handle_;
@@ -121,6 +99,8 @@ namespace atframe {
 
             bool next_keepalive_refresh;
             time_t next_tick_update_etcd_mebers;
+
+            atproxy_manager proxy_mgr_;
         };
     }
 }

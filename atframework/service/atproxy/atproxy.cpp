@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <std/ref.h>
 
 #include <uv.h>
 
@@ -20,26 +21,45 @@ static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd,
     return 0;
 }
 
-static int app_handle_on_connected(atapp::app &app, atbus::endpoint &ep, int status) {
-    WLOGINFO("node %llx connected, status: %d", ep.get_id(), status);
-    return 0;
-}
+struct app_handle_on_connected {
+    std::reference_wrapper<atframe::proxy::etcd_v2_module> etcd_v2_module;
+    app_handle_on_connected(atframe::proxy::etcd_v2_module& mod) : etcd_v2_module(mod) {}
 
-static int app_handle_on_disconnected(atapp::app &app, atbus::endpoint &ep, int status) {
-    WLOGINFO("node %llx disconnected, status: %d", ep.get_id(), status);
-    return 0;
-}
+    int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
+        WLOGINFO("node %llx connected, status: %d", ep.get_id(), status);
+
+        etcd_v2_module.get().get_proxy_manager().on_connected(app, ep.get_id());
+        return 0;
+    }
+};
+
+struct app_handle_on_disconnected {
+    std::reference_wrapper<atframe::proxy::etcd_v2_module> etcd_v2_module;
+    app_handle_on_disconnected(atframe::proxy::etcd_v2_module& mod) : etcd_v2_module(mod) {}
+
+    int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
+        WLOGINFO("node %llx disconnected, status: %d", ep.get_id(), status);
+
+        etcd_v2_module.get().get_proxy_manager().on_disconnected(app, ep.get_id());
+        return 0;
+    }
+};
 
 int main(int argc, char *argv[]) {
     atapp::app app;
+    std::shared_ptr<atframe::proxy::etcd_v2_module> etcd_mod = std::make_shared<atframe::proxy::etcd_v2_module>();
+    if (!etcd_mod) {
+        fprintf(stderr, "create etcd module failed\n");
+        return -1;
+    }
 
     // setup module
-    app.add_module(std::make_shared<atframe::proxy::etcd_v2_module>());
+    app.add_module(etcd_mod);
 
     // setup message handle
     app.set_evt_on_send_fail(app_handle_on_send_fail);
-    app.set_evt_on_app_connected(app_handle_on_connected);
-    app.set_evt_on_app_disconnected(app_handle_on_disconnected);
+    app.set_evt_on_app_connected(app_handle_on_connected(*etcd_mod));
+    app.set_evt_on_app_disconnected(app_handle_on_disconnected(*etcd_mod));
 
     // run
     return app.run(uv_default_loop(), argc, (const char **)argv, NULL);

@@ -154,9 +154,7 @@ namespace atframe {
             // if there is watch response, start a new watch
             watch();
 
-            // TODO if there is any new proxy, add it to manager and start a connect
-            // TODO if there is any proxy removed, remove it from manager list
-            return 0;
+            return proxy_mgr_.tick(*get_app());
         }
 
         int etcd_v2_module::keepalive(bool refresh) {
@@ -659,7 +657,11 @@ namespace atframe {
         int etcd_v2_module::on_keepalive_complete(util::network::http_request &req) {
             if (0 != req.get_error_code() || util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
                 util::network::http_request::get_status_code_group(req.get_response_code())) {
-                setup_update_etcd_members();
+
+                // only network error will trigger a etcd member update
+                if (0 != req.get_error_code()) {
+                    setup_update_etcd_members();
+                }
                 WLOGERROR("keepalive failed, error code: %d, http code: %d\n%s", 
                     req.get_error_code(), req.get_response_code(), req.get_error_msg());
             }
@@ -695,7 +697,10 @@ namespace atframe {
                     rpc_watch_.reset();
                     return 0;
                 } else {
-                    setup_update_etcd_members();
+                    // only network error will trigger a etcd member update
+                    if (0 != errcode) {
+                        setup_update_etcd_members();
+                    }
                     WLOGERROR("watch failed, error code: %d, http code: %d\n%s",
                         req.get_error_code(), req.get_response_code(), req.get_error_msg());
                 }
@@ -708,13 +713,40 @@ namespace atframe {
             unpack(nl, msg);
             WLOGDEBUG("got watch message:\n%s", msg.c_str());
 
-            // if it not a get request, the header will contain previews index
-            if (node_action_t::EN_NAT_GET != nl.action && !nl.nodes.empty()) {
+            // after these if sentense, nl will not be available anymore
+            if (node_action_t::EN_NAT_GET == nl.action && !nl.nodes.empty()) {
+                proxy_mgr_.reset(nl);
+            } else {
+                // if it not a get request, the header will contain previews index
                 uint64_t index = 0;
-                for (std::list<node_info_t>::const_iterator iter = nl.nodes.begin();
+                for (std::list<node_info_t>::iterator iter = nl.nodes.begin();
                     iter != nl.nodes.end(); ++iter) {
                     if (iter->modify_index > index) {
                         index = iter->modify_index;
+                    }
+
+                    switch (iter->action) {
+
+                    case node_action_t::EN_NAT_SET:
+                    case node_action_t::EN_NAT_CREATE:
+                    case node_action_t::EN_NAT_MODIFY: {
+                        // update all new nodes
+                        if (iter->listens.empty()) {
+                            proxy_mgr_.remove(iter->id);
+                        } else {
+                            proxy_mgr_.set(*iter);
+                        }
+                    }
+                    case node_action_t::EN_NAT_REMOVE:
+                    case node_action_t::EN_NAT_EXPIRE: {
+                        // remove all expired/removed nodes
+                        proxy_mgr_.remove(iter->id);
+                        break;
+                    }
+                    default: {
+                        WLOGERROR("unknown action");
+                        break;
+                    }
                     }
                 }
 
@@ -722,10 +754,6 @@ namespace atframe {
                     rpc_watch_index_ = index + 1;
                 }
             }
-
-
-            // TODO update all new nodes
-            // TODO remove all expired nodes
 
             rpc_watch_.reset();
             return 0;
