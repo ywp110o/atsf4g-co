@@ -21,6 +21,7 @@ namespace atframe {
         class etcd_v2_module : public ::atapp::module_impl {
         public:
             struct conf_t {
+                std::vector<std::string> conf_hosts;
                 std::vector<std::string> hosts;
                 time_t keepalive_timeout;
                 time_t keepalive_interval;
@@ -38,10 +39,13 @@ namespace atframe {
 
             struct node_action_t {
                 enum type {
-                    EN_NAT_NONE = 0,
-                    EN_NAT_ADD,
-                    EN_NAT_MOD,
+                    EN_NAT_UNKNOWN = 0,
+                    EN_NAT_GET,
+                    EN_NAT_SET,
+                    EN_NAT_CREATE,
+                    EN_NAT_MODIFY,
                     EN_NAT_REMOVE,
+                    EN_NAT_EXPIRE,
                 };
             };
             struct node_info_t {
@@ -57,6 +61,8 @@ namespace atframe {
 
             struct node_list_t {
                 std::list<node_info_t> nodes;
+
+                node_action_t::type action;
                 uint64_t created_index;
                 uint64_t modify_index;
 
@@ -85,11 +91,13 @@ namespace atframe {
 
             int watch();
 
+            int update_etcd_members(bool waiting);
         private:
             void  setup_http_request(util::network::http_request::ptr_t& req);
             int select_host(const std::string& json_data);
+            void setup_update_etcd_members();
 
-            void unpack(node_info_t& out, rapidjson::Value& node, bool reset_data);
+            void unpack(node_info_t& out, rapidjson::Value& node, rapidjson::Value* prev_node, bool reset_data);
             void unpack(node_list_t& out, rapidjson::Value& node, bool reset_data);
 
             void unpack(node_info_t& out, const std::string& json);
@@ -98,6 +106,9 @@ namespace atframe {
             void pack(const node_info_t& out, std::string& json);
 
             int on_keepalive_complete(util::network::http_request& req);
+            int on_watch_complete(util::network::http_request& req);
+            int on_watch_header(util::network::http_request& req, const char* key, size_t keylen, const char* val, size_t vallen);
+            int on_update_etcd_complete(util::network::http_request& req);
 
         private:
             util::network::http_request::curl_m_bind_ptr_t curl_multi_;
@@ -105,8 +116,11 @@ namespace atframe {
             conf_t conf_;
             util::network::http_request::ptr_t rpc_keepalive_;
             util::network::http_request::ptr_t rpc_watch_;
+            uint64_t rpc_watch_index_;
+            util::network::http_request::ptr_t rpc_update_members_;
 
             bool next_keepalive_refresh;
+            time_t next_tick_update_etcd_mebers;
         };
     }
 }
