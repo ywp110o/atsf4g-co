@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "session.h"
+#include "session_port/libuv_session.h"
 #include <map>
 
 #if (defined(__cplusplus) && __cplusplus >= 201103L) || (defined(_MSC_VER) && _MSC_VER >= 1600)
@@ -30,6 +30,13 @@ namespace atframe {
                 size_t max_message_size;
             };
 
+            struct session_info_t {
+                session::ptr_t session;
+                ::atbus::node::id_t router;
+            };
+
+            typedef ATFRAME_GATEWAY_AUTO_MAP(session::id_t, session_info_t) session_map_t;
+
         public:
             int init(uv_loop_t *evloop);
             int listen(const char *address);
@@ -49,7 +56,7 @@ namespace atframe {
 
         private:
             uv_loop_t *evloop_;
-            ATFRAME_GATEWAY_AUTO_MAP(session::id_t, session::ptr_t) sessions_;
+            session_map_t sessions_;
             void *private_data_;
         }
     }
