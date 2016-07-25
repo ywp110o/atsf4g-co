@@ -12,3 +12,6 @@ option(PROJECT_ENABLE_UNITTEST "Enable build unit test." OFF)
 
 # project name
 set(PROJECT_BUILD_NAME "hello_project" CACHE STRING "Project name")
+
+# just like ATBUS_MACRO_DATA_SMALL_SIZE
+set(ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE 3072 CACHE STRING "small message buffer for atgateway connection(used to reduce memory copy when there are many small messages)")
