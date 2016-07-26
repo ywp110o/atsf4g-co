@@ -19,6 +19,14 @@ namespace atframe {
                 EN_ECT_REFUSE_RECONNECT = -1005,
                 EN_ECT_MISS_CALLBACKS = -1006,
                 EN_ECT_INVALID_ROUTER = -1007,
+                EN_ECT_INVALID_ADDRESS = -1008,
+                EN_ECT_NETWORK = -1009,
+                EN_ECT_BAD_PROTOCOL = -1010,
+                EN_ECT_CLOSING = -1011,
+                EN_ECT_LOST_MANAGER = -1012,
+                EN_ECT_MSG_TOO_LARGE = -1013,
+                EN_ECT_HANDLE_NOT_FOUND = -1014,
+                EN_ECT_ALREADY_HAS_FD = -1015,
             };
         };
 
@@ -27,6 +35,7 @@ namespace atframe {
                 EN_CRT_LOGOUT = 0,
                 EN_CRT_FIRST_IDLE,
                 EN_CRT_SERVER_CLOSED,
+                EN_CRT_SERVER_BUSY,
             };
         };
 
@@ -76,8 +85,11 @@ namespace atframe {
 
             virtual int close(int reason);
 
-        protected:
+            virtual bool check_reconnect(proto_base *other);
+
+        public:
             static void *get_tls_buffer(tls_buffer_t::type tls_type);
+            static size_t get_tls_length(tls_buffer_t::type tls_type);
 
         public:
             inline proto_callbacks_t *get_callbacks() const { return callbacks_; }

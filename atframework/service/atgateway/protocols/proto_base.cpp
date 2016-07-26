@@ -40,7 +40,7 @@ namespace atframe {
             }
 
             static void init_pthread_atgateway_get_msg_buffer_tls() {
-                for (int i = 0; i < ::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX++ i) {
+                for (int i = 0; i < ::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX; ++i) {
                     (void)pthread_key_create(&gt_atgateway_get_msg_buffer_tls_key[i], dtor_pthread_atgateway_get_msg_buffer_tls);
                 }
             }
@@ -63,13 +63,15 @@ namespace atframe {
 namespace atframe {
     namespace gateway {
         proto_base::proto_base() : flags_(0), callbacks_(NULL), private_data_(NULL) {}
-        proto_base::~proto_base{};
+        proto_base::~proto_base(){};
 
         void *proto_base::get_tls_buffer(tls_buffer_t::type tls_type) {
             return ::atframe::gateway::detail::atgateway_get_msg_buffer(tls_type);
         }
 
-        int write_done(int status) {
+        size_t proto_base::get_tls_length(tls_buffer_t::type tls_type) { return ATBUS_MACRO_TLS_MERGE_BUFFER_LEN; }
+
+        int proto_base::write_done(int status) {
             if (0 == (flags_ & flag_t::EN_PFT_WRITING)) {
                 return 0;
             }
@@ -78,6 +80,8 @@ namespace atframe {
             return 0;
         }
 
-        int proto_base::kickoff(int reason) { return 0; }
+        int proto_base::close(int reason) { return 0; }
+
+        bool proto_base::check_reconnect(proto_base *other) { return false; }
     }
 }

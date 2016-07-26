@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "session_port/libuv_session.h"
+#include "session.h"
 #include <list>
 #include <map>
 #include <std/functional.h>
@@ -30,10 +30,17 @@ namespace atframe {
                 size_t minute_send_limit;
 
                 size_t max_message_size;
+                size_t max_client_number;
+            };
+
+            struct conf_t {
+                client_limit_t limits;
+                int backlog;
             };
 
             typedef ATFRAME_GATEWAY_AUTO_MAP(session::id_t, session::ptr_t) session_map_t;
             typedef std::function<std::unique_ptr< ::atframe::gateway::proto_base>()> create_proto_fn_t;
+            typedef std::function<int(bus_id_t tid, int type, const void *buffer, size_t s)> post_data_fn_t;
 
         public:
             int init(uv_loop_t *evloop, create_proto_fn_t fn);
@@ -45,13 +52,16 @@ namespace atframe {
             inline void *get_private_data() const { return private_data_; }
             inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
 
+            int post_data(bus_id_t tid, int type, const void *buffer, size_t s);
+
         private:
-            void on_evt_read_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
-            void on_evt_read_data(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
-            void on_evt_write(uv_write_t *req, int status);
-            void on_evt_accept(uv_stream_t *server, int status);
-            void on_evt_shutdown(uv_shutdown_t *req, int status);
-            void on_evt_closed(uv_handle_t *handle);
+            static void on_evt_read_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
+            static void on_evt_read_data(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
+            static void on_evt_write(uv_write_t *req, int status);
+            static void on_evt_accept_tcp(uv_stream_t *server, int status);
+            static void on_evt_accept_pipe(uv_stream_t *server, int status);
+
+            static void on_evt_listen_closed(uv_handle_t *handle);
 
         private:
             struct session_timeout_t {
@@ -60,8 +70,13 @@ namespace atframe {
             };
 
             uv_loop_t *evloop_;
-            create_proto_fn_t create_proto_fn_;
+            conf_t conf_;
 
+            create_proto_fn_t create_proto_fn_;
+            post_data_fn_t post_data_fn_;
+
+            typedef std::shared_ptr<uv_stream_t> listen_handle_ptr_t;
+            std::list<listen_handle_ptr_t> listen_handles_;
             session_map_t actived_sessions_;
             std::list<session_timeout_t> first_idle_;
             session_map_t reconnect_cache_;

@@ -14,7 +14,8 @@
 
 namespace atframe {
     namespace gateway {
-        class session : std::shared_from_this<session> {
+        class session_manager;
+        class session : std::enable_shared_from_this<session> {
         public:
             struct limit_t {
                 size_t total_recv_bytes;
@@ -48,23 +49,35 @@ namespace atframe {
 
             void set_flag(flag_t::type t, bool v);
 
-            static ptr_t create();
+            static ptr_t create(session_manager *, std::unique_ptr<proto_base> &);
 
             inline id_t get_id() const { return id_; };
 
-            int init_new_session(::atbus::node::id_t router, std::unique_ptr<proto_base> &proto);
+            int accept_tcp(uv_stream_t *server);
+            int accept_pipe(uv_stream_t *server);
+
+            int init_new_session(::atbus::node::id_t router);
 
             int init_reconnect(session &sess);
+
+            void on_alloc_read(size_t suggested_size, char *&out_buf, size_t &out_len);
+            void on_read(int ssz, const char *buff, size_t len);
 
             int close(int reason);
 
             int send_to_client(const void *data, size_t len);
 
-            int send_to_server(const ::atframe::gw::ss_msg &msg);
+            int send_to_server(::atframe::gw::ss_msg &msg);
+
+            proto_base *get_protocol_handle();
+            const proto_base *get_protocol_handle() const;
 
         private:
             int send_new_session();
             int send_remove_session();
+
+            static void on_evt_shutdown(uv_shutdown_t *req, int status);
+            static void on_evt_closed(uv_handle_t *handle);
 
         public:
             inline void *get_private_data() const { return private_data_; }
@@ -75,13 +88,20 @@ namespace atframe {
         private:
             id_t id_;
             ::atbus::node::id_t router_;
+            session_manager *owner_;
+
             limit_t limit_;
             int flags_;
             union {
-                uv_tcp_t tcp_handle;
-                uv_pipe_t unix_handle;
-                uv_udp_t udp_handle;
+                uv_handle_t raw_handle_;
+                uv_stream_t stream_handle_;
+                uv_tcp_t tcp_handle_;
+                uv_pipe_t unix_handle_;
+                uv_udp_t udp_handle_;
             };
+            uv_shutdown_t shutdown_req_;
+            std::string peer_ip_;
+            int32_t peer_port_;
 
             std::unique_ptr<proto_base> proto_;
             void *private_data_;
