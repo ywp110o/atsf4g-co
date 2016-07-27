@@ -83,5 +83,8 @@ namespace atframe {
         int proto_base::close(int reason) { return 0; }
 
         bool proto_base::check_reconnect(proto_base *other) { return false; }
+
+        void proto_base::set_recv_buffer_limit(size_t, size_t) {}
+        void proto_base::set_send_buffer_limit(size_t, size_t) {}
     }
 }

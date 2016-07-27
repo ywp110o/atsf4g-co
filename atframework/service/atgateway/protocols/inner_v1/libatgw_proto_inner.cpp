@@ -40,30 +40,7 @@ namespace atframe {
         }
 
         void libatgw_proto_inner_v1::read(int ssz, const char *buff, size_t len) {
-
             io_stream_flag_guard flag_guard(channel->flags, io_stream_channel::EN_CF_IN_CALLBACK);
-
-            // 如果正处于关闭阶段，忽略所有数据
-            if (io_stream_connection::EN_ST_CONNECTED != conn_raw_ptr->status) {
-                return;
-            }
-
-            // if no more data or EAGAIN or break by signal, just ignore
-            if (0 == nread || UV_EAGAIN == nread || UV_EAI_AGAIN == nread || UV_EINTR == nread) {
-                return;
-            }
-
-            // TODO if network error or reset by peer, move session into reconnect queue
-            if (nread < 0) {
-                session::ptr_t s = sess->shared_from_this();
-                channel->error_code = static_cast<int>(nread);
-                s->close(close_reason_t::EN_CRT_LOGOUT);
-
-                //
-                reconnect_timeout_.push_back();
-                reconnect_cache_[sess->get_id()] = s;
-                return;
-            }
 
             // TODO alloc call read API of session proto
         }

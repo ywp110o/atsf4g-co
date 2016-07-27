@@ -65,6 +65,8 @@ namespace atframe {
 
             int close(int reason);
 
+            int close_fd();
+
             int send_to_client(const void *data, size_t len);
 
             int send_to_server(::atframe::gw::ss_msg &msg);

@@ -27,6 +27,9 @@ namespace atframe {
 
             virtual bool check_reconnect(proto_base *other);
 
+            virtual void set_recv_buffer_limit(size_t max_size, size_t max_number);
+            virtual void set_send_buffer_limit(size_t max_size, size_t max_number);
+
         private:
             struct recv_cache_t {
                 char small_recv_buffer_[ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE];

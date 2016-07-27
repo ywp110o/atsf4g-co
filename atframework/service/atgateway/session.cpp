@@ -206,6 +206,23 @@ namespace atframe {
             }
         }
 
+        int session::close_fd() {
+            if (check_flag(flag_t::EN_FT_HAS_FD)) {
+                if (proto_) {
+                    proto_->close(reason);
+                }
+
+                // shutdown and close uv_stream_t
+                // manager can not be used any more
+                owner_ = NULL;
+                shutdown_req_.data = new ptr_t(shared_from_this());
+                uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
+                set_flag(flag_t::EN_FT_HAS_FD, false);
+            }
+
+            return 0;
+        }
+
         int session::send_to_client(const void *data, size_t len) {
             // send to proto_
             if (check_flag(flag_t::EN_FT_CLOSING)) {
@@ -218,6 +235,7 @@ namespace atframe {
                 return error_code_t::EN_ECT_BAD_PROTOCOL;
             }
 
+            // TODO send limit
             return proto_->write(data, len);
         }
 
@@ -232,6 +250,8 @@ namespace atframe {
                 WLOGERROR("sesseion %llx has lost manager and can not send ss message any more", id_);
                 return error_code_t::EN_ECT_LOST_MANAGER;
             }
+
+            // TODO recv limit
 
             // send to server with type = ::atframe::component::service_type::EN_ATST_GATEWAY
             std::stringstream ss;

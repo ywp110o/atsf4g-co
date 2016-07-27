@@ -27,13 +27,28 @@ namespace atframe {
             }
         }
 
-        int session_manager::init(uv_loop_t *evloop, create_proto_fn_t fn) {
-            evloop_ = evloop;
+        int session_manager::init(::atbus::node *bus_node, create_proto_fn_t fn) {
+            evloop_ = bus_node->get_evloop();
+            app_node_ = bus_node;
             create_proto_fn_ = fn;
             if (!fn) {
                 WLOGERROR("create protocol function is required");
                 return -1;
             }
+            return 0;
+        }
+
+        int session_manager::listen_all() {
+            int ret = 0;
+            for (std::vector<std::string>::iterator iter = conf_.listen.address.begin(); iter != conf_.listen.address.end(); ++iter) {
+                int res = listen((*iter).c_str());
+                if (0 != res) {
+                    WLOGERROR("try to listen %s failed, res: %d", (*iter).c_str(), res);
+                } else {
+                    ++ret;
+                }
+            }
+
             return 0;
         }
 
@@ -214,11 +229,38 @@ namespace atframe {
 
         int session_manager::post_data(bus_id_t tid, int type, const void *buffer, size_t s) {
             // send to process
-            if (!post_data_fn_) {
+            if (!app_node_) {
                 return error_code_t::EN_ECT_HANDLE_NOT_FOUND;
             }
 
-            return post_data_fn_(tid, type, buffer, s);
+            return app_node_->send_data(tid, type, buffer, s);
+        }
+
+        int session_manager::push_data(session::id_t sess_id, const void *buffer, size_t s) {
+            session_map_t::iterator iter = actived_sessions_.find(sess_id);
+            if (actived_sessions_.end() == iter) {
+                return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+            }
+
+            return iter->second->send_to_client(buffer, s);
+        }
+
+        int session_manager::broadcast_data(const void *buffer, size_t s) {
+            int ret = error_code_t::EN_ECT_SESSION_NOT_FOUND;
+            for (session_map_t::iterator iter = actived_sessions_.begin(); iter != actived_sessions_.end(); ++iter) {
+                if (iter->second->check_flag(session::flag_t::EN_FT_REGISTERED)) {
+                    int res = iter->second->send_to_client(buffer, s);
+                    if (0 != res) {
+                        WLOGERROR("broadcast data to session 0x%llx failed, res: %d", iter->first, res);
+                    }
+
+                    if (0 != ret) {
+                        ret = res;
+                    }
+                }
+            }
+
+            return ret;
         }
 
         void session_manager::on_evt_read_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
@@ -231,6 +273,53 @@ namespace atframe {
         void session_manager::on_evt_read_data(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             session *sess = reinterpret_cast<session *>(stream->data);
             assert(sess);
+
+            // 如果正处于关闭阶段，忽略所有数据
+            if (sess->check_flag(session::flag_t::EN_FT_CLOSING)) {
+                return;
+            }
+
+            if (NULL == sess->owner_) {
+                return;
+            }
+            session_manager *self = sess->owner_;
+
+            // if no more data or EAGAIN or break by signal, just ignore
+            if (0 == nread || UV_EAGAIN == nread || UV_EAI_AGAIN == nread || UV_EINTR == nread) {
+                return;
+            }
+
+            // if network error or reset by peer, move session into reconnect queue
+            if (nread < 0) {
+                //
+                if (self->conf_.reconnect_timeout > 0) {
+                    self->reconnect_timeout_.push_back(session_timeout_t());
+                    session_timeout_t &sess_timer = self->reconnect_timeout_.back();
+                    sess_timer.s = sess->shared_from_this();
+                    sess_timer.timeout = util::time::time_utility::get_now() + self->conf_.reconnect_timeout;
+                    self->reconnect_cache_[sess->get_id()] = s;
+
+                    // close fd first
+                    sess->close_fd();
+
+                    // erase from activited map
+                    session_map_t::iterator iter = self->actived_sessions_.find(sess->get_id());
+                    if (iter != self->actived_sessions_.end()) {
+                        self->actived_sessions_.erase(iter);
+                    }
+                } else {
+                    // close fd
+                    sess->close();
+
+                    // erase from activited map
+                    session_map_t::iterator iter = self->actived_sessions_.find(sess->get_id());
+                    if (iter != self->actived_sessions_.end()) {
+                        self->actived_sessions_.erase(iter);
+                    }
+                }
+                return;
+            }
+
             sess->on_read(static_cast<int>(nread), buf->base, buf->len);
         }
 
@@ -271,16 +360,29 @@ namespace atframe {
                 return;
             }
 
+            // setup send buffer size
+            proto->set_recv_buffer_limit(ATBUS_MACRO_MSG_LIMIT, 2);
+            proto->set_send_buffer_limit(mgr->conf_.send_buffer_size, 0);
+
+            // setup default router
+            sess->set_router(mgr->conf_.default_router);
+
             // create proto object and session object
             int res = sess->accept_tcp(server);
             if (0 != res) {
                 sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
+                return;
             }
 
             // check session number limit
             if (mgr->conf_.limits.max_client_number > 0 &&
                 mgr->actived_sessions_.size() + mgr->actived_sessions_.size() >= mgr->conf_.limits.max_client_number) {
                 sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
+                return;
+            }
+
+            if (on_create_session_fn_) {
+                on_create_session_fn_(*sess);
             }
         }
 
@@ -317,15 +419,28 @@ namespace atframe {
                 return;
             }
 
+            // setup send buffer size
+            proto->set_recv_buffer_limit(ATBUS_MACRO_MSG_LIMIT, 2);
+            proto->set_send_buffer_limit(mgr->conf_.send_buffer_size, 0);
+
+            // setup default router
+            sess->set_router(mgr->conf_.default_router);
+
             int res = sess->accept_pipe(server);
             if (0 != res) {
                 sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
+                return;
             }
 
             // check session number limit
             if (mgr->conf_.limits.max_client_number > 0 &&
                 mgr->actived_sessions_.size() + mgr->actived_sessions_.size() >= mgr->conf_.limits.max_client_number) {
                 sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
+                return;
+            }
+
+            if (on_create_session_fn_) {
+                on_create_session_fn_(*sess);
             }
         }
 

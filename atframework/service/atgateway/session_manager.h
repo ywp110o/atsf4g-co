@@ -29,21 +29,34 @@ namespace atframe {
                 size_t minute_recv_limit;
                 size_t minute_send_limit;
 
-                size_t max_message_size;
                 size_t max_client_number;
+            };
+
+            struct lister_conf_t {
+                std::vector<std::string> address;
+                std::string type;
+                int backlog;
             };
 
             struct conf_t {
                 client_limit_t limits;
-                int backlog;
+                lister_conf_t listen;
+                time_t reconnect_timeout;
+                size_t send_buffer_size;
+                ::atbus::node::id_t default_router;
             };
 
             typedef ATFRAME_GATEWAY_AUTO_MAP(session::id_t, session::ptr_t) session_map_t;
             typedef std::function<std::unique_ptr< ::atframe::gateway::proto_base>()> create_proto_fn_t;
-            typedef std::function<int(bus_id_t tid, int type, const void *buffer, size_t s)> post_data_fn_t;
+            typedef std::function<void(session &)> on_create_session_fn_t;
 
         public:
-            int init(uv_loop_t *evloop, create_proto_fn_t fn);
+            int init(::atbus::node *bus_node, create_proto_fn_t fn);
+            /**
+             * @brief listen all address in configure
+             * @return the number of listened address
+             */
+            int listen_all();
             int listen(const char *address);
             int reset();
             int tick();
@@ -53,6 +66,15 @@ namespace atframe {
             inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
 
             int post_data(bus_id_t tid, int type, const void *buffer, size_t s);
+
+            int push_data(session::id_t sess_id, const void *buffer, size_t s);
+            int broadcast_data(const void *buffer, size_t s);
+
+            inline conf_t &get_conf() { return conf_; }
+            inline const conf_t &get_conf() const { return conf_; }
+
+            inline on_create_session_fn_t get_on_create_session() const { return on_create_session_fn_; }
+            inline void set_on_create_session(on_create_session_fn_t fn) { on_create_session_fn_ = fn; }
 
         private:
             static void on_evt_read_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
@@ -70,10 +92,11 @@ namespace atframe {
             };
 
             uv_loop_t *evloop_;
+            ::atbus::node *app_node_;
             conf_t conf_;
 
             create_proto_fn_t create_proto_fn_;
-            post_data_fn_t post_data_fn_;
+            on_create_session_fn_t on_create_session_fn_;
 
             typedef std::shared_ptr<uv_stream_t> listen_handle_ptr_t;
             std::list<listen_handle_ptr_t> listen_handles_;

@@ -4,8 +4,9 @@
 #include <cstring>
 #include <iostream>
 #include <sstream>
-#include <vector>
 #include <std/ref.h>
+#include <vector>
+
 
 #include <uv.h>
 
@@ -16,14 +17,14 @@
 #include "etcd_v2_module.h"
 
 static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd,
-    const atbus::protocol::msg &m) {
-    WLOGERROR("send data from %llx to %llx failed", src_pd, dst_pd);
+                                   const atbus::protocol::msg &m) {
+    WLOGERROR("send data from 0x%llx to 0x%llx failed", src_pd, dst_pd);
     return 0;
 }
 
 struct app_handle_on_connected {
     std::reference_wrapper<atframe::proxy::etcd_v2_module> etcd_v2_module;
-    app_handle_on_connected(atframe::proxy::etcd_v2_module& mod) : etcd_v2_module(mod) {}
+    app_handle_on_connected(atframe::proxy::etcd_v2_module &mod) : etcd_v2_module(mod) {}
 
     int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
         WLOGINFO("node 0x%llx connected, status: %d", ep.get_id(), status);
@@ -35,7 +36,7 @@ struct app_handle_on_connected {
 
 struct app_handle_on_disconnected {
     std::reference_wrapper<atframe::proxy::etcd_v2_module> etcd_v2_module;
-    app_handle_on_disconnected(atframe::proxy::etcd_v2_module& mod) : etcd_v2_module(mod) {}
+    app_handle_on_disconnected(atframe::proxy::etcd_v2_module &mod) : etcd_v2_module(mod) {}
 
     int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
         WLOGINFO("node 0x%llx disconnected, status: %d", ep.get_id(), status);

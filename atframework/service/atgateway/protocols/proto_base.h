@@ -27,6 +27,7 @@ namespace atframe {
                 EN_ECT_MSG_TOO_LARGE = -1013,
                 EN_ECT_HANDLE_NOT_FOUND = -1014,
                 EN_ECT_ALREADY_HAS_FD = -1015,
+                EN_ECT_SESSION_NOT_FOUND = -1016,
             };
         };
 
@@ -36,6 +37,7 @@ namespace atframe {
                 EN_CRT_FIRST_IDLE,
                 EN_CRT_SERVER_CLOSED,
                 EN_CRT_SERVER_BUSY,
+                EN_CRT_KICKOFF,
             };
         };
 
@@ -86,6 +88,9 @@ namespace atframe {
             virtual int close(int reason);
 
             virtual bool check_reconnect(proto_base *other);
+
+            virtual void set_recv_buffer_limit(size_t max_size, size_t max_number);
+            virtual void set_send_buffer_limit(size_t max_size, size_t max_number);
 
         public:
             static void *get_tls_buffer(tls_buffer_t::type tls_type);
