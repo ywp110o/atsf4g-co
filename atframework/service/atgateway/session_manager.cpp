@@ -227,6 +227,20 @@ namespace atframe {
             return 0;
         }
 
+        int session_manager::post_data(bus_id_t tid, ::atframe::gw::ss_msg &msg) {
+            return post_data(tid, ::atframe::component::service_type::EN_ATST_GATEWAY, msg);
+        }
+
+        int session_manager::post_data(bus_id_t tid, int type, ::atframe::gw::ss_msg &msg) {
+            // send to server with type = ::atframe::component::service_type::EN_ATST_GATEWAY
+            std::stringstream ss;
+            msgpack::pack(ss, msg);
+            std::string packed_buffer;
+            ss.str().swap(packed_buffer);
+
+            return post_data(tid, type, packed_buffer.data(), packed_buffer.size());
+        }
+
         int session_manager::post_data(bus_id_t tid, int type, const void *buffer, size_t s) {
             // send to process
             if (!app_node_) {
@@ -261,6 +275,15 @@ namespace atframe {
             }
 
             return ret;
+        }
+
+        int session_manager::set_session_router(session::id_t sess_id, ::atbus::node::id_t router) {
+            session_map_t::iterator iter = actived_sessions_.find(sess_id);
+            if (actived_sessions_.end() == iter) {
+                return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+            }
+
+            return iter->second->set_router(router);
         }
 
         void session_manager::on_evt_read_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {

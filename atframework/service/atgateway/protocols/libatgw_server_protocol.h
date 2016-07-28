@@ -19,6 +19,8 @@ enum ATFRAME_GW_SERVER_PROTOCOL_CMD {
     ATFRAME_GW_CMD_SESSION_ADD = 11,
     ATFRAME_GW_CMD_SESSION_REMOVE = 12,
     ATFRAME_GW_CMD_SESSION_KICKOFF = 14,
+    ATFRAME_GW_CMD_SET_ROUTER_REQ = 15,
+    ATFRAME_GW_CMD_SET_ROUTER_RSP = 16,
 
     ATFRAME_GW_CMD_MAX
 };
@@ -93,10 +95,17 @@ namespace atframe {
 
         class ss_msg_body {
         public:
-            ss_body_post *post;
-            ss_body_session *session;
+            union {
+                ss_body_post *post;
+                ss_body_session *session;
+                uint64_t router;
+            };
 
-            ss_msg_body() : post(NULL), session(NULL) {}
+            ss_msg_body() {
+                post = NULL;
+                session = NULL;
+                router = 0;
+            }
             ~ss_msg_body() {
                 if (NULL != post) {
                     delete post;
@@ -164,10 +173,11 @@ namespace atframe {
         struct ss_msg_head {
             ATFRAME_GW_SERVER_PROTOCOL_CMD cmd; // ID: 0
             uint64_t session_id;                // ID: 1
+            int error_code;                     // ID: 2
 
-            msg_head() : cmd(ATFRAME_GW_CMD_INVALID), session_id(0) {}
+            msg_head() : cmd(ATFRAME_GW_CMD_INVALID), session_id(0), error_code(0) {}
 
-            MSGPACK_DEFINE(cmd, session_id);
+            MSGPACK_DEFINE(cmd, session_id, error_code);
 
 
             template <typename CharT, typename Traits>

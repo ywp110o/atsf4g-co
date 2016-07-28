@@ -65,10 +65,14 @@ namespace atframe {
             inline void *get_private_data() const { return private_data_; }
             inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
 
+            int post_data(bus_id_t tid, ::atframe::gw::ss_msg &msg);
+            int post_data(bus_id_t tid, int type, ::atframe::gw::ss_msg &msg);
             int post_data(bus_id_t tid, int type, const void *buffer, size_t s);
 
             int push_data(session::id_t sess_id, const void *buffer, size_t s);
             int broadcast_data(const void *buffer, size_t s);
+
+            int set_session_router(session::id_t sess_id, ::atbus::node::id_t router);
 
             inline conf_t &get_conf() { return conf_; }
             inline const conf_t &get_conf() const { return conf_; }

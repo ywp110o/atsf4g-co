@@ -145,6 +145,21 @@ struct app_handle_on_recv {
             mod_.get_session_manager().close(msg.head.session_id, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
             break;
         }
+        case ATFRAME_GW_CMD_SET_ROUTER_REQ: {
+            int res = mod_.get_session_manager().set_session_router(msg.head.session_id, msg.body.router);
+            WLOGINFO("from server 0x%llx: session 0x%llx set router to %0xllx by server, res: %d", header->src_bus_id, msg.head.session_id,
+                     msg.body.router, res);
+
+            ::atframe::gw::ss_msg rsp;
+            rsp.init(ATFRAME_GW_CMD_SET_ROUTER_RSP, msg.head.session_id);
+            rsp.head.error_code = res;
+
+            res = mod_.get_session_manager().post_data(header->src_bus_id, rsp);
+            if (0 != res) {
+                WLOGERROR("send set router response to server 0x%llx failed, res: %d", header->src_bus_id, res);
+            }
+            break;
+        }
         default: {
             WLOGERROR("from server 0x%llx: session 0x%llx recv invalid cmd %d", header->src_bus_id, msg.head.session_id,
                       static_cast<int>(msg.head.cmd));
