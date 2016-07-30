@@ -38,12 +38,34 @@ namespace atframe {
                 int backlog;
             };
 
+            /**
+             * @brief crypt configure
+             * @note default reuse the definition of inner ptotocol, if it's useful for other protocol depends other protocol's implement
+             * @see protocols/inner_v1/libatgw_proto_inner.fbs
+             */
+            struct crypt_conf_t {
+                std::string default_key; /** default key, different used for different crypt protocol **/
+                time_t update_interval;  /** crypt key refresh interval **/
+                int type;                /** crypt type. XTEA, AES and etc. **/
+                int switch_secret_type;  /** how to generate the secret key, dh, rsa or direct send. recommander to use DH **/
+                uint32_t keybits;        /** key length in bits. **/
+
+                int rsa_sign_type;           /** RSA sign type. PKCS1, PKCS1_V15 or PSS **/
+                int hash_id;                 /** hash id, md5,sha1,sha256,sha512 **/
+                std::string rsa_public_key;  /** RSA public key file path. **/
+                std::string rsa_private_key; /** RSA private key file path. **/
+                std::string dh_param;        /** DH parameter file path. **/
+            };
+
             struct conf_t {
+                size_t version;
                 client_limit_t limits;
                 lister_conf_t listen;
                 time_t reconnect_timeout;
                 size_t send_buffer_size;
                 ::atbus::node::id_t default_router;
+
+                crypt_conf_t crypt;
             };
 
             typedef ATFRAME_GATEWAY_AUTO_MAP(session::id_t, session::ptr_t) session_map_t;

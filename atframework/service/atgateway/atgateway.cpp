@@ -27,6 +27,8 @@ public:
 
 public:
     virtual int init() CLASS_OVERRIDE {
+        gw_mgr_.get_conf().version = 1;
+
         int res = 0;
         if ("inner" == gw_mgr_.get_conf().listen.type) {
             gw_mgr_.init(get_app()->get_bus_node(), std::bind(&gateway_module::create_proto_inner, this));
@@ -41,6 +43,7 @@ public:
             return -1;
         }
 
+        // init limits
         res = gw_mgr_.listen_all();
         if (res <= 0) {
             fprintf(stderr, "nothing listened for client\n");
@@ -51,7 +54,109 @@ public:
     }
 
     virtual int reload() CLASS_OVERRIDE {
-        // TODO configure
+        ++gw_mgr_.get_conf().version;
+
+        // load init cluster member from configure
+        gw_mgr_.get_conf().limits.total_recv_limit = 0;
+        gw_mgr_.get_conf().limits.total_send_limit = 0;
+        gw_mgr_.get_conf().limits.hour_recv_limit = 0;
+        gw_mgr_.get_conf().limits.hour_send_limit = 0;
+        gw_mgr_.get_conf().limits.minute_recv_limit = 0;
+        gw_mgr_.get_conf().limits.minute_send_limit = 0;
+        gw_mgr_.get_conf().limits.max_client_number = 65536;
+
+        gw_mgr_.get_conf().listen.address.clear();
+        gw_mgr_.get_conf().listen.type.clear();
+        gw_mgr_.get_conf().listen.backlog = 1024;
+
+        gw_mgr_.get_conf().reconnect_timeout = 60;     // 60s
+        gw_mgr_.get_conf().send_buffer_size = 1048576; // 1MB
+        gw_mgr_.get_conf().default_router = 0;
+
+        util::config::ini_loader &cfg = get_app()->get_configure();
+        // listen configures
+        cfg.dump_to("atgateway.listen.address", gw_mgr_.get_conf().listen.address);
+        cfg.dump_to("atgateway.listen.type", gw_mgr_.get_conf().listen.type);
+        cfg.dump_to("atgateway.listen.max_client", gw_mgr_.get_conf().limits.max_client_number);
+        cfg.dump_to("atgateway.listen.backlog", gw_mgr_.get_conf().listen.backlog);
+
+        // client session configure
+        cfg.dump_to("atgateway.client.router.default", gw_mgr_.get_conf().default_router);
+        cfg.dump_to("atgateway.client.send_buffer_size", gw_mgr_.get_conf().send_buffer_size);
+        cfg.dump_to("atgateway.client.reconnect_timeout", gw_mgr_.get_conf().reconnect_timeout);
+
+        // client limit
+        cfg.dump_to("atgateway.client.limit.total_send", gw_mgr_.get_conf().limits.total_send_limit);
+        cfg.dump_to("atgateway.client.limit.total_recv", gw_mgr_.get_conf().limits.total_recv_limit);
+        cfg.dump_to("atgateway.client.limit.hour_send", gw_mgr_.get_conf().limits.hour_send_limit);
+        cfg.dump_to("atgateway.client.limit.hour_recv", gw_mgr_.get_conf().limits.hour_recv_limit);
+        cfg.dump_to("atgateway.client.limit.minute_send", gw_mgr_.get_conf().limits.minute_send_limit);
+        cfg.dump_to("atgateway.client.limit.minute_recv", gw_mgr_.get_conf().limits.minute_recv_limit);
+
+        // crypt
+        session_manager::crypt_conf_t &crypt_conf = gw_mgr_.get_conf().crypt;
+        crypt_conf.default_key.clear();
+        crypt_conf.update_interval = 300; // 5min
+        crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE;
+        crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT;
+        crypt_conf.keybits = 128;
+
+        crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
+        crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5;
+        crypt_conf.rsa_public_key.clear();
+        crypt_conf.rsa_private_key.clear();
+        crypt_conf.dh_param.clear();
+        do {
+            std::string val;
+            cfg.dump_to("atgateway.client.crypt.key", crypt_conf.default_key);
+            cfg.dump_to("atgateway.client.crypt.update_interval", crypt_conf.update_interval);
+            cfg.dump_to("atgateway.client.crypt.keybits", crypt_conf.keybits);
+            cfg.dump_to("atgateway.client.crypt.type", val);
+
+            if (0 == UTIL_STRFUNC_STRNCASE_CMP("xtea", val.c_str(), 4)) {
+                crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XTEA;
+            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("aes", val.c_str(), 3)) {
+                crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES;
+            } else {
+                break;
+            }
+
+            // rsa
+            cfg.dump_to("atgateway.client.crypt.rsa.public_key", crypt_conf.rsa_public_key);
+            cfg.dump_to("atgateway.client.crypt.rsa.private_key", crypt_conf.rsa_private_key);
+            if (!crypt_conf.rsa_public_key.empty() && !crypt_conf.rsa_private_key.empty()) {
+                crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA;
+
+                val.clear();
+                cfg.dump_to("atgateway.client.crypt.rsa.sign", val);
+                if (0 == UTIL_STRFUNC_STRNCASE_CMP("pkcs1_v15", val.c_str(), 9)) {
+                    crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1_V15;
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("pkcs1", val.c_str(), 5)) {
+                    crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("pss", val.c_str(), 3)) {
+                    crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PSS;
+                }
+            }
+
+            // dh
+            cfg.dump_to("atgateway.client.crypt.dhparam", crypt_conf.dh_param);
+            if (!crypt_conf.dh_param.empty()) {
+                crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH;
+            }
+
+            // hash id
+            val.clear();
+            cfg.dump_to("atgateway.client.crypt.hash_id", val);
+            if (0 == UTIL_STRFUNC_STRNCASE_CMP("md5", val.c_str(), 3)) {
+                crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5;
+            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha512", val.c_str(), 6)) {
+                crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA512;
+            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha256", val.c_str(), 6)) {
+                crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA256;
+            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha1", val.c_str(), 4)) {
+                crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA1;
+            }
+        } while (false);
     }
 
     virtual int stop() CLASS_OVERRIDE {
