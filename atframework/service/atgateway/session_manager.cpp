@@ -215,16 +215,41 @@ namespace atframe {
             return 0;
         }
 
-        int session_manager::close(session::id_t sess_id, int reason) {
-            session_map_t：：iterator iter = actived_sessions_.find(sess_id);
-            if (actived_sessions_.end() != iter) {
-                iter->second->close(reason);
-
-                // masual closed sessions will not be moved to reconnect list
-                actived_sessions_.erase(iter);
+        int session_manager::close(session::id_t sess_id, int reason, bool allow_reconnect) {
+            session_map_t::iterator iter = actived_sessions_.find(sess_id);
+            if (actived_sessions_.end() == iter) {
+                return 0;
             }
 
+
+            if (conf_.reconnect_timeout > 0 && allow_reconnect) {
+                reconnect_timeout_.push_back(session_timeout_t());
+                session_timeout_t &sess_timer = reconnect_timeout_.back();
+                sess_timer.s = sess->shared_from_this();
+                sess_timer.timeout = util::time::time_utility::get_now() + conf_.reconnect_timeout;
+                reconnect_cache_[sess->get_id()] = s;
+
+                // just close fd
+                sess->close_fd();
+            } else {
+                iter->second->close(reason);
+            }
+
+            // erase from activited map
+            actived_sessions_.erase(iter);
             return 0;
+        }
+
+        int session_manager::setup_reconnect(session::id_t sess_id) {
+            session_map_t：：iterator iter = actived_sessions_.find(sess_id);
+            if (actived_sessions_.end() == iter) {
+                return 0;
+            }
+
+            iter->second->close(reason);
+
+            // masual closed sessions will not be moved to reconnect list
+            actived_sessions_.erase(iter);
         }
 
         int session_manager::post_data(bus_id_t tid, ::atframe::gw::ss_msg &msg) {
@@ -286,70 +311,6 @@ namespace atframe {
             return iter->second->set_router(router);
         }
 
-        void session_manager::on_evt_read_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
-            // alloc read buffer from session proto
-            session *sess = reinterpret_cast<session *>(handle->data);
-            assert(sess);
-            sess->on_alloc_read(suggested_size, buf->base, buf->len);
-        }
-
-        void session_manager::on_evt_read_data(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
-            session *sess = reinterpret_cast<session *>(stream->data);
-            assert(sess);
-
-            // 如果正处于关闭阶段，忽略所有数据
-            if (sess->check_flag(session::flag_t::EN_FT_CLOSING)) {
-                return;
-            }
-
-            if (NULL == sess->owner_) {
-                return;
-            }
-            session_manager *self = sess->owner_;
-
-            // if no more data or EAGAIN or break by signal, just ignore
-            if (0 == nread || UV_EAGAIN == nread || UV_EAI_AGAIN == nread || UV_EINTR == nread) {
-                return;
-            }
-
-            // if network error or reset by peer, move session into reconnect queue
-            if (nread < 0) {
-                //
-                if (self->conf_.reconnect_timeout > 0) {
-                    self->reconnect_timeout_.push_back(session_timeout_t());
-                    session_timeout_t &sess_timer = self->reconnect_timeout_.back();
-                    sess_timer.s = sess->shared_from_this();
-                    sess_timer.timeout = util::time::time_utility::get_now() + self->conf_.reconnect_timeout;
-                    self->reconnect_cache_[sess->get_id()] = s;
-
-                    // close fd first
-                    sess->close_fd();
-
-                    // erase from activited map
-                    session_map_t::iterator iter = self->actived_sessions_.find(sess->get_id());
-                    if (iter != self->actived_sessions_.end()) {
-                        self->actived_sessions_.erase(iter);
-                    }
-                } else {
-                    // close fd
-                    sess->close();
-
-                    // erase from activited map
-                    session_map_t::iterator iter = self->actived_sessions_.find(sess->get_id());
-                    if (iter != self->actived_sessions_.end()) {
-                        self->actived_sessions_.erase(iter);
-                    }
-                }
-                return;
-            }
-
-            sess->on_read(static_cast<int>(nread), buf->base, buf->len);
-        }
-
-        void session_manager::on_evt_write(uv_write_t *req, int status) {
-            // TODO notify session proto that this write finished
-        }
-
         void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
             if (0 != status) {
                 WLOGERROR("accept tcp socket failed, status: %d", status);
@@ -368,6 +329,7 @@ namespace atframe {
             // create proto object and session object
             if (proto) {
                 sess = session::create(mgr, proto);
+                proto->set_private_data(sess.get());
             }
 
             if (!sess) {
@@ -405,7 +367,7 @@ namespace atframe {
             }
 
             if (on_create_session_fn_) {
-                on_create_session_fn_(*sess);
+                on_create_session_fn_(sess, sp.get());
             }
         }
 
@@ -463,7 +425,7 @@ namespace atframe {
             }
 
             if (on_create_session_fn_) {
-                on_create_session_fn_(*sess);
+                on_create_session_fn_(sess, sp.get());
             }
         }
 

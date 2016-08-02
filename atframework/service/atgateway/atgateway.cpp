@@ -32,11 +32,19 @@ public:
         int res = 0;
         if ("inner" == gw_mgr_.get_conf().listen.type) {
             gw_mgr_.init(get_app()->get_bus_node(), std::bind(&gateway_module::create_proto_inner, this));
-            // proto_callbacks_.write_fn = ;
-            // proto_callbacks_.message_fn = ;
-            // proto_callbacks_.new_session_fn = ;
-            // proto_callbacks_.reconnect_fn = ;
-            // proto_callbacks_.close_fn = ;
+            gw_mgr_.set_on_create_session(std::bind(&gateway_module::proto_inner_callback_on_create_session, this, std::placeholders::_1));
+
+            // init callbacks
+            proto_callbacks_.write_fn = std::bind(this, &gateway_module::proto_inner_callback_on_write, std::placeholders::_1,
+                                                  std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+            proto_callbacks_.message_fn = std::bind(this, &gateway_module::proto_inner_callback_on_message, std::placeholders::_1,
+                                                    std::placeholders::_2, std::placeholders::_3);
+            proto_callbacks_.new_session_fn =
+                std::bind(this, &gateway_module::proto_inner_callback_on_new_session, std::placeholders::_1, std::placeholders::_2);
+            proto_callbacks_.reconnect_fn =
+                std::bind(this, &gateway_module::proto_inner_callback_on_reconnect, std::placeholders::_1, std::placeholders::_2);
+            proto_callbacks_.close_fn =
+                std::bind(this, &gateway_module::proto_inner_callback_on_close, std::placeholders::_1, std::placeholders::_2);
 
         } else {
             fprintf(stderr, "listen type %s not supported\n", gw_mgr_.get_conf().listen.type.c_str());
@@ -115,6 +123,7 @@ public:
 
             if (0 == UTIL_STRFUNC_STRNCASE_CMP("xtea", val.c_str(), 4)) {
                 crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XTEA;
+                crypt_conf.keybits = 16 * 8;
             } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("aes", val.c_str(), 3)) {
                 crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES;
             } else {
@@ -157,6 +166,17 @@ public:
                 crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA1;
             }
         } while (false);
+
+        // protocol reload
+        if ("inner" == gw_mgr_.get_conf().listen.type) {
+            int res = ::atframe::gateway::libatgw_proto_inner_v1::global_reload(crypt_conf);
+            if (res < 0) {
+                WLOGERROR("reload inner protocol global configure failed, res: %d", res);
+                return res;
+            }
+        }
+
+        return 0;
     }
 
     virtual int stop() CLASS_OVERRIDE {
@@ -178,13 +198,149 @@ private:
         ::atframe::gateway::libatgw_proto_inner_v1 *ret = new (std::nothrow)::atframe::gateway::libatgw_proto_inner_v1();
         if (NULL != ret) {
             ret->set_callbacks(&proto_callbacks_);
-
-            // TODO setup crypt option
-
-            // TODO setup zip option
+            ret->set_write_header_offset(sizeof(uv_write_t));
         }
 
         return std::unique_ptr< ::atframe::gateway::proto_base>(ret);
+    }
+
+    static void proto_inner_callback_on_read_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
+        // alloc read buffer from session proto
+        session *sess = reinterpret_cast<session *>(handle->data);
+        assert(sess);
+        sess->on_alloc_read(suggested_size, buf->base, buf->len);
+    }
+
+    static void proto_inner_callback_on_read_data(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+        session *sess = reinterpret_cast<session *>(stream->data);
+        assert(sess);
+
+        // 如果正处于关闭阶段，忽略所有数据
+        if (sess->check_flag(session::flag_t::EN_FT_CLOSING)) {
+            return;
+        }
+
+        if (NULL == sess->owner_) {
+            return;
+        }
+        session_manager *mgr = sess->owner_;
+
+        // if no more data or EAGAIN or break by signal, just ignore
+        if (0 == nread || UV_EAGAIN == nread || UV_EAI_AGAIN == nread || UV_EINTR == nread) {
+            return;
+        }
+
+        // if network error or reset by peer, move session into reconnect queue
+        if (nread < 0) {
+            // notify to close fd
+            mgr->close(sess->get_id(), ::atframe::gateway::close_reason_t::EN_CRT_LOGOUT, true);
+            return;
+        }
+
+        if (NULL != buf) {
+            sess->on_read(static_cast<int>(nread), buf->base, buf->len);
+        }
+    }
+
+    void proto_inner_callback_on_create_session(session *sess, uv_stream_t *handle) {
+        if (NULL == sess) {
+            WLOGERROR("create session with inner proto without session object");
+            return;
+        }
+
+        if (NULL == handle) {
+            WLOGERROR("create session with inner proto without handle");
+            return;
+        }
+
+        // start read
+        handle->data = sess;
+        uv_read_start(handle, proto_inner_callback_on_read_alloc, proto_inner_callback_on_read_data);
+    }
+
+    static void proto_inner_callback_on_written_fn(uv_write_t *req, int status) {
+        ::atframe::gateway::session *sess = reinterpret_cast< ::atframe::gateway::session *>(req->data);
+        assert(sess);
+
+        if (NULL != sess) {
+            sess->on_write_done(status);
+        }
+    }
+
+    int proto_inner_callback_on_write(::atframe::gateway::proto_base *proto, void *buffer, size_t sz, bool *is_done) {
+        if (NULL == proto || NULL == buffer) {
+            return error_code_t::EN_ECT_PARAM;
+        }
+
+        assert(sz >= proto->get_write_header_offset());
+        int ret = 0;
+        do {
+            // uv_write_t
+            void *real_buffer = ::atbus::detail::fn::buffer_next(buffer, proto->get_write_header_offset());
+            sz -= proto->get_write_header_offset();
+            uv_write_t *req = reinterpret_cast<uv_write_t *>(buffer);
+            req->data = proto->get_private_data(;
+
+            uv_buf_t bufs[1] = { uv_buf_init(real_buffer, static_cast<unsigned int>(sz) };
+            ret = uv_write(req, connection->handle.get(), bufs, 1, proto_inner_callback_on_written_fn);
+            if (0 != ret) {
+                session *sess = reinterpret_cast<session *>(proto->get_private_data());
+                if (NULL == sess) {
+                    WLOGERROR("send data to session %s:%d failed, res: %d", sess->get_peer_host().c_str(), sess->get_peer_port(), ret);
+                } else {
+                    WLOGERROR("send data to proto %p failed, res: %d", proto, ret);
+                }
+            }
+
+        } while (false);
+
+        if (NULL != is_done) {
+            // if ret is not 0, there are some error happen, so write is done
+            *is_done = (0 != ret);
+        }
+        return ret;
+    }
+
+    int proto_inner_callback_on_message(::atframe::gateway::proto_base *proto, const void *buffer, size_t sz) {
+        session *sess = reinterpret_cast<session *>(proto->get_private_data());
+        if (NULL == sess) {
+            WLOGERROR("recv message from proto object %p length, but has no session", proto);
+            return -1;
+        }
+
+        ::atframe::gw::ss_msg post_msg;
+        post_msg.init(ATFRAME_GW_CMD_POST, sess->get_id());
+        post_msg.head.error_code = res;
+        post_msg.body.make_post(buffer, sz);
+
+        // send to router
+        return gw_mgr_.post_data(sess->get_router(), post_msg);
+    }
+
+    int proto_inner_callback_on_new_session(::atframe::gateway::proto_base *, uint64_t &sess_id) {
+        session *sess = reinterpret_cast<session *>(proto->get_private_data());
+        if (NULL == sess) {
+            WLOGERROR("recv new session message from proto object %p length, but has no session", proto);
+            return -1;
+        }
+
+        int ret = sess->init_new_session(gw_mgr_.get_conf().default_router);
+        sess_id = sess->get_id();
+        if (0 != ret) {
+            WLOGERROR("create new session failed, ret: %d", ret);
+        }
+
+        return ret;
+    }
+
+    int proto_inner_callback_on_reconnect(::atframe::gateway::proto_base *, uint64_t sess_id) {
+        // TODO check proto reconnect access
+        // TODO if proto reconnect success, init session with reconnect
+    }
+
+    int proto_inner_callback_on_close(::atframe::gateway::proto_base *, int) {
+        // do nothing here
+        return 0;
     }
 
 private:
@@ -228,6 +384,17 @@ struct app_handle_on_recv {
                 if (0 != res) {
                     WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", header->src_bus_id, msg.head.session_id,
                               res);
+
+                    // session not found, maybe gateway has restarted or server cache expired without remove
+                    // notify to remove the expired session
+                    if (error_code_t::EN_ECT_SESSION_NOT_FOUND == res) {
+                        ::atframe::gw::ss_msg rsp;
+                        rsp.init(ATFRAME_GW_CMD_SESSION_REMOVE, msg.head.session_id);
+                        res = mod_.get_session_manager().post_data(header->src_bus_id, rsp);
+                        if (0 != res) {
+                            WLOGERROR("send remove notify to server 0x%llx failed, res: %d", header->src_bus_id, res);
+                        }
+                    }
                 }
             } else if (msg.body.post->session_ids.empty()) { // broadcast to all actived session
                 int res = mod_.get_session_manager().broadcast_data(msg.body.post->content.ptr, msg.body.post->content.size);

@@ -28,6 +28,11 @@ namespace atframe {
                 EN_ECT_HANDLE_NOT_FOUND = -1014,
                 EN_ECT_ALREADY_HAS_FD = -1015,
                 EN_ECT_SESSION_NOT_FOUND = -1016,
+                EN_ECT_NOT_WRITING = -1017,
+                EN_ECT_CRYPT_NOT_SUPPORTED = -1018,
+                EN_ECT_PARAM = -1019,
+                EN_ECT_BAD_DATA = -1020,
+                EN_ECT_INVALID_SIZE = -1021,
             };
         };
 
@@ -38,12 +43,14 @@ namespace atframe {
                 EN_CRT_SERVER_CLOSED,
                 EN_CRT_SERVER_BUSY,
                 EN_CRT_KICKOFF,
+                EN_CRT_TRAFIC_EXTENDED,
+                EN_CRT_INVALID_DATA,
             };
         };
 
         class proto_base {
         public:
-            typedef std::function<int(proto_base *, const void *, size_t, bool &)> on_write_start_fn_t;
+            typedef std::function<int(proto_base *, void *, size_t, bool *)> on_write_start_fn_t;
             typedef std::function<int(proto_base *, const void *, size_t)> on_message_fn_t;
             typedef std::function<int(proto_base *, uint64_t &)> on_init_new_session_fn_t;
             typedef std::function<int(proto_base *, uint64_t)> on_init_reconnect_fn_t;
@@ -62,8 +69,18 @@ namespace atframe {
                 enum type {
                     EN_PFT_WRITING = 0x0001,
                     EN_FT_CLOSING = 0x0002,
-                    EN_FT_CLOSED = 0x0004,
+                    EN_FT_IN_CALLBACK = 0x0004,
                 };
+            };
+
+            struct flag_guard_t {
+                int *flags_;
+                int v_;
+                flag_guard_t(int &f, bool v);
+                ~flag_guard_t();
+
+                flag_guard_t(const flag_guard_t &other);
+                flag_guard_t &operator=(const flag_guard_t &other);
             };
 
             struct proto_callbacks_t {
@@ -79,8 +96,12 @@ namespace atframe {
             virtual ~proto_base() = 0;
 
         public:
+            bool check_flag(flag_t::type t) const;
+
+            void set_flag(flag_t::type t, bool v);
+
             virtual void alloc_recv_buffer(size_t suggested_size, char *&out_buf, size_t &out_len) = 0;
-            virtual void read(int ssz, const char *buff, size_t len) = 0;
+            virtual void read(int ssz, const char *buff, size_t len, int &errcode) = 0;
 
             virtual int write(const void *buffer, size_t len) = 0;
             virtual int write_done(int status);
@@ -103,8 +124,24 @@ namespace atframe {
             inline void *get_private_data() const { return private_data_; }
             inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
 
+            inline size_t get_write_header_offset() const { return write_header_offset_; }
+            inline void set_write_header_offset(size_t sz) {
+                if (0 == sz) {
+                    write_header_offset_ = sz;
+                } else {
+                    // padding to sizeof(size_t)
+                    write_header_offset_ = (sz + sizeof(size_t) - 1) & (~(sizeof(size_t) - 1));
+                }
+            }
+
         protected:
             int flags_;
+
+            /**
+             * @brief instead of malloc new data block, we can use some buffer in write buffer to hold the additional data.
+             *      For example, we can store uv_write_t at the head of buffer when we use libuv
+             */
+            size_t write_header_offset_;
 
             proto_callbacks_t *callbacks_;
             void *private_data_;

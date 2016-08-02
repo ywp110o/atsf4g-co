@@ -49,6 +49,7 @@
 ## rapidjson
 
 ## atframework
+/atframework/service/component/config/atframe_services_build_feature.h
 
 # editors
 .vscode

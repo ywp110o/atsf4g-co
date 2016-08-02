@@ -28,6 +28,11 @@ namespace atframe {
 
             ret->owner_ = mgr;
             ret->proto_.swap(proto);
+
+            if (!ret->proto_) {
+                return error_code_t::EN_ECT_BAD_PROTOCOL;
+            }
+
             return ret;
         }
 
@@ -173,13 +178,40 @@ namespace atframe {
         void session::on_alloc_read(size_t suggested_size, char *&out_buf, size_t &out_len) {
             if (proto_) {
                 proto_->alloc_recv_buffer(suggested_size, out_buf, out_len);
+
+                if (NULL == out_buf && 0 == out_len) {
+                    uv_read_stop(&stream_handle_);
+                }
             }
         }
 
         void session::on_read(int ssz, const char *buff, size_t len) {
             if (proto_) {
-                proto_->read(ssz, buff, len);
+                int errcode = 0;
+                proto_->read(ssz, buff, len, errcode);
+
+                if (errcode < 0) {
+                    WLOGERROR("session %s:%d read data length=%llu failed and will be closed, res: %d", peer_ip_.c_str(), peer_port_,
+                              static_cast<unsigned long long>(len), errcode);
+                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                }
             }
+        }
+
+        int session::on_write_done(int status) {
+            if (proto_) {
+                int ret = proto_->write_done(status);
+
+                // if about to closing and all data transfered, shutdown the socket
+                if (check_flag(flag_t::EN_FT_CLOSING_FD) && !proto_->check_flag(proto_base::flag_t::EN_PFT_WRITING)) {
+                    uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
+                }
+
+                return ret;
+            }
+
+
+            return 0;
         }
 
         void session::close(int reason) {
@@ -192,21 +224,14 @@ namespace atframe {
                 send_remove_session();
             }
 
-            if (check_flag(flag_t::EN_FT_HAS_FD)) {
-                if (proto_) {
-                    proto_->close(reason);
-                }
-
-                // shutdown and close uv_stream_t
-                // manager can not be used any more
-                owner_ = NULL;
-                shutdown_req_.data = new ptr_t(shared_from_this());
-                uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
-                set_flag(flag_t::EN_FT_HAS_FD, false);
-            }
+            close_fd();
         }
 
         int session::close_fd() {
+            if (check_flag(flag_t::EN_FT_CLOSING_FD)) {
+                return 0;
+            }
+
             if (check_flag(flag_t::EN_FT_HAS_FD)) {
                 if (proto_) {
                     proto_->close(reason);
@@ -216,8 +241,13 @@ namespace atframe {
                 // manager can not be used any more
                 owner_ = NULL;
                 shutdown_req_.data = new ptr_t(shared_from_this());
-                uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
                 set_flag(flag_t::EN_FT_HAS_FD, false);
+
+                // if writing, wait all data written an then shutdown it
+                set_flag(flag_t::EN_FT_CLOSING_FD, true);
+                if (!proto_ || !proto_->check_flag(proto_base::flag_t::EN_PFT_WRITING)) {
+                    uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
+                }
             }
 
             return 0;
@@ -226,7 +256,10 @@ namespace atframe {
         int session::send_to_client(const void *data, size_t len) {
             // send to proto_
             if (check_flag(flag_t::EN_FT_CLOSING)) {
-                WLOGERROR("sesseion %llx is closing, can not send data to client any more", id_);
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            if (!check_flag(flag_t::EN_FT_HAS_FD)) {
                 return error_code_t::EN_ECT_CLOSING;
             }
 

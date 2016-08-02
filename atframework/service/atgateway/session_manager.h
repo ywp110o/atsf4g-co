@@ -38,24 +38,7 @@ namespace atframe {
                 int backlog;
             };
 
-            /**
-             * @brief crypt configure
-             * @note default reuse the definition of inner ptotocol, if it's useful for other protocol depends other protocol's implement
-             * @see protocols/inner_v1/libatgw_proto_inner.fbs
-             */
-            struct crypt_conf_t {
-                std::string default_key; /** default key, different used for different crypt protocol **/
-                time_t update_interval;  /** crypt key refresh interval **/
-                int type;                /** crypt type. XTEA, AES and etc. **/
-                int switch_secret_type;  /** how to generate the secret key, dh, rsa or direct send. recommander to use DH **/
-                uint32_t keybits;        /** key length in bits. **/
-
-                int rsa_sign_type;           /** RSA sign type. PKCS1, PKCS1_V15 or PSS **/
-                int hash_id;                 /** hash id, md5,sha1,sha256,sha512 **/
-                std::string rsa_public_key;  /** RSA public key file path. **/
-                std::string rsa_private_key; /** RSA private key file path. **/
-                std::string dh_param;        /** DH parameter file path. **/
-            };
+            typedef ::atframe::gateway::libatgw_proto_inner_v1::crypt_conf_t crypt_conf_t;
 
             struct conf_t {
                 size_t version;
@@ -70,7 +53,7 @@ namespace atframe {
 
             typedef ATFRAME_GATEWAY_AUTO_MAP(session::id_t, session::ptr_t) session_map_t;
             typedef std::function<std::unique_ptr< ::atframe::gateway::proto_base>()> create_proto_fn_t;
-            typedef std::function<void(session &)> on_create_session_fn_t;
+            typedef std::function<void(session *, uv_stream_t *server)> on_create_session_fn_t;
 
         public:
             int init(::atbus::node *bus_node, create_proto_fn_t fn);
@@ -82,7 +65,7 @@ namespace atframe {
             int listen(const char *address);
             int reset();
             int tick();
-            int close(session::id_t sess_id, int reason);
+            int close(session::id_t sess_id, int reason, bool allow_reconnect = false);
 
             inline void *get_private_data() const { return private_data_; }
             inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
@@ -103,9 +86,6 @@ namespace atframe {
             inline void set_on_create_session(on_create_session_fn_t fn) { on_create_session_fn_ = fn; }
 
         private:
-            static void on_evt_read_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
-            static void on_evt_read_data(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
-            static void on_evt_write(uv_write_t *req, int status);
             static void on_evt_accept_tcp(uv_stream_t *server, int status);
             static void on_evt_accept_pipe(uv_stream_t *server, int status);
 

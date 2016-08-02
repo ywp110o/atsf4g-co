@@ -35,7 +35,7 @@ namespace atframe {
                     EN_FT_REGISTERED = 0x0004,
                     EN_FT_RECONNECTED = 0x0008,
                     EN_FT_CLOSING = 0x0010,
-                    EN_FT_IN_CALLBACK = 0x0020,
+                    EN_FT_CLOSING_FD = 0x0020,
                 };
             };
 
@@ -62,6 +62,7 @@ namespace atframe {
 
             void on_alloc_read(size_t suggested_size, char *&out_buf, size_t &out_len);
             void on_read(int ssz, const char *buff, size_t len);
+            int on_write_done(int status);
 
             int close(int reason);
 
@@ -86,6 +87,9 @@ namespace atframe {
             inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
             inline ::atbus::node::id_t get_router() const { return router_; }
             inline void set_router(::atbus::node::id_t id) { router_ = id; }
+
+            inline const std::string &get_peer_host() const { return peer_ip_; }
+            inline int32_t get_peer_port() const { return peer_port_; }
 
         private:
             id_t id_;
