@@ -220,19 +220,22 @@ namespace atframe {
             }
 
             set_flag(flag_t::EN_FT_CLOSING, true);
+
             if (check_flag(flag_t::EN_FT_REGISTERED) && !check_flag(flag_t::EN_FT_RECONNECTED)) {
                 send_remove_session();
             }
 
-            close_fd();
+            close_fd(reason);
         }
 
-        int session::close_fd() {
+        int session::close_fd(int reason) {
             if (check_flag(flag_t::EN_FT_CLOSING_FD)) {
                 return 0;
             }
 
             if (check_flag(flag_t::EN_FT_HAS_FD)) {
+                set_flag(flag_t::EN_FT_HAS_FD, false);
+
                 if (proto_) {
                     proto_->close(reason);
                 }
@@ -241,7 +244,6 @@ namespace atframe {
                 // manager can not be used any more
                 owner_ = NULL;
                 shutdown_req_.data = new ptr_t(shared_from_this());
-                set_flag(flag_t::EN_FT_HAS_FD, false);
 
                 // if writing, wait all data written an then shutdown it
                 set_flag(flag_t::EN_FT_CLOSING_FD, true);

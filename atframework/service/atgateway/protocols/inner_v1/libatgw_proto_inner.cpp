@@ -1,8 +1,18 @@
-#include "libatgw_proto_inner_v1.h"
+#include "libatgw_proto_inner.h"
 
 namespace atframe {
     namespace gateway {
-        libatgw_proto_inner_v1::libatgw_proto_inner_v1() {
+        namespace detail {
+            static uint64_t alloc_seq() {
+                static seq_alloc_u64 seq_alloc;
+                uint64_t ret = seq_alloc.inc();
+                while (0 == ret) {
+                    ret = seq_alloc.inc();
+                }
+                return ret;
+            }
+        }
+        libatgw_proto_inner_v1::libatgw_proto_inner_v1() : last_write_ptr_(NULL), close_reason_(0) {
             crypt_info_.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE;
             crypt_info_.keybits = 0;
 
@@ -10,13 +20,13 @@ namespace atframe {
         }
 
 
-        libatgw_proto_inner_v1::~libatgw_proto_inner_v1() {}
+        libatgw_proto_inner_v1::~libatgw_proto_inner_v1() { close(close_reason_t::EN_CRT_UNKNOWN, false); }
 
         void libatgw_proto_inner_v1::alloc_recv_buffer(size_t suggested_size, char *&out_buf, size_t &out_len) {
-            flag_guard_t flag_guard(flags_, flag_t::EN_FT_IN_CALLBACK);
+            flag_guard_t flag_guard(flags_, flag_t::EN_PFT_IN_CALLBACK);
 
             // 如果正处于关闭阶段，忽略所有数据
-            if (check_flag(flag_t::EN_FT_CLOSING)) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 out_buf = NULL;
                 out_len = 0;
                 return;
@@ -47,7 +57,7 @@ namespace atframe {
 
         void libatgw_proto_inner_v1::read(int ssz, const char *buff, size_t nread_s, int &errcode) {
             errcode = error_code_t::EN_ECT_SUCCESS;
-            flag_guard_t flag_guard(flags_, flag_t::EN_FT_IN_CALLBACK);
+            flag_guard_t flag_guard(flags_, flag_t::EN_PFT_IN_CALLBACK);
 
             void *data = NULL;
             size_t sread = 0, swrite = 0;
@@ -151,15 +161,86 @@ namespace atframe {
             }
         }
 
-        void libatgw_proto_inner_v1::dispatch_data(const char *buff, size_t len, int status, int errcode) {
+        void libatgw_proto_inner_v1::dispatch_data(const char *buffer, size_t len, int status, int errcode) {
             // do nothing if any error
-            if (errcode < 0) {
+            if (errcode < 0 || NULL == buffer) {
                 return;
             }
-            // TODO unpack
-            // TODO unzip
-            // TODO decrypt
-            // TODO on_message
+
+            // verify
+            if (false == atframe::gw::inner::v1::Verify(::flatbuffers::Verifier(buffer, len))) {
+                close(close_reason_t::EN_CRT_INVALID_DATA);
+                return;
+            }
+
+            // unpack
+            const atframe::gw::inner::v1::cs_msg *msg = Getcs_msg(buffer);
+            if (NULL == msg->head()) {
+                return;
+            }
+
+            switch (msg->head()->type()) {
+            case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST: {
+                if (::atframe::gw::inner::v1::cs_msg_body_cs_body_post != msg->body_type()) {
+                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                    break;
+                }
+
+                // TODO unzip
+                // TODO decrypt
+                // TODO on_message
+                break;
+            }
+            case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE: {
+                if (::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake != msg->body_type()) {
+                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                    break;
+                }
+                break;
+            }
+            case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PING: {
+                if (::atframe::gw::inner::v1::cs_msg_body_cs_body_ping != msg->body_type()) {
+                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                    break;
+                }
+
+                // response pong
+                break;
+            }
+            case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PONG: {
+                break;
+            }
+            case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_KICKOFF: {
+                if (::atframe::gw::inner::v1::cs_msg_body_cs_body_kickoff != msg->body_type()) {
+                    close(close_reason_t::EN_CRT_INVALID_DATA, false);
+                    break;
+                }
+
+                const ::atframe::gw::inner::v1::cs_body_kickoff *msg_body =
+                    static_cast<const ::atframe::gw::inner::v1::cs_body_kickoff *>(msg->body());
+                close(msg_body->reason(), false);
+                break;
+            }
+            case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_SYN: {
+                if (::atframe::gw::inner::v1::cs_msg_body_cs_body_post != msg->body_type()) {
+                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                    break;
+                }
+                // TODO apply new secret
+                // TODO send response
+                break;
+            }
+            case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_ACK: {
+                if (::atframe::gw::inner::v1::cs_msg_body_cs_body_post != msg->body_type()) {
+                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                    break;
+                }
+
+                // TODO use new secret now
+                break;
+            }
+            default: { break; }
+            }
         }
 
         int libatgw_proto_inner_v1::try_write() {
@@ -167,18 +248,123 @@ namespace atframe {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
 
-            int ret = 0;
             if (check_flag(flag_t::EN_PFT_WRITING)) {
-                return ret;
+                return 0;
             }
 
+            // empty then skip write data
+            if (write_buffers_.empty()) {
+                return 0;
+            }
+
+            // first 32bits is hash code, and then 32bits length
+            const size_t msg_header_len = sizeof(uint32_t) + sizeof(uint32_t);
+
+            // closing or closed, cancle writing
+            if (check_flag(flags_, flag_t::EN_PFT_CLOSING)) {
+                while (!write_buffers_.empty()) {
+                    // ::atbus::detail::buffer_block *bb = write_buffers_.front();
+                    // size_t nwrite = bb->raw_size();
+                    // // nwrite = write_header_offset_ + [data block...]
+                    // // data block = 32bits hash+vint+data length
+                    // char *buff_start = reinterpret_cast<char *>(bb->raw_data()) + write_header_offset_;
+                    // size_t left_length = nwrite - write_header_offset_;
+                    // while (left_length >= msg_header_len) {
+                    //     // skip 32bits hash
+                    //     uint32_t msg_len = flatbuffers::ReadScalar<uint32_t>(buff_start + sizeof(uint32_t));
+
+                    //     // skip 32bits hash and 32bits length
+                    //     buff_start += msg_header_len;
+
+                    //     // data length should be enough to hold all data
+                    //     if (left_length < msg_header_len + static_cast<size_t>(msg_len)) {
+                    //         assert(false);
+                    //         left_length = 0;
+                    //     }
+
+                    //     callback(UV_ECANCELED, error_code_t::EN_ECT_CLOSING, buff_start, left_length - msg_header_len);
+
+                    //     buff_start += static_cast<size_t>(msg_len);
+                    //     // 32bits hash+vint+data length
+                    //     left_length -= msg_header_len + static_cast<size_t>(msg_len);
+                    // }
+
+                    // remove all cache buffer
+                    write_buffers_.pop_front(nwrite, true);
+                }
+
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            int ret = 0;
             void *buffer = NULL;
             size_t sz = 0;
             bool is_done = false;
-            // TODO merge messages
 
+            // if not in writing mode, try to merge and write data
+            // merge only if message is smaller than read buffer
+            if (write_buffers_.limit().cost_number_ > 1 && write_buffers_.front()->raw_size() <= ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE) {
+                // left write_header_offset_ size at front
+                size_t available_bytes = get_tls_length(tls_buffer_t::EN_TBT_MERGE) - write_header_offset_;
+                char *buffer_start = reinterpret_cast<char *>(get_tls_buffer(tls_buffer_t::EN_TBT_MERGE));
+                char *free_buffer = buffer_start;
+
+                ::atbus::detail::buffer_block *preview_bb = NULL;
+                while (!write_buffers_.empty() && available_bytes > 0) {
+                    ::atbus::detail::buffer_block *bb = write_buffers_.front();
+                    if (bb->raw_size() > available_bytes) {
+                        break;
+                    }
+
+                    // if write_buffers_ is a static circle buffer, can not merge the bound blocks
+                    if (write_buffers_.is_static_mode() && NULL != preview_bb && preview_bb > bb) {
+                        break;
+                    }
+                    preview_bb = bb;
+
+                    // first write_header_offset_ should not be merged, the rest is 32bits hash+varint+len
+                    size_t bb_size = bb->raw_size() - write_header_offset_;
+                    memcpy(free_buffer, ::atbus::detail::fn::buffer_next(bb->raw_data(), write_header_offset_), bb_size);
+                    free_buffer += bb_size;
+                    available_bytes -= bb_size;
+
+                    write_buffers_.pop_front(bb->raw_size(), true);
+                }
+
+                void *data = NULL;
+                write_buffers_.push_front(data, write_header_offset_ + (free_buffer - buffer_start));
+
+                // already pop more data than write_header_offset_ + (free_buffer - buffer_start)
+                // so this push_front should always success
+                assert(data);
+                // at least merge one block
+                assert(free_buffer > buffer_start);
+                assert(static_cast<size_t>(free_buffer - buffer_start) <=
+                       (get_tls_length(tls_buffer_t::EN_TBT_MERGE) - write_header_offset_));
+
+                data = ::atbus::detail::fn::buffer_next(data, write_header_offset_);
+                // copy back merged data
+                memcpy(data, buffer_start, free_buffer - buffer_start);
+            }
+
+            // prepare to writing
+            ::atbus::detail::buffer_block *writing_block = write_buffers_.front();
+
+            // should always exist, empty will cause return before
+            if (NULL == writing_block) {
+                assert(writing_block);
+                return error_code_t::EN_ECT_NO_DATA;
+            }
+
+            if (writing_block->raw_size() <= write_header_offset_) {
+                connection->write_buffers.pop_front(writing_block->raw_size(), true);
+                return try_write();
+            }
+
+            // call write
             set_flag(flag_t::EN_PFT_WRITING, true);
-            ret = callbacks_->write_fn(this, buffer, sz, &is_done);
+            last_write_ptr_ = writing_block->raw_data();
+            ret = callbacks_->write_fn(this, writing_block->raw_data(), writing_block->raw_size(), &is_done);
             if (is_done) {
                 set_flag(flag_t::EN_PFT_WRITING, false);
             }
@@ -186,13 +372,12 @@ namespace atframe {
             return ret;
         }
 
-        int libatgw_proto_inner_v1::write_msg(::atframe::gw::inner::v1::cs_msg &msg) {
+        int libatgw_proto_inner_v1::write_msg(flatbuffers::FlatBufferBuilder &builder) {
             // first 32bits is hash code, and then 32bits length
             const size_t msg_header_len = sizeof(uint32_t) + sizeof(uint32_t);
 
-            void *buf = NULL;
-            size_t len = 0;
-            // TODO pack message
+            const void *buf = reinterpret_cast<const void *>(builder.GetBufferPointer());
+            size_t len = static_cast<size_t>(builder.GetSize());
 
             // push back message
             if (NULL != buf && len > 0) {
@@ -231,34 +416,121 @@ namespace atframe {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
 
+
             // TODO encrypt
             // TODO zip
             // TODO push data
             // TODO if not writing, try merge data and write it
-            return try_write();
+            flatbuffers::FlatBufferBuilder builder;
+            ::atframe::gw::inner::v1::cs_body_postBuilder post_body(builder);
+            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST,
+                                                                     ::atframe::gateway::detail::alloc_seq()));
+
+            post_body.add_length(builder.CreateString(static_cast<size_t>(len)));
+            post_body.add_data(builder.CreateString(reinterpret_cast<const char *>(buffer), static_cast<size_t>(len)));
+            post_body.Finish();
+            msg.Finish();
+            builder.Finish();
+            return write_msg(builder);
         }
 
         int libatgw_proto_inner_v1::write_done(int status) {
             if (!check_flag(flag_t::EN_PFT_WRITING)) {
                 return 0;
             }
+            flag_guard_t flag_guard(flags_, flag_t::EN_PFT_IN_CALLBACK);
+
+            void *data = NULL;
+            size_t nread, nwrite;
+
+            // first 32bits is hash code, and then 32bits length
+            const size_t msg_header_len = sizeof(uint32_t) + sizeof(uint32_t);
+
+            // popup the lost callback
+            while (true) {
+                write_buffers_.front(data, nread, nwrite);
+                if (NULL == data) {
+                    break;
+                }
+
+                assert(0 == nread);
+
+                if (0 == nwrite) {
+                    write_buffers_.pop_front(0, true);
+                    break;
+                }
+
+                // nwrite = write_header_offset_ + [data block...]
+                // data block = 32bits hash+vint+data length
+                // char *buff_start = reinterpret_cast<char *>(data) + write_header_offset_;
+                // size_t left_length = nwrite - write_header_offset_;
+                // while (left_length >= msg_header_len) {
+                //     uint32_t msg_len = flatbuffers::ReadScalar<uint32_t>(buff_start + sizeof(uint32_t));
+                //     // skip 32bits hash and 32bits length
+                //     buff_start += msg_header_len;
+
+                //     // data length should be enough to hold all data
+                //     if (left_length < msg_header_len + static_cast<size_t>(msg_len)) {
+                //         assert(false);
+                //         left_length = 0;
+                //     }
+
+                //     callback(status, last_write_ptr_ == data? 0: TIMEOUT, buff_start, msg_len);
+
+                //     buff_start += static_cast<size_t>(msg_len);
+
+                //     // 32bits hash+32bits length+data length
+                //     left_length -= msg_header_len + static_cast<size_t>(msg_len);
+                // }
+
+                // remove all cache buffer
+                write_buffers_.pop_front(nwrite, true);
+
+                // the end
+                if (last_write_ptr_ == data) {
+                    break;
+                }
+            };
+            last_write_ptr_ = NULL;
+
+            // unset writing mode
             set_flag(flag_t::EN_PFT_WRITING, false);
 
-            // TODO pop front message queue
-            // try write next data
-            return try_write();
+            // write left data
+            try_write();
+
+            // if in disconnecting status and there is no more data to write, close it
+            if (check_flag(flag_t::EN_PFT_CLOSING) && !check_flag(flag_t::EN_PFT_WRITING)) {
+                if (NULL != callbacks_ || callbacks_->close_fn) {
+                    return callbacks_->close_fn(this, close_reason_);
+                }
+            }
+
+            return 0;
         }
 
-        int libatgw_proto_inner_v1::close(int reason) {
-            // TODO send kickoff message
-            if (check_flag(flag_t::EN_FT_CLOSING)) {
+        int libatgw_proto_inner_v1::close(int reason) { return close(reason, true); }
+
+        int libatgw_proto_inner_v1::close(int reason, bool is_send_kickoff) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return 0;
             }
-            set_flag(flag_t::EN_FT_CLOSING, true);
+            set_flag(flag_t::EN_PFT_CLOSING, true);
+            close_reason_ = reason;
 
-            if (NULL != callbacks_ || callbacks_->close_fn) {
-                return callbacks_->close_fn(this, reason);
+            // send kickoff message
+            if (is_send_kickoff) {
+                send_kickoff(reason);
             }
+
+            // wait writing to finished
+            if (!check_flag(flag_t::EN_PFT_WRITING)) {
+                if (NULL != callbacks_ || callbacks_->close_fn) {
+                    return callbacks_->close_fn(this, close_reason_);
+                }
+            }
+
             return 0;
         }
 

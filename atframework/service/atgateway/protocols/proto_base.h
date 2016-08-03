@@ -33,12 +33,14 @@ namespace atframe {
                 EN_ECT_PARAM = -1019,
                 EN_ECT_BAD_DATA = -1020,
                 EN_ECT_INVALID_SIZE = -1021,
+                EN_ECT_NO_DATA = -1022,
             };
         };
 
         struct close_reason_t {
             enum type {
-                EN_CRT_LOGOUT = 0,
+                EN_CRT_UNKNOWN = 0,
+                EN_CRT_LOGOUT,
                 EN_CRT_FIRST_IDLE,
                 EN_CRT_SERVER_CLOSED,
                 EN_CRT_SERVER_BUSY,
@@ -68,8 +70,8 @@ namespace atframe {
             struct flag_t {
                 enum type {
                     EN_PFT_WRITING = 0x0001,
-                    EN_FT_CLOSING = 0x0002,
-                    EN_FT_IN_CALLBACK = 0x0004,
+                    EN_PFT_CLOSING = 0x0002,
+                    EN_PFT_IN_CALLBACK = 0x0004,
                 };
             };
 

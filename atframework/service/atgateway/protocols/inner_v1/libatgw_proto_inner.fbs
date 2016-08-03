@@ -63,12 +63,16 @@ table cs_msg_head {
     type: cs_msg_type_t(id: 0);
     sequence: ulong(id: 1);
 }
-union cs_msg_body { cs_body_post, cs_body_ping, cs_body_handshake }
+union cs_msg_body { cs_body_post, cs_body_kickoff, cs_body_ping, cs_body_handshake }
 
 table cs_body_post {
     /// the length before encrypt, because encrypt data will pad data.
     length: ulong; 
     data: [byte];
+}
+
+table cs_body_kickoff {
+    reason: int (id: 0);
 }
 
 table cs_body_rsa_cert {

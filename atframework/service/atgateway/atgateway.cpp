@@ -279,9 +279,10 @@ private:
             void *real_buffer = ::atbus::detail::fn::buffer_next(buffer, proto->get_write_header_offset());
             sz -= proto->get_write_header_offset();
             uv_write_t *req = reinterpret_cast<uv_write_t *>(buffer);
-            req->data = proto->get_private_data(;
+            req->data = proto->get_private_data();
+            assert(sizeof(uv_write_t) <= proto->get_write_header_offset());
 
-            uv_buf_t bufs[1] = { uv_buf_init(real_buffer, static_cast<unsigned int>(sz) };
+            uv_buf_t bufs[1] = { uv_buf_init(real_buffer, static_cast<unsigned int>(sz - proto->get_write_header_offset()) };
             ret = uv_write(req, connection->handle.get(), bufs, 1, proto_inner_callback_on_written_fn);
             if (0 != ret) {
                 session *sess = reinterpret_cast<session *>(proto->get_private_data());
@@ -338,8 +339,20 @@ private:
         // TODO if proto reconnect success, init session with reconnect
     }
 
-    int proto_inner_callback_on_close(::atframe::gateway::proto_base *, int) {
+    int proto_inner_callback_on_close(::atframe::gateway::proto_base *proto, int reason) {
         // do nothing here
+        session *sess = reinterpret_cast<session *>(proto->get_private_data());
+        if (NULL == sess) {
+            WLOGERROR("close session from proto object %p length, but has no session", proto);
+            return -1;
+        }
+
+        if (!sess->check_flag(session::flag_t::EN_FT_CLOSING)) {
+            // if network EOF or network error, do not close session, but wait for reconnect
+            if (::atframe::gateway::close_reason_t::EN_CRT_LOGOUT != reason) {
+                sess->close(reason);
+            }
+        }
         return 0;
     }
 

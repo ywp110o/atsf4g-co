@@ -230,7 +230,7 @@ namespace atframe {
                 reconnect_cache_[sess->get_id()] = s;
 
                 // just close fd
-                sess->close_fd();
+                sess->close_fd(reason);
             } else {
                 iter->second->close(reason);
             }

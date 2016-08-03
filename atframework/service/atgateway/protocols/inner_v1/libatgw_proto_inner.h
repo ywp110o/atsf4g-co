@@ -52,11 +52,12 @@ namespace atframe {
             void dispatch_data(const char *buff, size_t len, int errcode);
 
             int try_write();
-            int write_msg(::atframe::gw::inner::v1::cs_msg &msg);
+            int write_msg(flatbuffers::FlatBufferBuilder &builder);
             virtual int write(const void *buffer, size_t len);
             virtual int write_done(int status);
 
             virtual int close(int reason);
+            int close(int reason, bool is_send_kickoff);
 
             virtual bool check_reconnect(proto_base *other);
 
@@ -64,6 +65,12 @@ namespace atframe {
             virtual void set_send_buffer_limit(size_t max_size, size_t max_number);
 
             static int global_reload(crypt_conf_t &crypt_conf);
+
+            int send_ping();
+            int send_pong(time_t tp);
+            int send_key_syn(const std::string &secret);
+            int send_key_ack(const std::string &secret);
+            int send_kickoff(int reason);
 
         private:
             ::atbus::detail::buffer_manager read_buffers_;
@@ -78,6 +85,8 @@ namespace atframe {
             read_head_t read_head_;
 
             ::atbus::detail::buffer_manager write_buffers_;
+            const void *last_write_ptr_;
+            int close_reason_;
 
             // crypt option
             crypt_session_t crypt_info_;

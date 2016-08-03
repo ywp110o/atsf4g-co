@@ -13,6 +13,7 @@ namespace v1 {
 
 struct cs_msg_head;
 struct cs_body_post;
+struct cs_body_kickoff;
 struct cs_body_rsa_cert;
 struct cs_body_handshake;
 struct cs_body_ping;
@@ -134,14 +135,15 @@ inline const char *EnumNamecs_msg_type_t(cs_msg_type_t e) { return EnumNamescs_m
 enum cs_msg_body {
   cs_msg_body_NONE = 0,
   cs_msg_body_cs_body_post = 1,
-  cs_msg_body_cs_body_ping = 2,
-  cs_msg_body_cs_body_handshake = 3,
+  cs_msg_body_cs_body_kickoff = 2,
+  cs_msg_body_cs_body_ping = 3,
+  cs_msg_body_cs_body_handshake = 4,
   cs_msg_body_MIN = cs_msg_body_NONE,
   cs_msg_body_MAX = cs_msg_body_cs_body_handshake
 };
 
 inline const char **EnumNamescs_msg_body() {
-  static const char *names[] = { "NONE", "cs_body_post", "cs_body_ping", "cs_body_handshake", nullptr };
+  static const char *names[] = { "NONE", "cs_body_post", "cs_body_kickoff", "cs_body_ping", "cs_body_handshake", nullptr };
   return names;
 }
 
@@ -222,6 +224,37 @@ inline flatbuffers::Offset<cs_body_post> Createcs_body_post(flatbuffers::FlatBuf
   cs_body_postBuilder builder_(_fbb);
   builder_.add_length(length);
   builder_.add_data(data);
+  return builder_.Finish();
+}
+
+struct cs_body_kickoff FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  enum {
+    VT_REASON = 4
+  };
+  int32_t reason() const { return GetField<int32_t>(VT_REASON, 0); }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<int32_t>(verifier, VT_REASON) &&
+           verifier.EndTable();
+  }
+};
+
+struct cs_body_kickoffBuilder {
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_reason(int32_t reason) { fbb_.AddElement<int32_t>(cs_body_kickoff::VT_REASON, reason, 0); }
+  cs_body_kickoffBuilder(flatbuffers::FlatBufferBuilder &_fbb) : fbb_(_fbb) { start_ = fbb_.StartTable(); }
+  cs_body_kickoffBuilder &operator=(const cs_body_kickoffBuilder &);
+  flatbuffers::Offset<cs_body_kickoff> Finish() {
+    auto o = flatbuffers::Offset<cs_body_kickoff>(fbb_.EndTable(start_, 1));
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<cs_body_kickoff> Createcs_body_kickoff(flatbuffers::FlatBufferBuilder &_fbb,
+   int32_t reason = 0) {
+  cs_body_kickoffBuilder builder_(_fbb);
+  builder_.add_reason(reason);
   return builder_.Finish();
 }
 
@@ -433,6 +466,7 @@ inline bool Verifycs_msg_body(flatbuffers::Verifier &verifier, const void *union
   switch (type) {
     case cs_msg_body_NONE: return true;
     case cs_msg_body_cs_body_post: return verifier.VerifyTable(reinterpret_cast<const cs_body_post *>(union_obj));
+    case cs_msg_body_cs_body_kickoff: return verifier.VerifyTable(reinterpret_cast<const cs_body_kickoff *>(union_obj));
     case cs_msg_body_cs_body_ping: return verifier.VerifyTable(reinterpret_cast<const cs_body_ping *>(union_obj));
     case cs_msg_body_cs_body_handshake: return verifier.VerifyTable(reinterpret_cast<const cs_body_handshake *>(union_obj));
     default: return false;

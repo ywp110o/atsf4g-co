@@ -66,7 +66,7 @@ namespace atframe {
 
             int close(int reason);
 
-            int close_fd();
+            int close_fd(int reason);
 
             int send_to_client(const void *data, size_t len);
 
