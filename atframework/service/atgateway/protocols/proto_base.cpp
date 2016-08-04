@@ -3,12 +3,7 @@
 #include "proto_impl.h"
 
 #ifndef ATBUS_MACRO_TLS_MERGE_BUFFER_LEN
-
-#if defined(ATBUS_MACRO_MSG_LIMIT) && defined(ATBUS_MACRO_DATA_ALIGN_TYPE)
-#define ATBUS_MACRO_TLS_MERGE_BUFFER_LEN (ATBUS_MACRO_MSG_LIMIT - sizeof(ATBUS_MACRO_DATA_ALIGN_TYPE))
-#else
-#define ATBUS_MACRO_TLS_MERGE_BUFFER_LEN 65536
-#endif
+#define ATBUS_MACRO_MSG_LIMIT 65536
 #endif
 
 #if defined(UTIL_CONFIG_THREAD_LOCAL)
@@ -16,8 +11,7 @@ namespace atframe {
     namespace gateway {
         namespace detail {
             static char *atgateway_get_msg_buffer(::atframe::gateway::proto_base::tls_buffer_t::type t) {
-                static UTIL_CONFIG_THREAD_LOCAL char ret[ ::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX]
-                                                        [ATBUS_MACRO_TLS_MERGE_BUFFER_LEN];
+                static UTIL_CONFIG_THREAD_LOCAL char ret[ ::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX][ATBUS_MACRO_MSG_LIMIT];
                 return ret[t];
             }
         }
@@ -49,7 +43,7 @@ namespace atframe {
                 (void)pthread_once(&gt_atgateway_get_msg_buffer_tls_once, init_pthread_atgateway_get_msg_buffer_tls);
                 char *ret = reinterpret_cast<char *>(pthread_getspecific(gt_atgateway_get_msg_buffer_tls_key[i]));
                 if (NULL == ret) {
-                    ret = new char[ATBUS_MACRO_TLS_MERGE_BUFFER_LEN];
+                    ret = new char[ATBUS_MACRO_MSG_LIMIT];
                     pthread_setspecific(gt_atgateway_get_msg_buffer_tls_key[i], ret);
                 }
                 return ret;
@@ -96,18 +90,24 @@ namespace atframe {
             return ::atframe::gateway::detail::atgateway_get_msg_buffer(tls_type);
         }
 
-        size_t proto_base::get_tls_length(tls_buffer_t::type tls_type) { return ATBUS_MACRO_TLS_MERGE_BUFFER_LEN; }
+        size_t proto_base::get_tls_length(tls_buffer_t::type tls_type) { return ATBUS_MACRO_MSG_LIMIT; }
 
         int proto_base::write_done(int status) {
             if (!check_flag(flag_t::EN_PFT_WRITING)) {
                 return 0;
             }
             set_flag(flag_t::EN_PFT_WRITING, false);
+
             return 0;
         }
 
         int proto_base::close(int reason) {
             set_flag(flag_t::EN_FT_CLOSING, true);
+            set_flag(flag_t::EN_FT_CLOSED, true);
+
+            if (NULL != callbacks_ && callbacks_->close_fn) {
+                return callbacks_->close_fn(this, reason);
+            }
             return 0;
         }
 

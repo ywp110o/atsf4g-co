@@ -85,6 +85,8 @@ namespace atframe {
             inline on_create_session_fn_t get_on_create_session() const { return on_create_session_fn_; }
             inline void set_on_create_session(on_create_session_fn_t fn) { on_create_session_fn_ = fn; }
 
+            int reconnect(session &new_sess, session::id_t old_sess_id);
+
         private:
             static void on_evt_accept_tcp(uv_stream_t *server, int status);
             static void on_evt_accept_pipe(uv_stream_t *server, int status);

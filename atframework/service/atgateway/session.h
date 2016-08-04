@@ -36,6 +36,7 @@ namespace atframe {
                     EN_FT_RECONNECTED = 0x0008,
                     EN_FT_CLOSING = 0x0010,
                     EN_FT_CLOSING_FD = 0x0020,
+                    EN_FT_WRITING_FD = 0x0040,
                 };
             };
 
@@ -74,6 +75,9 @@ namespace atframe {
 
             proto_base *get_protocol_handle();
             const proto_base *get_protocol_handle() const;
+
+            uv_stream_t *get_uv_stream();
+            const uv_stream_t *get_uv_stream() const;
 
         private:
             int send_new_session();

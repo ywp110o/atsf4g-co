@@ -42,6 +42,12 @@ namespace atframe {
                 std::string param; /** cache data used for generate key, dhparam if using DH algorithm. **/
             };
 
+            // ping/pong
+            typedef struct ping_data_t {
+                time_t last_ping;
+                time_t last_delta;
+            };
+
         public:
             libatgw_proto_inner_v1();
             virtual ~libatgw_proto_inner_v1();
@@ -50,6 +56,7 @@ namespace atframe {
             virtual void read(int ssz, const char *buff, size_t len, int &errcode);
 
             void dispatch_data(const char *buff, size_t len, int errcode);
+            int dispatch_handshake(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
 
             int try_write();
             int write_msg(flatbuffers::FlatBufferBuilder &builder);
@@ -64,13 +71,20 @@ namespace atframe {
             virtual void set_recv_buffer_limit(size_t max_size, size_t max_number);
             virtual void set_send_buffer_limit(size_t max_size, size_t max_number);
 
-            static int global_reload(crypt_conf_t &crypt_conf);
-
-            int send_ping();
+            int send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len);
+            int send_ping(time_t tp);
             int send_pong(time_t tp);
-            int send_key_syn(const std::string &secret);
-            int send_key_ack(const std::string &secret);
+            int send_key_syn(const void *secret, size_t len);
+            int send_key_ack(const void *secret, size_t len);
             int send_kickoff(int reason);
+
+            const ping_data_t &get_last_ping() const { return ping_; }
+
+        private:
+            int decode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
+
+        public:
+            static int global_reload(crypt_conf_t &crypt_conf);
 
         private:
             ::atbus::detail::buffer_manager read_buffers_;
@@ -90,6 +104,9 @@ namespace atframe {
 
             // crypt option
             crypt_session_t crypt_info_;
+
+            // ping data
+            ping_data_t ping_;
         };
     }
 }

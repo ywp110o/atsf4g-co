@@ -207,7 +207,10 @@ namespace atframe {
 
                 if (first_idle_.front().s) {
                     session::ptr_t s = first_idle_.front().s;
-                    s->close(close_reason_t::EN_CRT_FIRST_IDLE);
+
+                    if (!s->check_flag(session::flag_t::EN_FT_REGISTERED)) {
+                        s->close(close_reason_t::EN_CRT_FIRST_IDLE);
+                    }
                 }
                 first_idle_.pop_front();
             }
@@ -311,6 +314,35 @@ namespace atframe {
             return iter->second->set_router(router);
         }
 
+        int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
+            // find old session
+            session_map_t::iterator iter = reconnect_cache_.find(old_sess_id);
+            if (iter == reconnect_cache_.end()) {
+                return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+            }
+
+            // check if old session not reconnected
+            if (iter->second->check_flag(session::flag_t::EN_FT_RECONNECTED)) {
+                WLOGERROR("session %s:%d try to reconnect %llx, but old session already reconnected", new_sess.get_peer_host().c_str(),
+                          new_sess.get_peer_port(), old_sess_id);
+                return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+            }
+
+            // run proto check
+            if (NULL == new_sess.get_protocol_handle() || NULL == iter->second->get_protocol_handle()) {
+                return error_code_t::EN_ECT_BAD_PROTOCOL;
+            }
+            if (!new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
+                return error_code_t::EN_ECT_REFUSE_RECONNECT;
+            }
+
+            // init with reconnect
+            int ret = new_sess.init_reconnect(*iter->second);
+            new_sess.get_protocol_handle()->set_private_data(&new_sess);
+            iter->second->get_protocol_handle()->set_private_data((*iter->second).get());
+            return ret;
+        }
+
         void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
             if (0 != status) {
                 WLOGERROR("accept tcp socket failed, status: %d", status);
@@ -320,19 +352,24 @@ namespace atframe {
             // server's data is session_manager
             session_manager *mgr = reinterpret_cast<session_manager *>(server->data);
             assert(mgr);
-            std::unique_ptr< ::atframe::gateway::proto_base> proto;
-            if (mgr->create_proto_fn_) {
-                mgr->create_proto_fn_().swap(proto);
-            }
 
             session::ptr_t sess;
-            // create proto object and session object
-            if (proto) {
-                sess = session::create(mgr, proto);
-                proto->set_private_data(sess.get());
+
+            {
+                std::unique_ptr< ::atframe::gateway::proto_base> proto;
+                if (mgr->create_proto_fn_) {
+                    mgr->create_proto_fn_().swap(proto);
+                }
+
+                // create proto object and session object
+                if (proto) {
+                    sess = session::create(mgr, proto);
+                }
             }
 
-            if (!sess) {
+            if (sess && NULL != sess->get_protocol_handle()) {
+                sess->get_protocol_handle()->set_private_data(sess.get());
+            } else {
                 WLOGERROR("create proto fn is null or create proto object failed or create session failed");
                 listen_handle_ptr_t sp;
                 uv_tcp_t *sock = detail::session_manager_make_stream_ptr<uv_tcp_t>(sp);
@@ -346,8 +383,8 @@ namespace atframe {
             }
 
             // setup send buffer size
-            proto->set_recv_buffer_limit(ATBUS_MACRO_MSG_LIMIT, 2);
-            proto->set_send_buffer_limit(mgr->conf_.send_buffer_size, 0);
+            sess->get_protocol_handle()->set_recv_buffer_limit(ATBUS_MACRO_MSG_LIMIT, 2);
+            sess->get_protocol_handle()->set_send_buffer_limit(mgr->conf_.send_buffer_size, 0);
 
             // setup default router
             sess->set_router(mgr->conf_.default_router);

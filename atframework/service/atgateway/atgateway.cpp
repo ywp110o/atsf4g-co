@@ -263,13 +263,25 @@ private:
         assert(sess);
 
         if (NULL != sess) {
+            sess->set_flag(session::flag_t::EN_FT_WRITING_FD, false);
             sess->on_write_done(status);
         }
     }
 
     int proto_inner_callback_on_write(::atframe::gateway::proto_base *proto, void *buffer, size_t sz, bool *is_done) {
         if (NULL == proto || NULL == buffer) {
+            if (NULL != is_done) {
+                *is_done = true;
+            }
             return error_code_t::EN_ECT_PARAM;
+        }
+
+        session *sess = reinterpret_cast<session *>(proto->get_private_data());
+        if (NULL == sess) {
+            if (NULL != is_done) {
+                *is_done = true;
+            }
+            return -1;
         }
 
         assert(sz >= proto->get_write_header_offset());
@@ -283,21 +295,18 @@ private:
             assert(sizeof(uv_write_t) <= proto->get_write_header_offset());
 
             uv_buf_t bufs[1] = { uv_buf_init(real_buffer, static_cast<unsigned int>(sz - proto->get_write_header_offset()) };
-            ret = uv_write(req, connection->handle.get(), bufs, 1, proto_inner_callback_on_written_fn);
+            sess->set_flag(session::flag_t::EN_FT_WRITING_FD, true);
+            ret = uv_write(req, sess->get_uv_stream(), bufs, 1, proto_inner_callback_on_written_fn);
             if (0 != ret) {
-                session *sess = reinterpret_cast<session *>(proto->get_private_data());
-                if (NULL == sess) {
-                    WLOGERROR("send data to session %s:%d failed, res: %d", sess->get_peer_host().c_str(), sess->get_peer_port(), ret);
-                } else {
-                    WLOGERROR("send data to proto %p failed, res: %d", proto, ret);
-                }
+                sess->set_flag(session::flag_t::EN_FT_WRITING_FD, false);
+                WLOGERROR("send data to proto %p failed, res: %d", proto, ret);
             }
 
         } while (false);
 
         if (NULL != is_done) {
-            // if ret is not 0, there are some error happen, so write is done
-            *is_done = (0 != ret);
+            // if not writting, notify write finished
+            *is_done = !sess->check_flag(session::flag_t::EN_FT_WRITING_FD);
         }
         return ret;
     }
@@ -335,12 +344,40 @@ private:
     }
 
     int proto_inner_callback_on_reconnect(::atframe::gateway::proto_base *, uint64_t sess_id) {
-        // TODO check proto reconnect access
-        // TODO if proto reconnect success, init session with reconnect
+        if (NULL == proto) {
+            WLOGERROR("parameter error");
+            return -1;
+        }
+
+        session *sess = reinterpret_cast<session *>(proto->get_private_data());
+        if (NULL == sess) {
+            WLOGERROR("close session from proto object %p length, but has no session", proto);
+            return -1;
+        }
+
+        // check proto reconnect access
+        if (sess->check_flag(session::flag_t::EN_FT_INITED)) {
+            WLOGERROR("try to reconnect session %llx from %llx, but already inited", sess->get_id(), sess_id);
+            return -1;
+        }
+
+        int res = gw_mgr_.reconnect(*sess, sess_id);
+        if (0 != res) {
+            if (error_code_t::EN_ECT_SESSION_NOT_FOUND != res && error_code_t::EN_ECT_REFUSE_RECONNECT != res) {
+                WLOGERROR("reconnect session %llx from %llx failed, res: %d", sess->get_id(), sess_id, res);
+            } else {
+                WLOGINFO("reconnect session %llx from %llx failed, res: %d", sess->get_id(), sess_id, res);
+            }
+        }
+        return res;
     }
 
     int proto_inner_callback_on_close(::atframe::gateway::proto_base *proto, int reason) {
-        // do nothing here
+        if (NULL == proto) {
+            WLOGERROR("parameter error");
+            return -1;
+        }
+
         session *sess = reinterpret_cast<session *>(proto->get_private_data());
         if (NULL == sess) {
             WLOGERROR("close session from proto object %p length, but has no session", proto);

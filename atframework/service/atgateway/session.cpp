@@ -124,6 +124,8 @@ namespace atframe {
             id_ = id_alloc.allocate();
             router_ = router;
             proto_.swap(proto);
+
+            set_flag(flag_t::EN_FT_INITED, true);
             return 0;
         }
 
@@ -135,7 +137,8 @@ namespace atframe {
             proto_.swap(sess.proto_);
             private_data_ = sess.private_data_;
 
-            set_flag(flag_t::EN_FT_REGISTERED, get_flag(flag_t::EN_FT_REGISTERED));
+            set_flag(flag_t::EN_FT_INITED, true);
+            set_flag(flag_t::EN_FT_REGISTERED, sess.get_flag(flag_t::EN_FT_REGISTERED));
             sess.set_flag(flag_t::EN_FT_RECONNECTED, true);
             return 0;
         }
@@ -203,7 +206,7 @@ namespace atframe {
                 int ret = proto_->write_done(status);
 
                 // if about to closing and all data transfered, shutdown the socket
-                if (check_flag(flag_t::EN_FT_CLOSING_FD) && !proto_->check_flag(proto_base::flag_t::EN_PFT_WRITING)) {
+                if (check_flag(flag_t::EN_FT_CLOSING_FD) && proto_->check_flag(proto_base::flag_t::EN_PFT_CLOSED)) {
                     uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
                 }
 
@@ -247,7 +250,7 @@ namespace atframe {
 
                 // if writing, wait all data written an then shutdown it
                 set_flag(flag_t::EN_FT_CLOSING_FD, true);
-                if (!proto_ || !proto_->check_flag(proto_base::flag_t::EN_PFT_WRITING)) {
+                if (!proto_ || proto_->check_flag(proto_base::flag_t::EN_PFT_CLOSED)) {
                     uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
                 }
             }
@@ -300,6 +303,9 @@ namespace atframe {
 
         proto_base *session::get_protocol_handle() { return proto_.get(); }
         const proto_base *session::get_protocol_handle() const { return proto_.get(); }
+
+        uv_stream_t *session::get_uv_stream() { return &stream_handle_; }
+        const uv_stream_t *session::get_uv_stream() const { return &stream_handle_; }
 
         void session::session_manager::on_evt_shutdown(uv_shutdown_t *req, int status) {
             // call close API

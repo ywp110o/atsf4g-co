@@ -17,6 +17,9 @@ namespace atframe {
             crypt_info_.keybits = 0;
 
             read_head_.len = 0;
+
+            ping_.last_ping = 0;
+            ping_.last_delta = 0;
         }
 
 
@@ -56,6 +59,11 @@ namespace atframe {
         }
 
         void libatgw_proto_inner_v1::read(int ssz, const char *buff, size_t nread_s, int &errcode) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                errcode = error_code_t::EN_ECT_CLOSING;
+                return;
+            }
+
             errcode = error_code_t::EN_ECT_SUCCESS;
             flag_guard_t flag_guard(flags_, flag_t::EN_PFT_IN_CALLBACK);
 
@@ -162,6 +170,10 @@ namespace atframe {
         }
 
         void libatgw_proto_inner_v1::dispatch_data(const char *buffer, size_t len, int status, int errcode) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
             // do nothing if any error
             if (errcode < 0 || NULL == buffer) {
                 return;
@@ -182,20 +194,35 @@ namespace atframe {
             switch (msg->head()->type()) {
             case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST: {
                 if (::atframe::gw::inner::v1::cs_msg_body_cs_body_post != msg->body_type()) {
-                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                    close(close_reason_t::EN_CRT_INVALID_DATA, false);
                     break;
                 }
 
-                // TODO unzip
-                // TODO decrypt
-                // TODO on_message
+                const ::atframe::gw::inner::v1::cs_body_post *msg_body =
+                    static_cast<const ::atframe::gw::inner::v1::cs_body_post *>(msg->body());
+
+                const void *out;
+                size_t outsz = static_cast<size_t>(msg_body->length());
+                int res = decode_post(msg_body->data()->data(), static_cast<size_t>(msg_body->data()->size()), out, outsz);
+                if (0 == res) {
+                    // on_message
+                    if (NULL != callbacks_ && callbacks_->message_fn) {
+                        callbacks_->message_fn(this, out, outsz);
+                    }
+                } else {
+                    close(close_reason_t::EN_CRT_INVALID_DATA, false);
+                }
+
                 break;
             }
             case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE: {
                 if (::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake != msg->body_type()) {
-                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                    close(close_reason_t::EN_CRT_INVALID_DATA, false);
                     break;
                 }
+                const ::atframe::gw::inner::v1::cs_body_handshake *msg_body =
+                    static_cast<const ::atframe::gw::inner::v1::cs_body_handshake *>(msg->body());
+                dispatch_handshake(*msg_body);
                 break;
             }
             case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PING: {
@@ -204,10 +231,27 @@ namespace atframe {
                     break;
                 }
 
+                const ::atframe::gw::inner::v1::cs_body_ping *msg_body =
+                    static_cast<const ::atframe::gw::inner::v1::cs_body_ping *>(msg->body());
+
                 // response pong
+                ping_.last_ping = static_cast<time_t>(msg_body->timepoint());
+                send_pong(ping_.last_ping);
                 break;
             }
             case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PONG: {
+                if (::atframe::gw::inner::v1::cs_msg_body_cs_body_ping != msg->body_type()) {
+                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                    break;
+                }
+
+                const ::atframe::gw::inner::v1::cs_body_ping *msg_body =
+                    static_cast<const ::atframe::gw::inner::v1::cs_body_ping *>(msg->body());
+
+                // update ping/pong duration
+                if (0 != ping_.last_ping) {
+                    ping_.last_delta = static_cast<time_t>(msg_body->timepoint()) - ping_.last_ping;
+                }
                 break;
             }
             case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_KICKOFF: {
@@ -223,27 +267,91 @@ namespace atframe {
             }
             case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_SYN: {
                 if (::atframe::gw::inner::v1::cs_msg_body_cs_body_post != msg->body_type()) {
-                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                    close(close_reason_t::EN_CRT_INVALID_DATA, false);
                     break;
                 }
-                // TODO apply new secret
-                // TODO send response
+
+                const ::atframe::gw::inner::v1::cs_body_post *msg_body =
+                    static_cast<const ::atframe::gw::inner::v1::cs_body_post *>(msg->body());
+
+                const void *out;
+                size_t outsz = static_cast<size_t>(msg_body->length());
+                int res = decode_post(msg_body->data()->data(), static_cast<size_t>(msg_body->data()->size()), out, outsz);
+                if (0 == res) {
+                    send_key_ack(out, outsz);
+                } else {
+                    close(close_reason_t::EN_CRT_INVALID_DATA, false);
+                }
                 break;
             }
             case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_ACK: {
                 if (::atframe::gw::inner::v1::cs_msg_body_cs_body_post != msg->body_type()) {
-                    close(close_reason_t::EN_CRT_INVALID_DATA);
+                    close(close_reason_t::EN_CRT_INVALID_DATA, false);
                     break;
                 }
 
-                // TODO use new secret now
+                const ::atframe::gw::inner::v1::cs_body_post *msg_body =
+                    static_cast<const ::atframe::gw::inner::v1::cs_body_post *>(msg->body());
+
+                const void *out;
+                size_t outsz = static_cast<size_t>(msg_body->length());
+                int res = decode_post(msg_body->data()->data(), static_cast<size_t>(msg_body->data()->size()), out, outsz);
+                if (0 == res) {
+                    // TODO verify and use the new secret now
+                } else {
+                    close(close_reason_t::EN_CRT_INVALID_DATA, false);
+                }
+
                 break;
             }
             default: { break; }
             }
         }
 
+        int libatgw_proto_inner_v1::dispatch_handshake(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            int ret = 0;
+            switch (body_handshake.step()) {
+            case atframe::gw::inner::v1::handshake_step_t_EN_HST_START_REQ: {
+                break;
+            }
+            case atframe::gw::inner::v1::handshake_step_t_EN_HST_START_RSP: {
+                break;
+            }
+            case atframe::gw::inner::v1::handshake_step_t_EN_HST_RECONNECT_REQ: {
+                break;
+            }
+            case atframe::gw::inner::v1::handshake_step_t_EN_HST_RECONNECT_RSP: {
+                break;
+            }
+            case atframe::gw::inner::v1::handshake_step_t_EN_HST_DH_PUBKEY_REQ: {
+                break;
+            }
+            case atframe::gw::inner::v1::handshake_step_t_EN_HST_DH_PUBKEY_RSP: {
+                break;
+            }
+            case atframe::gw::inner::v1::handshake_step_t_EN_HST_RSA_SECRET_REQ: {
+                break;
+            }
+            case atframe::gw::inner::v1::handshake_step_t_EN_HST_RSA_SECRET_RSP: {
+                break;
+            }
+            case atframe::gw::inner::v1::handshake_step_t_EN_HST_VERIFY: {
+                break;
+            }
+            default: { break; }
+            }
+            return ret;
+        }
+
         int libatgw_proto_inner_v1::try_write() {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
             if (NULL == callbacks_ || !callbacks_->write_fn) {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
@@ -412,27 +520,7 @@ namespace atframe {
         }
 
         int libatgw_proto_inner_v1::write(const void *buffer, size_t len) {
-            if (NULL == callbacks_ || !callbacks_->write_fn) {
-                return error_code_t::EN_ECT_MISS_CALLBACKS;
-            }
-
-
-            // TODO encrypt
-            // TODO zip
-            // TODO push data
-            // TODO if not writing, try merge data and write it
-            flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_body_postBuilder post_body(builder);
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-
-            post_body.add_length(builder.CreateString(static_cast<size_t>(len)));
-            post_body.add_data(builder.CreateString(reinterpret_cast<const char *>(buffer), static_cast<size_t>(len)));
-            post_body.Finish();
-            msg.Finish();
-            builder.Finish();
-            return write_msg(builder);
+            return send_post(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST, buffer, len);
         }
 
         int libatgw_proto_inner_v1::write_done(int status) {
@@ -502,6 +590,8 @@ namespace atframe {
 
             // if in disconnecting status and there is no more data to write, close it
             if (check_flag(flag_t::EN_PFT_CLOSING) && !check_flag(flag_t::EN_PFT_WRITING)) {
+                set_flag(flag_t::EN_PFT_CLOSED, true);
+
                 if (NULL != callbacks_ || callbacks_->close_fn) {
                     return callbacks_->close_fn(this, close_reason_);
                 }
@@ -526,6 +616,8 @@ namespace atframe {
 
             // wait writing to finished
             if (!check_flag(flag_t::EN_PFT_WRITING)) {
+                set_flag(flag_t::EN_PFT_CLOSED, true);
+
                 if (NULL != callbacks_ || callbacks_->close_fn) {
                     return callbacks_->close_fn(this, close_reason_);
                 }
@@ -535,8 +627,151 @@ namespace atframe {
         }
 
         bool libatgw_proto_inner_v1::check_reconnect(proto_base *other) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return false;
+            }
+
             // TODO check crypt type, keybits and encrypted secret
+            // TODO if success, copy crypt information
             return true;
+        }
+
+        int libatgw_proto_inner_v1::send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            if (NULL == callbacks_ || !callbacks_->write_fn) {
+                return error_code_t::EN_ECT_MISS_CALLBACKS;
+            }
+
+
+            // TODO encrypt
+            // TODO zip
+            // TODO push data
+            // TODO if not writing, try merge data and write it
+            flatbuffers::FlatBufferBuilder builder;
+            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(msg_type, ::atframe::gateway::detail::alloc_seq()));
+            ::atframe::gw::inner::v1::cs_body_postBuilder post_body(builder);
+
+            post_body.add_length(builder.CreateString(static_cast<size_t>(len)));
+            post_body.add_data(builder.CreateString(reinterpret_cast<const char *>(buffer), static_cast<size_t>(len)));
+
+            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_post);
+            msg.add_body(post_body.Finish());
+
+            msg.Finish();
+            builder.Finish();
+            return write_msg(builder);
+        }
+
+        int libatgw_proto_inner_v1::send_ping(time_t tp) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            if (NULL == callbacks_ || !callbacks_->write_fn) {
+                return error_code_t::EN_ECT_MISS_CALLBACKS;
+            }
+
+            ping_.last_ping = tp;
+
+            flatbuffers::FlatBufferBuilder builder;
+            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PING,
+                                                                     ::atframe::gateway::detail::alloc_seq()));
+            ::atframe::gw::inner::v1::cs_body_pingBuilder ping_body(builder);
+
+            ping_body.add_timepoint(static_cast<int64_t>(tp));
+
+            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_ping);
+            msg.add_body(ping_body.Finish());
+
+            msg.Finish();
+            builder.Finish();
+            return write_msg(builder);
+        }
+
+        int libatgw_proto_inner_v1::send_pong(time_t tp) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            if (NULL == callbacks_ || !callbacks_->write_fn) {
+                return error_code_t::EN_ECT_MISS_CALLBACKS;
+            }
+
+            flatbuffers::FlatBufferBuilder builder;
+            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PONG,
+                                                                     ::atframe::gateway::detail::alloc_seq()));
+            ::atframe::gw::inner::v1::cs_body_pingBuilder ping_body(builder);
+
+            ping_body.add_timepoint(static_cast<int64_t>(tp));
+
+            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_ping);
+            msg.add_body(ping_body.Finish());
+
+            msg.Finish();
+            builder.Finish();
+            return write_msg(builder);
+        }
+
+        int libatgw_proto_inner_v1::send_key_syn(const void *secret, size_t len) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            // TODO mark next secret
+            return send_post(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_SYN, secret, len);
+        }
+
+        int libatgw_proto_inner_v1::send_key_ack(const void *secret, size_t len) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            // TODO update secret
+            return send_post(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_ACK, secret, len);
+        }
+
+        int libatgw_proto_inner_v1::send_kickoff(int reason) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            if (NULL == callbacks_ || !callbacks_->write_fn) {
+                return error_code_t::EN_ECT_MISS_CALLBACKS;
+            }
+
+            flatbuffers::FlatBufferBuilder builder;
+            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_KICKOFF,
+                                                                     ::atframe::gateway::detail::alloc_seq()));
+            ::atframe::gw::inner::v1::cs_body_kickoffBuilder kickoff_body(builder);
+
+            kickoff_body.add_reason(reason);
+
+            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_kickoff);
+            msg.add_body(kickoff_body.Finish());
+
+            msg.Finish();
+            builder.Finish();
+            return write_msg(builder);
+        }
+
+        int libatgw_proto_inner_v1::decode_post(const void *in, size_t insz, const void *&out, size_t &outsz) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            // TODO unzip
+            // TODO decrypt
+
+            outsz = insz;
+            out = in;
+            return 0;
         }
 
         int libatgw_proto_inner_v1::global_reload(crypt_conf_t &crypt_conf) {
