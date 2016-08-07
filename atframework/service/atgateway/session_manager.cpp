@@ -243,18 +243,6 @@ namespace atframe {
             return 0;
         }
 
-        int session_manager::setup_reconnect(session::id_t sess_id) {
-            session_map_t：：iterator iter = actived_sessions_.find(sess_id);
-            if (actived_sessions_.end() == iter) {
-                return 0;
-            }
-
-            iter->second->close(reason);
-
-            // masual closed sessions will not be moved to reconnect list
-            actived_sessions_.erase(iter);
-        }
-
         int session_manager::post_data(bus_id_t tid, ::atframe::gw::ss_msg &msg) {
             return post_data(tid, ::atframe::component::service_type::EN_ATST_GATEWAY, msg);
         }

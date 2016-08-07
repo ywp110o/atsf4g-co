@@ -33,7 +33,7 @@ enum hash_id_t : byte {
 enum handshake_step_t : byte { 
     EN_HST_START_REQ = 0,       // Step 1. start a new session handshake by client
     EN_HST_START_RSP,           // Step 2. tell client the session id, crypt method and bits, secret switch method and init data
-    EN_HST_RECONNECT_REQ,       // Step 1. start a reconnect handshake by client, with session id, crypt method and bits, secret switch method and the encrypted secret code
+    EN_HST_RECONNECT_REQ,       // Step 1. start a reconnect handshake by client, with session id, crypt method and bits and the encrypted secret code
     EN_HST_RECONNECT_RSP,       // Step 2. response reconnect handshake result to client
     EN_HST_DH_PUBKEY_REQ,       // Step 3. DH: send public key of client to server
     EN_HST_DH_PUBKEY_RSP,       // Step 4. DH: notify public key is accepted
@@ -93,11 +93,11 @@ table cs_body_rsa_cert {
 ///     step=EN_HST_RSA_SECRET_RSP, switch_type=EN_SST_RSA: nothing
 ///     step=EN_HST_VERIFY, switch_type=ANY : any message just for test
 table cs_body_handshake {
-    session_id: [ulong] (id: 0);
+    session_id: ulong (id: 0);
     step: handshake_step_t (id: 1);
     switch_type: switch_secret_t (id: 2);
     crypt_type: crypt_type_t (id: 3);
-    crypt_bits: [uint] (id: 4); 
+    crypt_bits: uint (id: 4); 
     crypt_param: [byte] (id: 5); 
     rsa_cert: cs_body_rsa_cert (id: 6);
 }

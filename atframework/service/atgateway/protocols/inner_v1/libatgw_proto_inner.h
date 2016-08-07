@@ -48,6 +48,12 @@ namespace atframe {
                 time_t last_delta;
             };
 
+            struct ext_flag_t {
+                enum type {
+                    EN_PEFT_HANDSHAKE_DONE = 0x0100,
+                };
+            };
+
         public:
             libatgw_proto_inner_v1();
             virtual ~libatgw_proto_inner_v1();
@@ -58,6 +64,17 @@ namespace atframe {
             void dispatch_data(const char *buff, size_t len, int errcode);
             int dispatch_handshake(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
 
+            int dispatch_handshake_start_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
+            int dispatch_handshake_start_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
+            int dispatch_handshake_reconn_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
+            int dispatch_handshake_reconn_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
+            int dispatch_handshake_dh_pubkey_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
+            int dispatch_handshake_dh_pubkey_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
+            int dispatch_handshake_rsa_secret_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
+            int dispatch_handshake_rsa_secret_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
+            int dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
+
+            int set_handshake_done(int status);
             int try_write();
             int write_msg(flatbuffers::FlatBufferBuilder &builder);
             virtual int write(const void *buffer, size_t len);
@@ -70,6 +87,9 @@ namespace atframe {
 
             virtual void set_recv_buffer_limit(size_t max_size, size_t max_number);
             virtual void set_send_buffer_limit(size_t max_size, size_t max_number);
+
+            int start_session();
+            int reconnect_session(uint64_t sess_id, int type, const std::string &secret, uint32_r keybits);
 
             int send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len);
             int send_ping(time_t tp);
@@ -87,6 +107,7 @@ namespace atframe {
             static int global_reload(crypt_conf_t &crypt_conf);
 
         private:
+            uint64_t session_id_;
             ::atbus::detail::buffer_manager read_buffers_;
             /**
             * @brief 由于大多数数据包都比较小

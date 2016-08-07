@@ -12,7 +12,7 @@ namespace atframe {
                 return ret;
             }
         }
-        libatgw_proto_inner_v1::libatgw_proto_inner_v1() : last_write_ptr_(NULL), close_reason_(0) {
+        libatgw_proto_inner_v1::libatgw_proto_inner_v1() : session_id_(0), last_write_ptr_(NULL), close_reason_(0) {
             crypt_info_.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE;
             crypt_info_.keybits = 0;
 
@@ -313,38 +313,147 @@ namespace atframe {
                 return error_code_t::EN_ECT_CLOSING;
             }
 
+            if (check_flag(ext_flag_t::EN_PEFT_HANDSHAKE_DONE)) {
+                return error_code_t::EN_ECT_HANDSHAKE;
+            }
+
             int ret = 0;
             switch (body_handshake.step()) {
             case atframe::gw::inner::v1::handshake_step_t_EN_HST_START_REQ: {
+                ret = dispatch_handshake_start_req(body_handshake);
                 break;
             }
             case atframe::gw::inner::v1::handshake_step_t_EN_HST_START_RSP: {
+                ret = dispatch_handshake_start_rsp(body_handshake);
                 break;
             }
             case atframe::gw::inner::v1::handshake_step_t_EN_HST_RECONNECT_REQ: {
+                ret = dispatch_handshake_reconn_req(body_handshake);
                 break;
             }
             case atframe::gw::inner::v1::handshake_step_t_EN_HST_RECONNECT_RSP: {
+                ret = dispatch_handshake_reconn_rsp(body_handshake);
                 break;
             }
             case atframe::gw::inner::v1::handshake_step_t_EN_HST_DH_PUBKEY_REQ: {
+                ret = dispatch_handshake_dh_pubkey_req(body_handshake);
                 break;
             }
             case atframe::gw::inner::v1::handshake_step_t_EN_HST_DH_PUBKEY_RSP: {
+                ret = dispatch_handshake_dh_pubkey_rsp(body_handshake);
                 break;
             }
             case atframe::gw::inner::v1::handshake_step_t_EN_HST_RSA_SECRET_REQ: {
+                ret = dispatch_handshake_rsa_secret_req(body_handshake);
                 break;
             }
             case atframe::gw::inner::v1::handshake_step_t_EN_HST_RSA_SECRET_RSP: {
+                ret = dispatch_handshake_rsa_secret_rsp(body_handshake);
                 break;
             }
             case atframe::gw::inner::v1::handshake_step_t_EN_HST_VERIFY: {
+                ret = dispatch_handshake_verify_ntf(body_handshake);
                 break;
             }
             default: { break; }
             }
             return ret;
+        }
+
+        int libatgw_proto_inner_v1::dispatch_handshake_start_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            if (NULL == callbacks_ || !callbacks_->write_fn) {
+                return error_code_t::EN_ECT_MISS_CALLBACKS;
+            }
+
+            uint64_t sess_id = 0;
+            if (!callbacks_->new_session_fn) {
+                !callbacks_->new_session_fn(this, sess_id);
+            }
+
+            flatbuffers::FlatBufferBuilder builder;
+            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
+                                                                     ::atframe::gateway::detail::alloc_seq()));
+            ::atframe::gw::inner::v1::cs_body_handshakeBuilder handshake_body(builder);
+
+
+            handshake_body.add_session_id(sess_id);
+            handshake_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_START_RSP);
+
+            if (0 != sess_id) {
+                // TODO use the global switch type
+                handshake_body.add_switch_type(::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT);
+                // TODO use the global crypt type
+                // crypt_info_.type = ;
+                // crypt_info_.secret = ;
+                // crypt_info_.keybits = ;
+                handshake_body.add_crypt_type(static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_info_.type));
+                handshake_body.add_crypt_bits(crypt_info_.keybits);
+                handshake_body.add_crypt_param(builder.CreateVector(crypt_info_.secret.data(), crypt_info_.secret.size()));
+
+                // if switch type is RSA
+                ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
+                rsa_cert.add_rsa_sign(::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1);
+                rsa_cert.add_hash_type(::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5);
+                rsa_cert.add_pubkey(builder.CreateVector(NULL, 0));
+                handshake_body.add_rsa_cert(rsa_cert.Finish());
+            }
+
+            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
+            msg.add_body(handshake_body.Finish());
+
+            msg.Finish();
+            builder.Finish();
+            return write_msg(builder);
+        }
+        int libatgw_proto_inner_v1::dispatch_handshake_start_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            // TODO check if start new session success
+            // TODO assign session id,
+            // TODO if not use crypt, assign crypt information and set_handshake_done(0)
+
+            // TODO if in DH handshake, generate and send pubkey
+            // TODO if in RSA handshake, generate and send secret
+            return 0;
+        }
+        int libatgw_proto_inner_v1::dispatch_handshake_reconn_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            // TODO assign crypt options
+            // TODO try to reconnect
+            return 0;
+        }
+        int libatgw_proto_inner_v1::dispatch_handshake_reconn_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            return 0;
+        }
+        int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            return 0;
+        }
+        int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            return 0;
+        }
+        int libatgw_proto_inner_v1::dispatch_handshake_rsa_secret_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            return 0;
+        }
+        int libatgw_proto_inner_v1::dispatch_handshake_rsa_secret_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            return 0;
+        }
+        int libatgw_proto_inner_v1::dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            return 0;
+        }
+
+        int libatgw_proto_inner_v1::set_handshake_done(int status) {
+            if (check_flag(ext_flag_t::EN_PEFT_HANDSHAKE_DONE)) {
+                return error_code_t::EN_ECT_HANDSHAKE;
+            }
+            set_flag(ext_flag_t::EN_PEFT_HANDSHAKE_DONE, true);
+
+            if (NULL != callbacks_ && callbacks_->on_handshake_done_fn) {
+                callbacks_->on_handshake_done_fn(this, status);
+            }
+
+            return 0;
         }
 
         int libatgw_proto_inner_v1::try_write() {
@@ -631,9 +740,106 @@ namespace atframe {
                 return false;
             }
 
-            // TODO check crypt type, keybits and encrypted secret
-            // TODO if success, copy crypt information
+            libatgw_proto_inner_v1 *other_proto = dynamic_cast<libatgw_proto_inner_v1 *>(other);
+            assert(other_proto);
+
+            // TODO decrypt secret
+
+            // check crypt type, keybits and encrypted secret
+            if (!(crypt_info_.type == other_proto->crypt_info_.type && crypt_info_.keybits == other_proto->crypt_info_.keybits &&
+                  crypt_info_.secret == other_proto->crypt_info_.secret)) {
+                return false;
+            }
+
+
+            // if success, copy crypt information
+            session_id_ = other_proto->session_id_;
+            crypt_info_ = other_proto->crypt_info_;
             return true;
+        }
+
+        int libatgw_proto_inner_v1::start_session() {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            if (NULL == callbacks_ || !callbacks_->write_fn) {
+                return error_code_t::EN_ECT_MISS_CALLBACKS;
+            }
+
+            if (0 != session_id_) {
+                return error_code_t::EN_ECT_SESSION_ALREADY_EXIST;
+            }
+
+            flatbuffers::FlatBufferBuilder builder;
+            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
+                                                                     ::atframe::gateway::detail::alloc_seq()));
+            ::atframe::gw::inner::v1::cs_body_handshakeBuilder handshake_body(builder);
+
+            handshake_body.add_session_id(0);
+            handshake_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_START_REQ);
+            handshake_body.add_switch_type(::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT);
+            handshake_body.add_crypt_type(::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE);
+            handshake_body.add_crypt_bits(0);
+            handshake_body.add_crypt_param(builder.CreateVector(NULL, 0));
+
+            ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
+            rsa_cert.add_rsa_sign(::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1);
+            rsa_cert.add_hash_type(::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5);
+            rsa_cert.add_pubkey(builder.CreateVector(NULL, 0));
+            handshake_body.add_rsa_cert(rsa_cert.Finish());
+
+            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
+            msg.add_body(handshake_body.Finish());
+
+            msg.Finish();
+            builder.Finish();
+            return write_msg(builder);
+        }
+
+        int libatgw_proto_inner_v1::reconnect_session(uint64_t sess_id, int type, const std::string &secret, uint32_r keybits) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            if (NULL == callbacks_ || !callbacks_->write_fn) {
+                return error_code_t::EN_ECT_MISS_CALLBACKS;
+            }
+
+            if (0 != session_id_) {
+                return error_code_t::EN_ECT_SESSION_ALREADY_EXIST;
+            }
+
+            // TODO encrypt secret
+            const void *secret_buffer = NULL;
+            size_t secret_length = secret.size();
+
+            flatbuffers::FlatBufferBuilder builder;
+            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
+                                                                     ::atframe::gateway::detail::alloc_seq()));
+            ::atframe::gw::inner::v1::cs_body_handshakeBuilder handshake_body(builder);
+
+            handshake_body.add_session_id(sess_id);
+            handshake_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_RECONNECT_REQ);
+            handshake_body.add_switch_type(::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT);
+            handshake_body.add_crypt_type(static_cast< ::atframe::gw::inner::v1::crypt_type_t>(type));
+            handshake_body.add_crypt_bits(keybits);
+            handshake_body.add_crypt_param(builder.CreateVector(secret_buffer, secret_length));
+
+            ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
+            rsa_cert.add_rsa_sign(::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1);
+            rsa_cert.add_hash_type(::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5);
+            rsa_cert.add_pubkey(builder.CreateVector(secret.data(), secret.size()));
+            handshake_body.add_rsa_cert(rsa_cert.Finish());
+
+            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
+            msg.add_body(handshake_body.Finish());
+
+            msg.Finish();
+            builder.Finish();
+            return write_msg(builder);
         }
 
         int libatgw_proto_inner_v1::send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len) {
@@ -652,7 +858,7 @@ namespace atframe {
             // TODO if not writing, try merge data and write it
             flatbuffers::FlatBufferBuilder builder;
             ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(msg_type, ::atframe::gateway::detail::alloc_seq()));
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, msg_type, ::atframe::gateway::detail::alloc_seq()));
             ::atframe::gw::inner::v1::cs_body_postBuilder post_body(builder);
 
             post_body.add_length(builder.CreateString(static_cast<size_t>(len)));
@@ -679,7 +885,7 @@ namespace atframe {
 
             flatbuffers::FlatBufferBuilder builder;
             ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PING,
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PING,
                                                                      ::atframe::gateway::detail::alloc_seq()));
             ::atframe::gw::inner::v1::cs_body_pingBuilder ping_body(builder);
 
@@ -704,7 +910,7 @@ namespace atframe {
 
             flatbuffers::FlatBufferBuilder builder;
             ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PONG,
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PONG,
                                                                      ::atframe::gateway::detail::alloc_seq()));
             ::atframe::gw::inner::v1::cs_body_pingBuilder ping_body(builder);
 
@@ -747,7 +953,7 @@ namespace atframe {
 
             flatbuffers::FlatBufferBuilder builder;
             ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_KICKOFF,
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_KICKOFF,
                                                                      ::atframe::gateway::detail::alloc_seq()));
             ::atframe::gw::inner::v1::cs_body_kickoffBuilder kickoff_body(builder);
 

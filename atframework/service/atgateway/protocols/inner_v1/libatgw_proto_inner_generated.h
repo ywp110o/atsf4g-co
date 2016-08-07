@@ -323,22 +323,20 @@ struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     VT_CRYPT_PARAM = 14,
     VT_RSA_CERT = 16
   };
-  const flatbuffers::Vector<uint64_t> *session_id() const { return GetPointer<const flatbuffers::Vector<uint64_t> *>(VT_SESSION_ID); }
+  uint64_t session_id() const { return GetField<uint64_t>(VT_SESSION_ID, 0); }
   handshake_step_t step() const { return static_cast<handshake_step_t>(GetField<int8_t>(VT_STEP, 0)); }
   switch_secret_t switch_type() const { return static_cast<switch_secret_t>(GetField<int8_t>(VT_SWITCH_TYPE, 0)); }
   crypt_type_t crypt_type() const { return static_cast<crypt_type_t>(GetField<int8_t>(VT_CRYPT_TYPE, 0)); }
-  const flatbuffers::Vector<uint32_t> *crypt_bits() const { return GetPointer<const flatbuffers::Vector<uint32_t> *>(VT_CRYPT_BITS); }
+  uint32_t crypt_bits() const { return GetField<uint32_t>(VT_CRYPT_BITS, 0); }
   const flatbuffers::Vector<int8_t> *crypt_param() const { return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_CRYPT_PARAM); }
   const cs_body_rsa_cert *rsa_cert() const { return GetPointer<const cs_body_rsa_cert *>(VT_RSA_CERT); }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<flatbuffers::uoffset_t>(verifier, VT_SESSION_ID) &&
-           verifier.Verify(session_id()) &&
+           VerifyField<uint64_t>(verifier, VT_SESSION_ID) &&
            VerifyField<int8_t>(verifier, VT_STEP) &&
            VerifyField<int8_t>(verifier, VT_SWITCH_TYPE) &&
            VerifyField<int8_t>(verifier, VT_CRYPT_TYPE) &&
-           VerifyField<flatbuffers::uoffset_t>(verifier, VT_CRYPT_BITS) &&
-           verifier.Verify(crypt_bits()) &&
+           VerifyField<uint32_t>(verifier, VT_CRYPT_BITS) &&
            VerifyField<flatbuffers::uoffset_t>(verifier, VT_CRYPT_PARAM) &&
            verifier.Verify(crypt_param()) &&
            VerifyField<flatbuffers::uoffset_t>(verifier, VT_RSA_CERT) &&
@@ -350,11 +348,11 @@ struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
 struct cs_body_handshakeBuilder {
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
-  void add_session_id(flatbuffers::Offset<flatbuffers::Vector<uint64_t>> session_id) { fbb_.AddOffset(cs_body_handshake::VT_SESSION_ID, session_id); }
+  void add_session_id(uint64_t session_id) { fbb_.AddElement<uint64_t>(cs_body_handshake::VT_SESSION_ID, session_id, 0); }
   void add_step(handshake_step_t step) { fbb_.AddElement<int8_t>(cs_body_handshake::VT_STEP, static_cast<int8_t>(step), 0); }
   void add_switch_type(switch_secret_t switch_type) { fbb_.AddElement<int8_t>(cs_body_handshake::VT_SWITCH_TYPE, static_cast<int8_t>(switch_type), 0); }
   void add_crypt_type(crypt_type_t crypt_type) { fbb_.AddElement<int8_t>(cs_body_handshake::VT_CRYPT_TYPE, static_cast<int8_t>(crypt_type), 0); }
-  void add_crypt_bits(flatbuffers::Offset<flatbuffers::Vector<uint32_t>> crypt_bits) { fbb_.AddOffset(cs_body_handshake::VT_CRYPT_BITS, crypt_bits); }
+  void add_crypt_bits(uint32_t crypt_bits) { fbb_.AddElement<uint32_t>(cs_body_handshake::VT_CRYPT_BITS, crypt_bits, 0); }
   void add_crypt_param(flatbuffers::Offset<flatbuffers::Vector<int8_t>> crypt_param) { fbb_.AddOffset(cs_body_handshake::VT_CRYPT_PARAM, crypt_param); }
   void add_rsa_cert(flatbuffers::Offset<cs_body_rsa_cert> rsa_cert) { fbb_.AddOffset(cs_body_handshake::VT_RSA_CERT, rsa_cert); }
   cs_body_handshakeBuilder(flatbuffers::FlatBufferBuilder &_fbb) : fbb_(_fbb) { start_ = fbb_.StartTable(); }
@@ -366,18 +364,18 @@ struct cs_body_handshakeBuilder {
 };
 
 inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshake(flatbuffers::FlatBufferBuilder &_fbb,
-   flatbuffers::Offset<flatbuffers::Vector<uint64_t>> session_id = 0,
+   uint64_t session_id = 0,
    handshake_step_t step = handshake_step_t_EN_HST_START_REQ,
    switch_secret_t switch_type = switch_secret_t_EN_SST_DIRECT,
    crypt_type_t crypt_type = crypt_type_t_EN_ET_NONE,
-   flatbuffers::Offset<flatbuffers::Vector<uint32_t>> crypt_bits = 0,
+   uint32_t crypt_bits = 0,
    flatbuffers::Offset<flatbuffers::Vector<int8_t>> crypt_param = 0,
    flatbuffers::Offset<cs_body_rsa_cert> rsa_cert = 0) {
   cs_body_handshakeBuilder builder_(_fbb);
+  builder_.add_session_id(session_id);
   builder_.add_rsa_cert(rsa_cert);
   builder_.add_crypt_param(crypt_param);
   builder_.add_crypt_bits(crypt_bits);
-  builder_.add_session_id(session_id);
   builder_.add_crypt_type(crypt_type);
   builder_.add_switch_type(switch_type);
   builder_.add_step(step);

@@ -28,12 +28,13 @@ namespace atframe {
                 EN_ECT_HANDLE_NOT_FOUND = -1014,
                 EN_ECT_ALREADY_HAS_FD = -1015,
                 EN_ECT_SESSION_NOT_FOUND = -1016,
-                EN_ECT_NOT_WRITING = -1017,
-                EN_ECT_CRYPT_NOT_SUPPORTED = -1018,
-                EN_ECT_PARAM = -1019,
-                EN_ECT_BAD_DATA = -1020,
-                EN_ECT_INVALID_SIZE = -1021,
-                EN_ECT_NO_DATA = -1022,
+                EN_ECT_SESSION_ALREADY_EXIST = -1017,
+                EN_ECT_NOT_WRITING = -1018,
+                EN_ECT_CRYPT_NOT_SUPPORTED = -1019,
+                EN_ECT_PARAM = -1020,
+                EN_ECT_BAD_DATA = -1021,
+                EN_ECT_INVALID_SIZE = -1022,
+                EN_ECT_NO_DATA = -1023,
             };
         };
 
