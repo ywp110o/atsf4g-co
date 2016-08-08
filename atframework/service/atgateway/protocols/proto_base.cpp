@@ -11,7 +11,8 @@ namespace atframe {
     namespace gateway {
         namespace detail {
             static char *atgateway_get_msg_buffer(::atframe::gateway::proto_base::tls_buffer_t::type t) {
-                static UTIL_CONFIG_THREAD_LOCAL char ret[ ::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX][ATBUS_MACRO_MSG_LIMIT];
+                static UTIL_CONFIG_THREAD_LOCAL char ret[ ::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX]
+                                                        [ATBUS_MACRO_MSG_LIMIT + 2 * sizeof(size_t)]; // in case of padding
                 return ret[t];
             }
         }
@@ -43,7 +44,7 @@ namespace atframe {
                 (void)pthread_once(&gt_atgateway_get_msg_buffer_tls_once, init_pthread_atgateway_get_msg_buffer_tls);
                 char *ret = reinterpret_cast<char *>(pthread_getspecific(gt_atgateway_get_msg_buffer_tls_key[i]));
                 if (NULL == ret) {
-                    ret = new char[ATBUS_MACRO_MSG_LIMIT];
+                    ret = new char[ATBUS_MACRO_MSG_LIMIT + 2 * sizeof(size_t)]; // in case of padding
                     pthread_setspecific(gt_atgateway_get_msg_buffer_tls_key[i], ret);
                 }
                 return ret;

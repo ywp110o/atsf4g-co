@@ -1,3 +1,7 @@
+#include "lock/lock_holder.h"
+#include "lock/spin_lock.h"
+
+
 #include "libatgw_proto_inner.h"
 
 namespace atframe {
@@ -11,7 +15,37 @@ namespace atframe {
                 }
                 return ret;
             }
+
+            struct crypt_global_configure_t {
+                crypt_global_configure_t() : inited_(false) {
+                    conf_.update_interval = 600;
+                    conf_.type = 0;
+                    conf_.switch_secret_type = 0;
+                    conf_.keybits = 0;
+
+                    conf_.rsa_sign_type = 0;
+                    conf_.hash_id = 0;
+                }
+                ~crypt_global_configure_t() { close(); }
+
+                void init() { close(); }
+
+                void close() {
+                    if (!inited_) {
+                        return;
+                    }
+                    inited_ = false;
+                }
+
+                crypt_conf_t conf_;
+                bool inited_;
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+#endif
+            };
         }
+
         libatgw_proto_inner_v1::libatgw_proto_inner_v1() : session_id_(0), last_write_ptr_(NULL), close_reason_(0) {
             crypt_info_.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE;
             crypt_info_.keybits = 0;
@@ -23,7 +57,10 @@ namespace atframe {
         }
 
 
-        libatgw_proto_inner_v1::~libatgw_proto_inner_v1() { close(close_reason_t::EN_CRT_UNKNOWN, false); }
+        libatgw_proto_inner_v1::~libatgw_proto_inner_v1() {
+            close(close_reason_t::EN_CRT_UNKNOWN, false);
+            close_crypt();
+        }
 
         void libatgw_proto_inner_v1::alloc_recv_buffer(size_t suggested_size, char *&out_buf, size_t &out_len) {
             flag_guard_t flag_guard(flags_, flag_t::EN_PFT_IN_CALLBACK);
@@ -207,7 +244,7 @@ namespace atframe {
                 if (0 == res) {
                     // on_message
                     if (NULL != callbacks_ && callbacks_->message_fn) {
-                        callbacks_->message_fn(this, out, outsz);
+                        callbacks_->message_fn(this, out, static_cast<size_t>(msg_body->length()));
                     }
                 } else {
                     close(close_reason_t::EN_CRT_INVALID_DATA, false);
@@ -388,9 +425,7 @@ namespace atframe {
                 // TODO use the global switch type
                 handshake_body.add_switch_type(::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT);
                 // TODO use the global crypt type
-                // crypt_info_.type = ;
-                // crypt_info_.secret = ;
-                // crypt_info_.keybits = ;
+                // setup_crypt
                 handshake_body.add_crypt_type(static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_info_.type));
                 handshake_body.add_crypt_bits(crypt_info_.keybits);
                 handshake_body.add_crypt_param(builder.CreateVector(crypt_info_.secret.data(), crypt_info_.secret.size()));
@@ -420,10 +455,23 @@ namespace atframe {
             return 0;
         }
         int libatgw_proto_inner_v1::dispatch_handshake_reconn_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
-            // TODO assign crypt options
-            // TODO try to reconnect
-            return 0;
+            // try to reconnect
+            if (NULL == callbacks_ || !callbacks_->reconnect_fn) {
+                return error_code_t::EN_ECT_MISS_CALLBACKS;
+            }
+
+            // assign crypt options
+            const flatbuffers::Vector<int8_t> *secret = body_handshake.crypt_param();
+            if (NULL != secret) {
+                setup_crypt(body_handshake.crypt_type(), secret->data(), secret->size(), body_handshake.crypt_bits());
+                crypt_info_.secret.assign(secret->data(), secret->size());
+            } else {
+                setup_crypt(body_handshake.crypt_type(), NULL, 0, body_handshake.crypt_bits());
+            }
+
+            return callbacks_->reconnect_fn(this, body_handshake.session_id());
         }
+
         int libatgw_proto_inner_v1::dispatch_handshake_reconn_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
             return 0;
         }
@@ -700,6 +748,7 @@ namespace atframe {
             // if in disconnecting status and there is no more data to write, close it
             if (check_flag(flag_t::EN_PFT_CLOSING) && !check_flag(flag_t::EN_PFT_WRITING)) {
                 set_flag(flag_t::EN_PFT_CLOSED, true);
+                close_crypt_data();
 
                 if (NULL != callbacks_ || callbacks_->close_fn) {
                     return callbacks_->close_fn(this, close_reason_);
@@ -726,6 +775,7 @@ namespace atframe {
             // wait writing to finished
             if (!check_flag(flag_t::EN_PFT_WRITING)) {
                 set_flag(flag_t::EN_PFT_CLOSED, true);
+                close_crypt_data();
 
                 if (NULL != callbacks_ || callbacks_->close_fn) {
                     return callbacks_->close_fn(this, close_reason_);
@@ -733,6 +783,97 @@ namespace atframe {
             }
 
             return 0;
+        }
+
+        void libatgw_proto_inner_v1::setup_crypt(int type, const void *key, size_t keylen, uint32_t keybits) {
+            close_crypt();
+
+
+            switch (crypt_info_.type) {
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XTEA: {
+                const unsigned char xtea_key[16];
+                if (keylen < sizeof(xtea_key)) {
+                    ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED, "xtea key length is too small");
+                    return;
+                }
+
+                memcpy(xtea_key, key, keylen);
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED, "openssl/libressl do not support xtea");
+
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                mbedtls_xtea_init(&crypt_info_.xtea_key.mbedtls_xtea_ctx);
+                mbedtls_xtea_setup(&ctx, crypt_info_.xtea_key.mbedtls_xtea_ctx);
+#endif
+                break;
+            }
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
+                if (keylen * 8 < keybits) {
+                    ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED, "aes key length is too small");
+                    return;
+                }
+
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                int res = AES_set_encrypt_key(key, keybits, &crypt_info_.aes_key.openssl_encrypt_key);
+                if (res < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(res, "openssl/libressl setup AES encrypt key failed");
+                    return;
+                }
+
+                res = AES_set_encrypt_key(key, keybits, &crypt_info_.aes_key.openssl_decrypt_key);
+                if (res < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(res, "openssl/libressl setup AES decrypt key failed");
+                    return;
+                }
+
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                mbedtls_aes_init(&crypt_info_.aes_key.mbedtls_aes_encrypt_ctx);
+                mbedtls_aes_init(&crypt_info_.aes_key.mbedtls_aes_decrypt_ctx);
+                int res = mbedtls_aes_setkey_enc(&crypt_info_.aes_key.mbedtls_aes_encrypt_ctx, reinterpret_cast<const unsigned char *>(key),
+                                                 keybits);
+                if (res < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(res, "polarssl/mbedtls setup AES encrypt key failed");
+                    return;
+                }
+
+                res = mbedtls_aes_setkey_enc(&crypt_info_.aes_key.mbedtls_aes_decrypt_ctx, reinterpret_cast<const unsigned char *>(key),
+                                             keybits);
+                if (res < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(res, "polarssl/mbedtls setup AES decrypt key failed");
+                    return;
+                }
+#endif
+                break;
+            }
+            default: { break; }
+            }
+
+            crypt_info_.secret.assign(reinterpret_cast<const char *>(key), keylen);
+            crypt_info_.type = type;
+            crypt_info_.keybits = keybits;
+        }
+
+        void libatgw_proto_inner_v1::close_crypt() {
+            switch (crypt_info_.type) {
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XTEA: {
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                mbedtls_xtea_free(&crypt_info_.xtea_key.mbedtls_xtea_ctx);
+#endif
+                break;
+            }
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                mbedtls_aes_free(&crypt_info_.aes_key.mbedtls_aes_encrypt_ctx);
+                mbedtls_aes_free(&crypt_info_.aes_key.mbedtls_aes_decrypt_ctx);
+#endif
+                break;
+            }
+            default: { break; }
+            }
+
+            crypt_info_.type = 0;
         }
 
         bool libatgw_proto_inner_v1::check_reconnect(proto_base *other) {
@@ -754,7 +895,8 @@ namespace atframe {
 
             // if success, copy crypt information
             session_id_ = other_proto->session_id_;
-            crypt_info_ = other_proto->crypt_info_;
+            setup_crypt(other_proto->crypt_info_.type, other_proto->crypt_info_.secret.data(), other_proto->crypt_info_.secret.size(),
+                        other_proto->crypt_info_.keybits);
             return true;
         }
 
@@ -852,17 +994,21 @@ namespace atframe {
             }
 
 
-            // TODO encrypt
-            // TODO zip
-            // TODO push data
-            // TODO if not writing, try merge data and write it
+            // encrypt/zip
+            size_t ori_len = len;
+            int res = encode_post(buffer, len, buffer, len);
+            if (0 != res) {
+                return res;
+            }
+
+            // pack
             flatbuffers::FlatBufferBuilder builder;
             ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
             msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, msg_type, ::atframe::gateway::detail::alloc_seq()));
             ::atframe::gw::inner::v1::cs_body_postBuilder post_body(builder);
 
-            post_body.add_length(builder.CreateString(static_cast<size_t>(len)));
-            post_body.add_data(builder.CreateString(reinterpret_cast<const char *>(buffer), static_cast<size_t>(len)));
+            post_body.add_length(static_cast<uint64_t>(ori_len));
+            post_body.add_data(builder.CreateString(reinterpret_cast<const char *>(buffer), len));
 
             msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_post);
             msg.add_body(post_body.Finish());
@@ -967,6 +1113,19 @@ namespace atframe {
             return write_msg(builder);
         }
 
+        int libatgw_proto_inner_v1::encode_post(const void *in, size_t insz, const void *&out, size_t &outsz) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+
+            // TODO encrypt
+            // TODO zip
+
+            outsz = insz;
+            out = in;
+            return 0;
+        }
+
         int libatgw_proto_inner_v1::decode_post(const void *in, size_t insz, const void *&out, size_t &outsz) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
@@ -980,8 +1139,36 @@ namespace atframe {
             return 0;
         }
 
+        int libatgw_proto_inner_v1::encrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+            switch (crypt_info_.type) {
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XTEA: {
+                break;
+            }
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
+                break;
+            }
+            default: {
+                out = in;
+                outsz = insz;
+                break;
+            }
+            }
+        }
+
+        int libatgw_proto_inner_v1::decrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
+            }
+        }
+
         int libatgw_proto_inner_v1::global_reload(crypt_conf_t &crypt_conf) {
-            // TODO spin_lock
+            // spin_lock
+            static ::util::lock::spin_lock global_proto_lock;
+            ::util::lock::lock_holder< ::util::lock::spin_lock> lh(global_proto_lock);
+
             if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == crypt_conf.type) {
                 return 0;
             }
@@ -990,16 +1177,16 @@ namespace atframe {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
 // TODO init DH param file
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
 #endif
                 break;
             }
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
 // TODO init public key and private key
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
 #endif
                 break;
             }

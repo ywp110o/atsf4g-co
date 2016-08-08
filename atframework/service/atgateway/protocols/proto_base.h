@@ -130,6 +130,20 @@ namespace atframe {
              */
             typedef std::function<int(proto_base *, int)> on_handshake_done_fn_t;
 
+            /**
+             * SPECIFY: callback when any error happen
+             * PARAMETER:
+             *   0: proto object
+             *   1: file name
+             *   2: line
+             *   3: error code
+             *   4: error message
+             * RETURN: 0 or error code
+             * OPTIONAL
+             * PROTOCOL: any custom protocol should call this when any error happen.
+             */
+            typedef std::function<int(proto_base *, const char *, int, int errcode, const char *)> on_error_fn_t;
+
             struct tls_buffer_t {
                 enum type {
                     EN_TBT_MERGE = 0,
@@ -165,6 +179,7 @@ namespace atframe {
                 on_init_reconnect_fn_t reconnect_fn;
                 on_close_fn_t close_fn;
                 on_handshake_done_fn_t on_handshake_done_fn;
+                on_error_fn_t on_error_fn;
             };
 
         protected:
@@ -317,5 +332,8 @@ namespace atframe {
         };
     }
 }
+
+#define ATFRAME_GATEWAY_ON_ERROR(errcode, errmsg) \
+    if (NULL != callbacks_ && callbacks_->on_error_fn) callbacks_->on_error_fn(__FILE__, __LINE__, errcode, errmsg)
 
 #endif

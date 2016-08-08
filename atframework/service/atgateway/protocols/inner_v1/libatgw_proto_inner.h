@@ -7,6 +7,45 @@
 
 #include "../proto_base.h"
 
+extern "C" {
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
+#include <openssl/aes.h>
+#include <openssl/bio.h>
+#include <openssl/bn.h>
+#include <openssl/crypto.h>
+#include <openssl/dh.h>
+#include <openssl/err.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/rsa.h>
+#include <openssl/sha.h>
+
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#include <openssl/aes.h>
+#include <openssl/bio.h>
+#include <openssl/bn.h>
+#include <openssl/crypto.h>
+#include <openssl/dh.h>
+#include <openssl/err.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/rsa.h>
+#include <openssl/sha.h>
+
+
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+#include "mbedtls/aes.h"
+#include "mbedtls/ctr_drbg.h"
+#include "mbedtls/dhm.h"
+#include "mbedtls/entropy.h"
+#include "mbedtls/net.h"
+#include "mbedtls/rsa.h"
+#include "mbedtls/sha1.h"
+#endif
+}
+
 #ifndef ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE
 #define ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE 3072
 #endif
@@ -34,12 +73,36 @@ namespace atframe {
                 std::string dh_param;        /** DH parameter file path. **/
             };
 
+            struct crypt_session_aes_t {
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                AES_KEY openssl_encrypt_key;
+                AES_KEY openssl_decrypt_key;
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                mbedtls_aes_context mbedtls_aes_encrypt_ctx;
+                mbedtls_aes_context mbedtls_aes_decrypt_ctx;
+#endif
+            };
+
+            struct crypt_session_xtea_t {
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                AES_KEY openssl_encrypt_key;
+                AES_KEY openssl_decrypt_key;
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                mbedtls_xtea_context mbedtls_xtea_ctx;
+#endif
+            };
+
             struct crypt_session_t {
                 int type;           /** crypt type. XTEA, AES and etc. **/
                 std::string secret; /** crypt secret. **/
                 uint32_t keybits;   /** key length in bits. **/
 
                 std::string param; /** cache data used for generate key, dhparam if using DH algorithm. **/
+
+                union {
+                    crypt_session_aes_t aes_key;
+                    crypt_session_xtea_t xtea_key;
+                };
             };
 
             // ping/pong
@@ -83,6 +146,9 @@ namespace atframe {
             virtual int close(int reason);
             int close(int reason, bool is_send_kickoff);
 
+            void setup_crypt(int type, const void *key, size_t keylen, uint32_t keybits);
+            void close_crypt();
+
             virtual bool check_reconnect(proto_base *other);
 
             virtual void set_recv_buffer_limit(size_t max_size, size_t max_number);
@@ -101,7 +167,11 @@ namespace atframe {
             const ping_data_t &get_last_ping() const { return ping_; }
 
         private:
+            int encode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
             int decode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
+
+            int encrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz);
+            int decrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz);
 
         public:
             static int global_reload(crypt_conf_t &crypt_conf);

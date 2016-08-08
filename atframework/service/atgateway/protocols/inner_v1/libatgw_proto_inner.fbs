@@ -13,6 +13,7 @@ enum error_code_t:int {
 
 enum crypt_type_t : byte { 
     EN_ET_NONE = 0, // no encrypt
+    EN_ET_XXTEA,    // xxtea
     EN_ET_XTEA,     // xtea
     EN_ET_AES       // aes
 }
