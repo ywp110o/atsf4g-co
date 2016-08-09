@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "algorithm/xxtea.h"
 #include "detail/buffer.h"
 
 #include "../proto_base.h"
@@ -62,7 +63,7 @@ namespace atframe {
             struct crypt_conf_t {
                 std::string default_key; /** default key, different used for different crypt protocol **/
                 time_t update_interval;  /** crypt key refresh interval **/
-                int type;                /** crypt type. XTEA, AES and etc. **/
+                int type;                /** crypt type. XXTEA, AES and etc. **/
                 int switch_secret_type;  /** how to generate the secret key, dh, rsa or direct send. recommander to use DH **/
                 uint32_t keybits;        /** key length in bits. **/
 
@@ -84,16 +85,11 @@ namespace atframe {
             };
 
             struct crypt_session_xtea_t {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-                AES_KEY openssl_encrypt_key;
-                AES_KEY openssl_decrypt_key;
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                mbedtls_xtea_context mbedtls_xtea_ctx;
-#endif
+                ::util::xxtea_key util_xxtea_ctx;
             };
 
             struct crypt_session_t {
-                int type;           /** crypt type. XTEA, AES and etc. **/
+                int type;           /** crypt type. XXTEA, AES and etc. **/
                 std::string secret; /** crypt secret. **/
                 uint32_t keybits;   /** key length in bits. **/
 

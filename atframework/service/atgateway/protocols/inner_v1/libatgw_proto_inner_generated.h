@@ -32,14 +32,14 @@ enum error_code_t {
 
 enum crypt_type_t {
   crypt_type_t_EN_ET_NONE = 0,
-  crypt_type_t_EN_ET_XTEA = 1,
+  crypt_type_t_EN_ET_XXTEA = 1,
   crypt_type_t_EN_ET_AES = 2,
   crypt_type_t_MIN = crypt_type_t_EN_ET_NONE,
   crypt_type_t_MAX = crypt_type_t_EN_ET_AES
 };
 
 inline const char **EnumNamescrypt_type_t() {
-  static const char *names[] = { "EN_ET_NONE", "EN_ET_XTEA", "EN_ET_AES", nullptr };
+  static const char *names[] = { "EN_ET_NONE", "EN_ET_XXTEA", "EN_ET_AES", nullptr };
   return names;
 }
 

@@ -1,7 +1,6 @@
 #include "lock/lock_holder.h"
 #include "lock/spin_lock.h"
 
-
 #include "libatgw_proto_inner.h"
 
 namespace atframe {
@@ -790,21 +789,18 @@ namespace atframe {
 
 
             switch (crypt_info_.type) {
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XTEA: {
-                const unsigned char xtea_key[16];
-                if (keylen < sizeof(xtea_key)) {
-                    ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED, "xtea key length is too small");
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
+                if (keylen < sizeof(crypt_info_.xtea_key.util_xxtea_ctx)) {
+                    ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED, "xxtea key length is too small");
                     return;
                 }
 
-                memcpy(xtea_key, key, keylen);
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-                ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED, "openssl/libressl do not support xtea");
+                if (keybits != 8 * sizeof(crypt_info_.xtea_key.util_xxtea_ctx)) {
+                    ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED, "xxtea keybits must be 128");
+                    return;
+                }
 
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                mbedtls_xtea_init(&crypt_info_.xtea_key.mbedtls_xtea_ctx);
-                mbedtls_xtea_setup(&ctx, crypt_info_.xtea_key.mbedtls_xtea_ctx);
-#endif
+                ::util::xxtea_setup(&crypt_info_.xtea_key.util_xxtea_ctx, reinterpret_cast<const unsigned char *>(key), keylen);
                 break;
             }
             case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
@@ -855,11 +851,8 @@ namespace atframe {
 
         void libatgw_proto_inner_v1::close_crypt() {
             switch (crypt_info_.type) {
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XTEA: {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                mbedtls_xtea_free(&crypt_info_.xtea_key.mbedtls_xtea_ctx);
-#endif
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
+                // donothing
                 break;
             }
             case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
@@ -1144,7 +1137,7 @@ namespace atframe {
                 return error_code_t::EN_ECT_CLOSING;
             }
             switch (crypt_info_.type) {
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XTEA: {
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
                 break;
             }
             case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {

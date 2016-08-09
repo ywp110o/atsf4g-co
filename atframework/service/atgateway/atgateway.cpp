@@ -121,9 +121,9 @@ public:
             cfg.dump_to("atgateway.client.crypt.keybits", crypt_conf.keybits);
             cfg.dump_to("atgateway.client.crypt.type", val);
 
-            if (0 == UTIL_STRFUNC_STRNCASE_CMP("xtea", val.c_str(), 4)) {
-                crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XTEA;
-                crypt_conf.keybits = 16 * 8;
+            if (0 == UTIL_STRFUNC_STRNCASE_CMP("xxtea", val.c_str(), 5)) {
+                crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA;
+                crypt_conf.keybits = 128;
             } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("aes", val.c_str(), 3)) {
                 crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES;
             } else {
