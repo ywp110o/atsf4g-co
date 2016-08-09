@@ -9,7 +9,7 @@
 #include "../proto_base.h"
 
 extern "C" {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
 #include <openssl/aes.h>
 #include <openssl/bio.h>
 #include <openssl/bn.h>
@@ -21,20 +21,6 @@ extern "C" {
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/sha.h>
-
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-#include <openssl/aes.h>
-#include <openssl/bio.h>
-#include <openssl/bn.h>
-#include <openssl/crypto.h>
-#include <openssl/dh.h>
-#include <openssl/err.h>
-#include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/pem.h>
-#include <openssl/rsa.h>
-#include <openssl/sha.h>
-
 
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
 #include "mbedtls/aes.h"
@@ -94,6 +80,7 @@ namespace atframe {
                 uint32_t keybits;   /** key length in bits. **/
 
                 std::string param; /** cache data used for generate key, dhparam if using DH algorithm. **/
+                std::string next_secret;
 
                 union {
                     crypt_session_aes_t aes_key;

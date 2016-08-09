@@ -1,7 +1,14 @@
 #include "lock/lock_holder.h"
 #include "lock/spin_lock.h"
+#include "std/smart_ptr.h"
+
 
 #include "libatgw_proto_inner.h"
+
+// the same as openssl, mbedtls also use this as a constant integer
+#ifndef AES_BLOCK_SIZE
+#define AES_BLOCK_SIZE 16
+#endif
 
 namespace atframe {
     namespace gateway {
@@ -16,32 +23,101 @@ namespace atframe {
             }
 
             struct crypt_global_configure_t {
-                crypt_global_configure_t() : inited_(false) {
-                    conf_.update_interval = 600;
-                    conf_.type = 0;
-                    conf_.switch_secret_type = 0;
-                    conf_.keybits = 0;
+                typedef std::shared_ptr<crypt_global_configure_t> ptr_t;
 
-                    conf_.rsa_sign_type = 0;
-                    conf_.hash_id = 0;
-                }
+                crypt_global_configure_t(const crypt_conf_t &conf) : conf_(conf), inited_(false) {}
                 ~crypt_global_configure_t() { close(); }
 
-                void init() { close(); }
+                int init() {
+                    close();
+
+                    if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == crypt_conf.type) {
+                        return 0;
+                    }
+
+                    switch (crypt_conf.switch_secret_type) {
+                    case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
+
+// TODO init DH param file
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                        openssl_dh_ptr_ = PEM_read_DHparams(FILE *, NULL, NULL, NULL);
+// PEM_read_DHparams
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+// mbedtls_dhm_read_params
+#endif
+                        break;
+                    }
+                    case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
+                        // TODO init public key and private key
+                        // mbedtls: use API in mbedtls/pk.h => mbedtls_pk_parse_public_key, mbedtls_pk_parse_keyfile
+                        // openssl/libressl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
+                        return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                        break;
+                    }
+                    case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
+                        break;
+                    }
+                    default: {
+                        return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                        break;
+                    }
+                    }
+
+                    inited_ = true;
+                    return 0;
+                }
 
                 void close() {
                     if (!inited_) {
                         return;
                     }
                     inited_ = false;
+
+                    switch (crypt_conf.switch_secret_type) {
+                    case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
+// free DH param file
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                        if (NULL != openssl_dh_ptr_) {
+                            DH_free(openssl_dh_ptr_);
+                        }
+// PEM_read_DHparams
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                        // mbedtls_dhm_read_params
+                        mbedtls_dhm_free(&mbedtls_dh_ctx_);
+#endif
+                        break;
+                    }
+                    case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
+                        // TODO init public key and private key
+                        // mbedtls: use API in mbedtls/pk.h => mbedtls_pk_parse_public_key, mbedtls_pk_parse_keyfile
+                        // openssl/libressl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
+                        return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                        break;
+                    }
+                    case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
+                        break;
+                    }
+                    default: {
+                        return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                        break;
+                    }
+                    }
                 }
 
                 crypt_conf_t conf_;
                 bool inited_;
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+
+                union {
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                    DH *openssl_dh_ptr_;
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                    mbedtls_dhm_context mbedtls_dh_ctx_;
 #endif
+                };
+                static ptr_t &current() {
+                    static ptr_t ret;
+                    return ret;
+                }
             };
         }
 
@@ -1069,7 +1145,34 @@ namespace atframe {
             }
 
             // TODO mark next secret
-            return send_post(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_SYN, secret, len);
+            switch (crypt_conf.switch_secret_type) {
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
+// TODO generate another dhparam
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+#endif
+                return send_post(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_SYN, param.data(), param.size());
+                break;
+            }
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
+                // TODO send public key
+                return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                break;
+            }
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
+                // send secret again
+                crypt_info_.next_secret.assign(reinterpret_cast<const char *>(secret), len);
+                return send_post(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_SYN, secret, len);
+                break;
+            }
+            default: {
+                return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                break;
+            }
+            }
+
+            return 0;
         }
 
         int libatgw_proto_inner_v1::send_key_ack(const void *secret, size_t len) {
@@ -1136,11 +1239,61 @@ namespace atframe {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
             }
+
+            if (0 == insz || NULL == in) {
+                out = in;
+                outsz = insz;
+                return error_code_t::EN_ECT_PARAM;
+            }
+
+            int ret = 0;
+            void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
+            size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
+
             switch (crypt_info_.type) {
             case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
+                size_t outsz = ((insz - 1) | 0x03) + 1;
+
+                if (len < outsz) {
+                    return error_code_t::EN_ECT_MSG_TOO_LARGE;
+                }
+
+                memcpy(buffer, in, insz);
+                if (outsz > insz) {
+                    memset(reinterpret_cast<char *>(buffer) + insz, 0, outsz - insz);
+                }
+
+                ::util::xxtea_encrypt(&crypt_info_.xtea_key.util_xxtea_ctx, buffer, outsz);
+                out = buffer;
                 break;
             }
             case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
+                unsigned char iv[AES_BLOCK_SIZE];
+                memset(iv, 0, sizeof(iv));
+
+                size_t outsz = ((insz - 1) | (AES_BLOCK_SIZE - 1)) + 1;
+
+                if (len < outsz) {
+                    return error_code_t::EN_ECT_MSG_TOO_LARGE;
+                }
+
+                memcpy(buffer, in, insz);
+                if (outsz > insz) {
+                    memset(reinterpret_cast<char *>(buffer) + insz, 0, outsz - insz);
+                }
+
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                AES_cbc_encrypt(reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer), outsz,
+                                &crypt_info_.aes_key.openssl_decrypt_key, iv, AES_ENCRYPT);
+
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                ret = mbedtls_aes_crypt_cbc(&crypt_info_.aes_key.mbedtls_aes_encrypt_ctx, MBEDTLS_AES_ENCRYPT, outsz, iv,
+                                            reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer));
+                if (ret < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls AES encrypt failed");
+                    return res;
+                }
+#endif
                 break;
             }
             default: {
@@ -1149,12 +1302,79 @@ namespace atframe {
                 break;
             }
             }
+
+            return ret;
         }
 
         int libatgw_proto_inner_v1::decrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
             }
+
+            if (0 == insz || NULL == in) {
+                out = in;
+                outsz = insz;
+                return error_code_t::EN_ECT_PARAM;
+            }
+
+            int ret = 0;
+            void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
+            size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
+
+            switch (crypt_info_.type) {
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
+                size_t outsz = ((insz - 1) | 0x03) + 1;
+
+                if (len < outsz) {
+                    return error_code_t::EN_ECT_MSG_TOO_LARGE;
+                }
+
+                memcpy(buffer, in, insz);
+                if (outsz > insz) {
+                    memset(reinterpret_cast<char *>(buffer) + insz, 0, outsz - insz);
+                }
+
+                ::util::xxtea_decrypt(&crypt_info_.xtea_key.util_xxtea_ctx, buffer, outsz);
+                out = buffer;
+                break;
+            }
+            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
+                unsigned char iv[AES_BLOCK_SIZE];
+                memset(iv, 0, sizeof(iv));
+
+                size_t outsz = ((insz - 1) | (AES_BLOCK_SIZE - 1)) + 1;
+
+                if (len < outsz) {
+                    return error_code_t::EN_ECT_MSG_TOO_LARGE;
+                }
+
+                memcpy(buffer, in, insz);
+                if (outsz > insz) {
+                    memset(reinterpret_cast<char *>(buffer) + insz, 0, outsz - insz);
+                }
+
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                AES_cbc_encrypt(reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer), outsz,
+                                &crypt_info_.aes_key.openssl_decrypt_key, iv, AES_DECRYPT);
+
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                ret = mbedtls_aes_crypt_cbc(&crypt_info_.aes_key.mbedtls_aes_decrypt_ctx, MBEDTLS_AES_DECRYPT, outsz, iv,
+                                            reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer));
+                if (ret < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls AES decrypt failed");
+                    return res;
+                }
+#endif
+                break;
+            }
+            default: {
+                out = in;
+                outsz = insz;
+                break;
+            }
+            }
+
+            return ret;
         }
 
         int libatgw_proto_inner_v1::global_reload(crypt_conf_t &crypt_conf) {
@@ -1162,37 +1382,17 @@ namespace atframe {
             static ::util::lock::spin_lock global_proto_lock;
             ::util::lock::lock_holder< ::util::lock::spin_lock> lh(global_proto_lock);
 
-            if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == crypt_conf.type) {
-                return 0;
+            detail::crypt_global_configure_t::ptr_t inst = std::make_shared<detail::crypt_global_configure_t>(crypt_conf);
+            if (!inst) {
+                return error_code_t::EN_ECT_MALLOC;
             }
 
-            switch (crypt_conf.switch_secret_type) {
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
-// TODO init DH param file
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-#endif
-                break;
-            }
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
-// TODO init public key and private key
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-#endif
-                break;
-            }
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
-                break;
-            }
-            default: {
-                return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                break;
-            }
+            int ret = inst->init();
+            if (0 == ret) {
+                detail::crypt_global_configure_t::current().swap(inst);
             }
 
-            return 0;
+            return ret;
         }
     }
 }
