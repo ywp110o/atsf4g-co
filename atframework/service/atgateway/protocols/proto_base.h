@@ -164,6 +164,8 @@ namespace atframe {
                     EN_PFT_CLOSING = 0x0002,
                     EN_PFT_CLOSED = 0x0004,
                     EN_PFT_IN_CALLBACK = 0x0008,
+                    EN_PFT_HANDSHAKE_DONE = 0x0100,
+                    EN_PFT_HANDSHAKE_UPDATE = 0x0200,
                 };
             };
 
@@ -259,6 +261,25 @@ namespace atframe {
              * @param max_number max max_number, 0 for umlimited
              */
             virtual void set_send_buffer_limit(size_t max_size, size_t max_number);
+
+            /**
+             * @biref notify handshake finished
+             * @note custom protocol should call it when handshake is finished or updated no matter if it's success
+             * @note it will set EN_PFT_HANDSHAKE_DONE to true, EN_PFT_HANDSHAKE_UPDATE to false, and then call the on_handshake_done_fn
+             * callback
+             * @param status status
+             * @return 0 or error code
+             */
+            virtual int handshake_done(int status);
+
+            /**
+             * @biref update and do handshake again
+             * @note custom protocol could use this function to implement the update of crypt secret, access token or other data
+             * @note it will set EN_PFT_HANDSHAKE_UPDATE to true
+             * @param status status
+             * @return 0 or error code
+             */
+            virtual int handshake_update();
 
         public:
             /**

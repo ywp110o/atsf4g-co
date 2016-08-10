@@ -221,6 +221,14 @@ namespace atframe {
         int session_manager::close(session::id_t sess_id, int reason, bool allow_reconnect) {
             session_map_t::iterator iter = actived_sessions_.find(sess_id);
             if (actived_sessions_.end() == iter) {
+                // if not allow reconnect, close reconnect cache
+                if (!allow_reconnect) {
+                    iter = reconnect_cache_.find(sess_id);
+                    if (reconnect_cache_.end() != iter) {
+                        iter->second->close(reason);
+                    }
+                }
+
                 return 0;
             }
 
@@ -307,6 +315,11 @@ namespace atframe {
             session_map_t::iterator iter = reconnect_cache_.find(old_sess_id);
             if (iter == reconnect_cache_.end()) {
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+            }
+
+            // check if old session closed
+            if (iter->second->check_flag(session::flag_t::EN_FT_CLOSING)) {
+                return error_code_t::EN_ECT_CLOSING;
             }
 
             // check if old session not reconnected

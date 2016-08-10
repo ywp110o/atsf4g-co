@@ -1,7 +1,5 @@
 #include "lock/lock_holder.h"
 #include "lock/spin_lock.h"
-#include "std/smart_ptr.h"
-
 
 #include "libatgw_proto_inner.h"
 
@@ -425,7 +423,7 @@ namespace atframe {
                 return error_code_t::EN_ECT_CLOSING;
             }
 
-            if (check_flag(ext_flag_t::EN_PEFT_HANDSHAKE_DONE)) {
+            if (check_flag(flag_t::EN_PFT_HANDSHAKE_DONE) && !check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE)) {
                 return error_code_t::EN_ECT_HANDSHAKE;
             }
 
@@ -491,27 +489,7 @@ namespace atframe {
             msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
                                                                      ::atframe::gateway::detail::alloc_seq()));
             ::atframe::gw::inner::v1::cs_body_handshakeBuilder handshake_body(builder);
-
-
-            handshake_body.add_session_id(sess_id);
-            handshake_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_START_RSP);
-
-            if (0 != sess_id) {
-                // TODO use the global switch type
-                handshake_body.add_switch_type(::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT);
-                // TODO use the global crypt type
-                // setup_crypt
-                handshake_body.add_crypt_type(static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_info_.type));
-                handshake_body.add_crypt_bits(crypt_info_.keybits);
-                handshake_body.add_crypt_param(builder.CreateVector(crypt_info_.secret.data(), crypt_info_.secret.size()));
-
-                // if switch type is RSA
-                ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
-                rsa_cert.add_rsa_sign(::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1);
-                rsa_cert.add_hash_type(::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5);
-                rsa_cert.add_pubkey(builder.CreateVector(NULL, 0));
-                handshake_body.add_rsa_cert(rsa_cert.Finish());
-            }
+            pack_handshake_start_rsp(sess_id, handshake_body, detail::crypt_global_configure_t::current());
 
             msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
             msg.add_body(handshake_body.Finish());
@@ -566,14 +544,42 @@ namespace atframe {
             return 0;
         }
 
-        int libatgw_proto_inner_v1::set_handshake_done(int status) {
-            if (check_flag(ext_flag_t::EN_PEFT_HANDSHAKE_DONE)) {
-                return error_code_t::EN_ECT_HANDSHAKE;
-            }
-            set_flag(ext_flag_t::EN_PEFT_HANDSHAKE_DONE, true);
+        int libatgw_proto_inner_v1::pack_handshake_start_rsp(uint64_t sess_id,
+                                                             ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body,
+                                                             std::shared_ptr<detail::crypt_global_configure_t> &shared_conf) {
 
-            if (NULL != callbacks_ && callbacks_->on_handshake_done_fn) {
-                callbacks_->on_handshake_done_fn(this, status);
+            handshake_body.add_session_id(sess_id);
+            handshake_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_START_RSP);
+
+            if (0 != sess_id) {
+                if (crypt_info_->shared_conf != shared_conf) {
+                    crypt_info_->shared_conf = shared_conf;
+                }
+                if (shared_conf) {
+                    // use the global switch type
+                    handshake_body.add_switch_type(
+                        static_cast< ::atframe::gw::inner::v1::switch_secret_t>(shared_conf->conf_.switch_secret_type));
+                    // use the global crypt type
+                    // setup_crypt
+                    handshake_body.add_crypt_type(static_cast< ::atframe::gw::inner::v1::crypt_type_t>(shared_conf->conf_.type));
+                    handshake_body.add_crypt_bits(shared_conf->conf_.keybits);
+
+                    // send send first parameter
+                    handshake_body.add_crypt_param(builder.CreateVector(crypt_info_.secret.data(), crypt_info_.secret.size()));
+                } else {
+                    // empty data
+                    handshake_body.add_switch_type(::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT);
+                    handshake_body.add_crypt_type(::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE);
+                    handshake_body.add_crypt_bits(0);
+                    handshake_body.add_crypt_param(builder.CreateVector(NULL, 0));
+                }
+
+                // TODO if switch type is RSA
+                // ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
+                // rsa_cert.add_rsa_sign(::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1);
+                // rsa_cert.add_hash_type(::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5);
+                // rsa_cert.add_pubkey(builder.CreateVector(NULL, 0));
+                // handshake_body.add_rsa_cert(rsa_cert.Finish());
             }
 
             return 0;
@@ -863,8 +869,7 @@ namespace atframe {
         void libatgw_proto_inner_v1::setup_crypt(int type, const void *key, size_t keylen, uint32_t keybits) {
             close_crypt();
 
-
-            switch (crypt_info_.type) {
+            switch (type) {
             case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
                 if (keylen < sizeof(crypt_info_.xtea_key.util_xxtea_ctx)) {
                     ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED, "xxtea key length is too small");
@@ -964,6 +969,7 @@ namespace atframe {
 
             // if success, copy crypt information
             session_id_ = other_proto->session_id_;
+            crypt_info_->shared_conf = other_proto->crypt_info_->shared_conf;
             setup_crypt(other_proto->crypt_info_.type, other_proto->crypt_info_.secret.data(), other_proto->crypt_info_.secret.size(),
                         other_proto->crypt_info_.keybits);
             return true;

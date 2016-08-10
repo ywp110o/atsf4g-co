@@ -116,5 +116,30 @@ namespace atframe {
 
         void proto_base::set_recv_buffer_limit(size_t, size_t) {}
         void proto_base::set_send_buffer_limit(size_t, size_t) {}
+
+        int proto_base::handshake_done(int status) {
+            bool has_handshake_done = check_flag(flag_t::EN_PFT_HANDSHAKE_DONE);
+            if (has_handshake_done && !check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE)) {
+                return error_code_t::EN_ECT_HANDSHAKE;
+            }
+            set_flag(flag_t::EN_PFT_HANDSHAKE_DONE, true);
+            set_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE, false);
+
+            // on_handshake_done_fn only active when handshake done
+            if (!has_handshake_done && NULL != callbacks_ && callbacks_->on_handshake_done_fn) {
+                callbacks_->on_handshake_done_fn(this, status);
+            }
+
+            return 0;
+        }
+
+        int proto_base::handshake_update() {
+            if (check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE)) {
+                return error_code_t::EN_ECT_HANDSHAKE;
+            }
+
+            set_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE, true);
+            return 0;
+        }
     }
 }

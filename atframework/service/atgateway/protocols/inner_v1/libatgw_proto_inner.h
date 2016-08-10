@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "std/smart_ptr.h"
+
 #include "algorithm/xxtea.h"
 #include "detail/buffer.h"
 
@@ -39,6 +41,10 @@ extern "C" {
 
 namespace atframe {
     namespace gateway {
+        namespace detail {
+            struct crypt_global_configure_t;
+        }
+
         class libatgw_proto_inner_v1 : public proto_base {
         public:
             /**
@@ -75,6 +81,7 @@ namespace atframe {
             };
 
             struct crypt_session_t {
+                std::shared_ptr<detail::crypt_global_configure_t> shared_conf;
                 int type;           /** crypt type. XXTEA, AES and etc. **/
                 std::string secret; /** crypt secret. **/
                 uint32_t keybits;   /** key length in bits. **/
@@ -92,12 +99,6 @@ namespace atframe {
             typedef struct ping_data_t {
                 time_t last_ping;
                 time_t last_delta;
-            };
-
-            struct ext_flag_t {
-                enum type {
-                    EN_PEFT_HANDSHAKE_DONE = 0x0100,
-                };
             };
 
         public:
@@ -120,7 +121,9 @@ namespace atframe {
             int dispatch_handshake_rsa_secret_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
             int dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
 
-            int set_handshake_done(int status);
+            int pack_handshake_start_rsp(uint64_t sess_id, ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body,
+                                         std::shared_ptr<detail::crypt_global_configure_t> &shared_conf);
+
             int try_write();
             int write_msg(flatbuffers::FlatBufferBuilder &builder);
             virtual int write(const void *buffer, size_t len);
