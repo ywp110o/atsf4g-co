@@ -36,6 +36,7 @@ namespace atframe {
                 EN_ECT_INVALID_SIZE = -1022,
                 EN_ECT_NO_DATA = -1023,
                 EN_ECT_MALLOC = -1024,
+                EN_ECT_CRYPT_TEST_FAILED = -1100,
                 EN_ECT_CRYPT_READ_DHPARAM_FILE = -1101,
                 EN_ECT_CRYPT_INIT_DHPARAM = -1102,
                 EN_ECT_CRYPT_READ_RSA_PUBKEY = -1103,
@@ -147,7 +148,7 @@ namespace atframe {
              * OPTIONAL
              * PROTOCOL: any custom protocol should call this when any error happen.
              */
-            typedef std::function<int(proto_base *, const char *, int, int errcode, const char *)> on_error_fn_t;
+            typedef std::function<int(proto_base *, const char *, int, int, const char *)> on_error_fn_t;
 
             struct tls_buffer_t {
                 enum type {

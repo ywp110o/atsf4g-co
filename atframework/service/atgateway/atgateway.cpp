@@ -35,16 +35,20 @@ public:
             gw_mgr_.set_on_create_session(std::bind(&gateway_module::proto_inner_callback_on_create_session, this, std::placeholders::_1));
 
             // init callbacks
-            proto_callbacks_.write_fn = std::bind(this, &gateway_module::proto_inner_callback_on_write, std::placeholders::_1,
+            proto_callbacks_.write_fn = std::bind(&gateway_module::proto_inner_callback_on_write, this, std::placeholders::_1,
                                                   std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
-            proto_callbacks_.message_fn = std::bind(this, &gateway_module::proto_inner_callback_on_message, std::placeholders::_1,
+            proto_callbacks_.message_fn = std::bind(&gateway_module::proto_inner_callback_on_message, this, std::placeholders::_1,
                                                     std::placeholders::_2, std::placeholders::_3);
             proto_callbacks_.new_session_fn =
-                std::bind(this, &gateway_module::proto_inner_callback_on_new_session, std::placeholders::_1, std::placeholders::_2);
+                std::bind(&gateway_module::proto_inner_callback_on_new_session, this, std::placeholders::_1, std::placeholders::_2);
             proto_callbacks_.reconnect_fn =
-                std::bind(this, &gateway_module::proto_inner_callback_on_reconnect, std::placeholders::_1, std::placeholders::_2);
+                std::bind(&gateway_module::proto_inner_callback_on_reconnect, this, std::placeholders::_1, std::placeholders::_2);
             proto_callbacks_.close_fn =
-                std::bind(this, &gateway_module::proto_inner_callback_on_close, std::placeholders::_1, std::placeholders::_2);
+                std::bind(&gateway_module::proto_inner_callback_on_close, this, std::placeholders::_1, std::placeholders::_2);
+
+            proto_callbacks_.on_error_fn = std::bind(&gateway_module::proto_inner_callback_on_error, this, std::placeholders::_1,
+                                                     std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+
 
         } else {
             fprintf(stderr, "listen type %s not supported\n", gw_mgr_.get_conf().listen.type.c_str());
@@ -389,6 +393,18 @@ private:
             if (::atframe::gateway::close_reason_t::EN_CRT_LOGOUT != reason) {
                 sess->close(reason);
             }
+        }
+        return 0;
+    }
+
+    int proto_inner_callback_on_error(::atframe::gateway::proto_base *, const char *filename, int line, int errcode, const char *errmsg) {
+        if (::util::log::log_wrapper::check(::util::log::log_wrapper::categorize_t::DEFAULT,
+                                            ::util::log::log_wrapper::level_t::LOG_LW_ERROR)) {
+
+            WDTLOGGETCAT(::util::log::log_wrapper::categorize_t::DEFAULT)
+                ->log(::util::log::log_wrapper::caller_info_t(::util::log::log_wrapper::level_t::LOG_LW_ERROR, "Error", filename, line,
+                                                              "anonymous"),
+                      "error code %d, msg: %s", errcode, errmsg);
         }
         return 0;
     }

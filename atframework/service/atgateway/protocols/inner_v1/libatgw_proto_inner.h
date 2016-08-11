@@ -121,8 +121,9 @@ namespace atframe {
             int dispatch_handshake_rsa_secret_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
             int dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
 
-            int pack_handshake_start_rsp(uint64_t sess_id, ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body,
-                                         std::shared_ptr<detail::crypt_global_configure_t> &shared_conf);
+            int pack_handshake_start_rsp(uint64_t sess_id, ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body);
+            int pack_handshake_dh_pubkey_req(const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
+                                             ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body);
 
             int try_write();
             int write_msg(flatbuffers::FlatBufferBuilder &builder);
@@ -135,6 +136,9 @@ namespace atframe {
             void setup_crypt(int type, const void *key, size_t keylen, uint32_t keybits);
             void close_crypt();
 
+            int setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf);
+            void close_handshake();
+
             virtual bool check_reconnect(proto_base *other);
 
             virtual void set_recv_buffer_limit(size_t max_size, size_t max_number);
@@ -146,7 +150,7 @@ namespace atframe {
             int send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len);
             int send_ping(time_t tp);
             int send_pong(time_t tp);
-            int send_key_syn(const void *secret, size_t len);
+            int send_key_syn();
             int send_key_ack(const void *secret, size_t len);
             int send_kickoff(int reason);
 
@@ -184,6 +188,27 @@ namespace atframe {
 
             // ping data
             ping_data_t ping_;
+
+            // used for handshake
+            struct handshake_t {
+                int switch_secret_type;
+                bool has_data;
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                struct dh_t {
+                    DH *openssl_dh_ptr_;
+                };
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                struct dh_t {
+                    mbedtls_dhm_context mbedtls_dh_ctx_;
+                    mbedtls_ctr_drbg_context mbedtls_ctr_drbg_;
+                    mbedtls_entropy_context mbedtls_entropy_;
+                };
+#endif
+                union {
+                    dh_t dh;
+                };
+            };
+            handshake_t handshake_;
         };
     }
 }
