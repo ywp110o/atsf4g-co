@@ -87,13 +87,19 @@ namespace atframe {
                 uint32_t keybits;   /** key length in bits. **/
 
                 std::string param; /** cache data used for generate key, dhparam if using DH algorithm. **/
-                std::string next_secret;
+
+                crypt_session_t();
+                ~crypt_session_t();
+
+                int setup(int type, uint32_t keybits);
+                void close();
 
                 union {
                     crypt_session_aes_t aes_key;
                     crypt_session_xtea_t xtea_key;
                 };
             };
+            typedef std::shared_ptr<crypt_session_t> crypt_session_ptr_t;
 
             // ping/pong
             typedef struct ping_data_t {
@@ -134,10 +140,9 @@ namespace atframe {
             int close(int reason, bool is_send_kickoff);
 
             void setup_crypt(int type, const void *key, size_t keylen, uint32_t keybits);
-            void close_crypt();
 
             int setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf);
-            void close_handshake();
+            void close_handshake(int status);
 
             virtual bool check_reconnect(proto_base *other);
 
@@ -151,8 +156,8 @@ namespace atframe {
             int send_ping(time_t tp);
             int send_pong(time_t tp);
             int send_key_syn();
-            int send_key_ack(const void *secret, size_t len);
             int send_kickoff(int reason);
+            int send_verify(const void *buf, size_t sz);
 
             const ping_data_t &get_last_ping() const { return ping_; }
 
@@ -160,8 +165,8 @@ namespace atframe {
             int encode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
             int decode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
 
-            int encrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz);
-            int decrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz);
+            int encrypt_data(crypt_session_t &crypt_info, const void *in, size_t insz, const void *&out, size_t &outsz);
+            int decrypt_data(crypt_session_t &crypt_info, const void *in, size_t insz, const void *&out, size_t &outsz);
 
         public:
             static int global_reload(crypt_conf_t &crypt_conf);
@@ -184,7 +189,9 @@ namespace atframe {
             int close_reason_;
 
             // crypt option
-            crypt_session_t crypt_info_;
+            crypt_session_ptr_t crypt_read_;
+            crypt_session_ptr_t crypt_write_;
+            crypt_session_ptr_t crypt_handshake_;
 
             // ping data
             ping_data_t ping_;

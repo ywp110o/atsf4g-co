@@ -83,15 +83,15 @@ table cs_body_rsa_cert {
 
 ///
 /// crypt_param is used for different purpose depends on step and switch_type, that's
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : DH parameter
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : DH parameter
-///     step=EN_HST_DH_PUBKEY_REQ, switch_type=EN_SST_DH : DH public key
-///     step=EN_HST_DH_PUBKEY_RSP, switch_type=EN_SST_DH : nothing
+///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : nothing
+///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : DH public key of server
+///     step=EN_HST_DH_PUBKEY_REQ, switch_type=EN_SST_DH : DH public key of client
+///     step=EN_HST_DH_PUBKEY_RSP, switch_type=EN_SST_DH : verify data prefix
 ///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT: secret
 ///     step=EN_HST_START_RSP, switch_type=EN_SST_RSA: salt
 ///     step=EN_HST_RSA_SECRET_REQ, switch_type=EN_SST_RSA: encrypted secret
 ///     step=EN_HST_RSA_SECRET_RSP, switch_type=EN_SST_RSA: nothing
-///     step=EN_HST_VERIFY, switch_type=ANY : any message just for test
+///     step=EN_HST_VERIFY, switch_type=ANY : verify data prefix + suffix
 table cs_body_handshake {
     session_id: ulong (id: 0);
     step: handshake_step_t (id: 1);

@@ -75,7 +75,11 @@ namespace atframe {
         }
 
         proto_base::proto_base() : flags_(0), write_header_offset_(0), callbacks_(NULL), private_data_(NULL) {}
-        proto_base::~proto_base(){};
+        proto_base::~proto_base() {
+            if (check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE) || !check_flag(flag_t::EN_PFT_HANDSHAKE_DONE)) {
+                handshake_done(error_code_t::EN_ECT_HANDSHAKE);
+            }
+        };
 
         bool proto_base::check_flag(flag_t::type t) const { return 0 != (flags_ & t); }
 
