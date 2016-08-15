@@ -23,6 +23,17 @@ if (MINGW)
     list(APPEND EXTENTION_LINK_LIB stdc++)
 endif()
 
+if (OPENSSL_FOUND)
+    include_directories(${OPENSSL_INCLUDE_DIR})
+    list(APPEND EXTENTION_LINK_LIB ${OPENSSL_CRYPTO_LIBRARY})
+elseif (LIBRESSL_FOUND)
+    include_directories(${LIBRESSL_INCLUDE_DIR})
+    list(APPEND EXTENTION_LINK_LIB ${LIBRESSL_CRYPTO_LIBRARY})
+elseif (MBEDTLS_FOUND)
+    include_directories(${MbedTLS_INCLUDE_DIRS})
+    list(APPEND EXTENTION_LINK_LIB ${MbedTLS_CRYPTO_LIBRARIES})
+endif()
+
 add_executable(${ATSF4G_APP_NAME} ${ATSF4G_APP_SRC_LIST} ${PROJECT_3RD_PARTY_SRC_LIST})
 target_link_libraries("${ATSF4G_APP_NAME}"
     ${PROJECT_LIB_LINK}

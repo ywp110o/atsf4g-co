@@ -1,5 +1,7 @@
+#include "algorithm/murmur_hash.h"
 #include "lock/lock_holder.h"
 #include "lock/spin_lock.h"
+
 
 #include "libatgw_proto_inner.h"
 
@@ -1669,6 +1671,16 @@ namespace atframe {
             return ret;
         }
 
+        void libatgw_proto_inner_v1::set_recv_buffer_limit(size_t max_size, size_t max_number) {
+            read_buffers_.set_mode(max_size, max_number);
+        }
+
+        void libatgw_proto_inner_v1::set_send_buffer_limit(size_t max_size, size_t max_number) {
+            write_buffers_.set_mode(max_size, max_number);
+        }
+
+        int libatgw_proto_inner_v1::handshake_update() { return send_key_syn(); }
+
         int libatgw_proto_inner_v1::start_session() {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
@@ -1680,6 +1692,12 @@ namespace atframe {
 
             if (0 != session_id_) {
                 return error_code_t::EN_ECT_SESSION_ALREADY_EXIST;
+            }
+
+            std::shared_ptr<crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
+            int ret = setup_handshake(global_cfg);
+            if (ret < 0) {
+                return ret;
             }
 
             flatbuffers::FlatBufferBuilder builder;
@@ -1718,8 +1736,14 @@ namespace atframe {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
 
-            if (0 != session_id_) {
-                return error_code_t::EN_ECT_SESSION_ALREADY_EXIST;
+            if (0 == session_id_) {
+                return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+            }
+
+            std::shared_ptr<crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
+            int ret = setup_handshake(crypt_handshake_->shared_conf);
+            if (ret < 0) {
+                return ret;
             }
 
             // encrypt secrets
@@ -1851,16 +1875,38 @@ namespace atframe {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
 
+            // if handshake is running, do not start handshake again.
+            if (handshake_.has_data) {
+                return 0;
+            }
+
             // make a new crypt session for handshake
             crypt_handshake_ = std::make_shared<crypt_session_t>();
 
-            // TODO and then, just like start rsp
+            // and then, just like start rsp
             std::shared_ptr<crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
             int ret = setup_handshake(global_cfg);
             if (ret < 0) {
                 return ret;
             }
 
+            flatbuffers::FlatBufferBuilder builder;
+            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
+            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_SYN,
+                                                                     ::atframe::gateway::detail::alloc_seq()));
+            ::atframe::gw::inner::v1::cs_body_handshakeBuilder handshake_body(builder);
+
+            ret = pack_handshake_start_rsp(sess_id, handshake_body);
+            if (ret < 0) {
+                return ret;
+            }
+
+            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
+            msg.add_body(handshake_body.Finish());
+
+            msg.Finish();
+            builder.Finish();
+            ret = write_msg(builder);
             return ret;
         }
 

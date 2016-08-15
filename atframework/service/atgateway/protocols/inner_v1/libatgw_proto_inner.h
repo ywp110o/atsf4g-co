@@ -149,6 +149,8 @@ namespace atframe {
             virtual void set_recv_buffer_limit(size_t max_size, size_t max_number);
             virtual void set_send_buffer_limit(size_t max_size, size_t max_number);
 
+            virtual int handshake_update();
+
             int start_session();
             int reconnect_session(uint64_t sess_id, int type, const std::string &secret, uint32_r keybits);
 

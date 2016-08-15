@@ -15,3 +15,16 @@ include("${PROJECT_3RD_PARTY_ROOT_DIR}/libcurl/libcurl.cmake")
 
 # =========== 3rd_party - rapidjson ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/rapidjson/rapidjson.cmake")
+
+# =========== 3rd_party - openssl/libressl/mbedtls ===========
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/openssl/openssl.cmake")
+if (NOT OPENSSL_FOUND)
+    include("${PROJECT_3RD_PARTY_ROOT_DIR}/libressl/libressl.cmake")
+    if (NOT LIBRESSL_FOUND)
+        include("${PROJECT_3RD_PARTY_ROOT_DIR}/mbedtls/mbedtls.cmake")
+
+        if (NOT MBEDTLS_FOUND)
+            message(FATAL_ERROR "must at least have one of openssl,libressl or mbedtls.")
+        endif()
+    endif()
+endif()

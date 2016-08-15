@@ -1,18 +1,19 @@
 
-#include "config/compiler_features.h"
 #include "proto_impl.h"
+#include "std/thread.h"
 
-#ifndef ATBUS_MACRO_TLS_MERGE_BUFFER_LEN
+
+#ifndef ATBUS_MACRO_MSG_LIMIT
 #define ATBUS_MACRO_MSG_LIMIT 65536
 #endif
 
-#if defined(UTIL_CONFIG_THREAD_LOCAL)
+#if defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED
 namespace atframe {
     namespace gateway {
         namespace detail {
             static char *atgateway_get_msg_buffer(::atframe::gateway::proto_base::tls_buffer_t::type t) {
-                static UTIL_CONFIG_THREAD_LOCAL char ret[ ::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX]
-                                                        [ATBUS_MACRO_MSG_LIMIT + 2 * sizeof(size_t)]; // in case of padding
+                static THREAD_TLS char ret[ ::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX]
+                                          [ATBUS_MACRO_MSG_LIMIT + 2 * sizeof(size_t)]; // in case of padding
                 return ret[t];
             }
         }
