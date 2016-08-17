@@ -46,6 +46,9 @@
 /3rd_party/libcurl/pkg
 /3rd_party/libcurl/prebuilt
 
+## flatbuffers
+/3rd_party/flatbuffers/repo
+
 ## rapidjson
 
 ## atframework

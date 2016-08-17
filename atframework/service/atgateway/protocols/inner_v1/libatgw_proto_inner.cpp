@@ -91,7 +91,7 @@ namespace atframe {
                         // test
                         mbedtls_dhm_context test_dh_ctx;
                         mbedtls_dhm_init(&test_dh_ctx);
-                        if (0 != mbedtls_dhm_parse_dhm(&mbedtls_dh_ctx_, &mbedtls_dh_param_[0], pem_sz)) {
+                        if (0 != mbedtls_dhm_parse_dhm(&test_dh_ctx, reinterpret_cast<const unsigned char*>(mbedtls_dh_param_.data()), pem_sz)) {
                             ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         }
                         mbedtls_dhm_free(&test_dh_ctx);
@@ -844,8 +844,10 @@ namespace atframe {
                     break;
                 }
 
-                int res = mbedtls_dhm_read_public(&handshake_.dh.mbedtls_dh_ctx_, peer_body.crypt_param()->data(),
-                                                  peer_body.crypt_param()->size());
+                int res = mbedtls_dhm_read_public(&handshake_.dh.mbedtls_dh_ctx_, 
+                    reinterpret_cast<const unsigned char*>(peer_body.crypt_param()->data()),
+                    peer_body.crypt_param()->size());
+
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH read param failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -855,7 +857,8 @@ namespace atframe {
                 size_t psz = handshake_.dh.mbedtls_dh_ctx_.len;
                 // generate next_secret
                 crypt_handshake_->secret.resize(psz, 0);
-                res = mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, &crypt_handshake_->secret[0], psz, &psz,
+                res = mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, 
+                    reinterpret_cast<unsigned char*>(&crypt_handshake_->secret[0]), psz, &psz,
                                               mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH compute key failed");
@@ -1049,7 +1052,8 @@ namespace atframe {
                     size_t psz = mbedtls_mpi_size(&handshake_.dh.mbedtls_dh_ctx_.P);
                     size_t olen = 0;
                     crypt_handshake_->param.resize(psz, 0);
-                    int res = mbedtls_dhm_make_params(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz), &crypt_handshake_->param[0],
+                    int res = mbedtls_dhm_make_params(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz), 
+                        reinterpret_cast<unsigned char*>(&crypt_handshake_->param[0]),
                                                       &olen, mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
                     if (0 != res) {
                         ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH generate check public key failed");
@@ -1169,8 +1173,11 @@ namespace atframe {
                     break;
                 }
 
-                int res = mbedtls_dhm_read_params(&handshake_.dh.mbedtls_dh_ctx_, peer_body.crypt_param()->data(),
-                                                  peer_body.crypt_param()->size());
+				unsigned char* dh_params_beg = const_cast<unsigned char*>(
+					reinterpret_cast<const unsigned char*>(peer_body.crypt_param()->data())
+				);
+                int res = mbedtls_dhm_read_params(&handshake_.dh.mbedtls_dh_ctx_, &dh_params_beg,
+					dh_params_beg + peer_body.crypt_param()->size());
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH read param failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1179,7 +1186,8 @@ namespace atframe {
 
                 size_t psz = handshake_.dh.mbedtls_dh_ctx_.len;
                 crypt_handshake_->param.resize(psz, 0);
-                int res = mbedtls_dhm_make_public(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz), &crypt_handshake_->param[0], psz,
+                res = mbedtls_dhm_make_public(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz), 
+					reinterpret_cast<unsigned char*>(&crypt_handshake_->param[0]), psz,
                                                   mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH make public key failed");
@@ -1189,7 +1197,8 @@ namespace atframe {
 
                 // generate secret
                 crypt_handshake_->secret.resize(psz, 0);
-                res = mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, &crypt_handshake_->secret[0], psz, &psz,
+                res = mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, 
+					reinterpret_cast<unsigned char*>(&crypt_handshake_->secret[0]), psz, &psz,
                                               mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH compute key failed");
@@ -1274,7 +1283,8 @@ namespace atframe {
                         break;
                     }
 
-                    res = mbedtls_dhm_parse_dhm(&handshake_.dh.mbedtls_dh_ctx_, crypt_handshake_->shared_conf->mbedtls_dh_param_.data(),
+                    res = mbedtls_dhm_parse_dhm(&handshake_.dh.mbedtls_dh_ctx_, 
+                        reinterpret_cast<const unsigned char*>(crypt_handshake_->shared_conf->mbedtls_dh_param_.data()),
                                                 crypt_handshake_->shared_conf->mbedtls_dh_param_.size());
                     if (0 != res) {
                         ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls parse dhm failed");
@@ -1287,14 +1297,6 @@ namespace atframe {
                     mbedtls_ctr_drbg_free(&handshake_.dh.mbedtls_ctr_drbg_);
                     mbedtls_entropy_free(&handshake_.dh.mbedtls_entropy_);
                     mbedtls_dhm_free(&handshake_.dh.mbedtls_dh_ctx_);
-                }
-
-                if (NULL != pem) {
-                    fclose(pem);
-                }
-
-                if (NULL != pem_buf) {
-                    free(pem_buf);
                 }
 #endif
                 break;
