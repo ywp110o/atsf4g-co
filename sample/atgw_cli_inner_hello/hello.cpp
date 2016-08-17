@@ -1,11 +1,13 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "uv.h"
+
 #include <config/atframe_services_build_feature.h>
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        fprint(stderr, "usage: %0 <ip> <port> <dhparam>", argv[0]);
+        fprintf(stderr, "usage: %s <ip> <port> <dhparam>", argv[0]);
         return -1;
     }
 

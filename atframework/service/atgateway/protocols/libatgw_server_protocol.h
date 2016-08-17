@@ -1,5 +1,5 @@
-#ifndef LIBATBUS_PROTOCOL_DESC_H_
-#define LIBATBUS_PROTOCOL_DESC_H_
+#ifndef _ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_SVR_PROTO_H_
+#define _ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_SVR_PROTO_H_
 
 #pragma once
 
@@ -46,12 +46,12 @@ namespace atframe {
             std::string client_ip; // ID: 0
             int32_t client_port;   // ID: 1
 
-            session() : client_port(0) {}
+            ss_body_session() : client_port(0) {}
 
             MSGPACK_DEFINE(client_ip, client_port);
 
             template <typename CharT, typename Traits>
-            friend std::basic_ostream<CharT, Traits> &operator<<(std::basic_ostream<CharT, Traits> &os, const session &mbc) {
+            friend std::basic_ostream<CharT, Traits> &operator<<(std::basic_ostream<CharT, Traits> &os, const ss_body_session &mbc) {
                 os << "{" << std::endl
                    << "      client_ip: " << mbc.client_ip << std::endl
                    << "      client_port: " << mbc.client_port << std::endl;
@@ -149,7 +149,7 @@ namespace atframe {
             }
 
             template <typename CharT, typename Traits>
-            friend std::basic_ostream<CharT, Traits> &operator<<(std::basic_ostream<CharT, Traits> &os, const msg_body &mb) {
+            friend std::basic_ostream<CharT, Traits> &operator<<(std::basic_ostream<CharT, Traits> &os, const ss_msg_body &mb) {
                 os << "{" << std::endl;
 
                 if (NULL != mb.post) {
@@ -166,8 +166,8 @@ namespace atframe {
             }
 
         private:
-            ss_msg_body(const msg_body &);
-            ss_msg_body &operator=(const msg_body &);
+            ss_msg_body(const ss_msg_body &);
+            ss_msg_body &operator=(const ss_msg_body &);
         };
 
         struct ss_msg_head {
@@ -175,13 +175,13 @@ namespace atframe {
             uint64_t session_id;                // ID: 1
             int error_code;                     // ID: 2
 
-            msg_head() : cmd(ATFRAME_GW_CMD_INVALID), session_id(0), error_code(0) {}
+            ss_msg_head() : cmd(ATFRAME_GW_CMD_INVALID), session_id(0), error_code(0) {}
 
             MSGPACK_DEFINE(cmd, session_id, error_code);
 
 
             template <typename CharT, typename Traits>
-            friend std::basic_ostream<CharT, Traits> &operator<<(std::basic_ostream<CharT, Traits> &os, const msg_head &mh) {
+            friend std::basic_ostream<CharT, Traits> &operator<<(std::basic_ostream<CharT, Traits> &os, const ss_msg_head &mh) {
                 os << "{" << std::endl << "    cmd: " << mh.cmd << std::endl << "    session_id: " << mh.session_id << std::endl << "  }";
 
                 return os;
@@ -198,7 +198,7 @@ namespace atframe {
             }
 
             template <typename CharT, typename Traits>
-            friend std::basic_ostream<CharT, Traits> &operator<<(std::basic_ostream<CharT, Traits> &os, const msg &m) {
+            friend std::basic_ostream<CharT, Traits> &operator<<(std::basic_ostream<CharT, Traits> &os, const ss_msg &m) {
                 os << "{" << std::endl << "  head: " << m.head << std::endl << "  body:" << m.body << std::endl << "}";
 
                 return os;
@@ -244,7 +244,7 @@ namespace msgpack {
             };
 
             template <>
-            struct convert<atframe::gw::msg> {
+            struct convert<atframe::gw::ss_msg> {
                 msgpack::object const &operator()(msgpack::object const &o, atframe::gw::ss_msg &v) const {
                     if (o.type != msgpack::type::MAP) throw msgpack::type_error();
                     msgpack::object body_obj;

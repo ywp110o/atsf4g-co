@@ -4,14 +4,24 @@ EchoWithColor(COLOR GREEN "-- Configure ${ATSF4G_APP_NAME} on ${CMAKE_CURRENT_LI
 
 # ============ atgateway ============
 
-file(GLOB ATSF4G_APP_SRC_LIST RELATIVE ${CMAKE_CURRENT_LIST_DIR}
-    ${CMAKE_CURRENT_LIST_DIR}/*.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/*.cc
-    ${CMAKE_CURRENT_LIST_DIR}/*.c
-    ${CMAKE_CURRENT_LIST_DIR}/*.cxx
-    ${CMAKE_CURRENT_LIST_DIR}/*.h
-    ${CMAKE_CURRENT_LIST_DIR}/*.hpp
+file(GLOB_RECURSE ATSF4G_APP_SRC_LIST
+    *.cpp
+    *.cc
+    *.c
+    *.cxx
+    *.h
+    *.hpp
 )
+source_group_by_dir(ATSF4G_APP_SRC_LIST)
+
+# protocol hack
+if (OPENSSL_FOUND)
+    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL=1)
+elseif(LIBRESSL_FOUND)
+    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL=1)
+elseif(MBEDTLS_FOUND)
+    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS=1)
+endif()
 
 set(EXECUTABLE_OUTPUT_PATH "${PROJECT_INSTALL_BAS_DIR}/atframe/${ATSF4G_APP_NAME}/bin")
 

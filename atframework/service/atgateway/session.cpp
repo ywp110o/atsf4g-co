@@ -1,5 +1,15 @@
+#include <sstream>
+
+#include "uv.h"
+
+#include <log/log_wrapper.h>
+#include <common/file_system.h>
+
+#include "config/atframe_service_types.h"
+#include "core/timestamp_id_allocator.h"
 
 #include "session.h"
+#include "session_manager.h"
 
 namespace atframe {
     namespace gateway {
@@ -30,9 +40,10 @@ namespace atframe {
             ret->proto_.swap(proto);
 
             if (!ret->proto_) {
-                return error_code_t::EN_ECT_BAD_PROTOCOL;
+                return ptr_t();
             }
 
+            ret->proto_->set_private_data(ret.get());
             return ret;
         }
 
@@ -68,16 +79,16 @@ namespace atframe {
             uv_tcp_getpeername(&tcp_handle_, reinterpret_cast<struct sockaddr *>(&sock_addr), &name_len);
 
             char ip[64] = {0};
-            if (sock_addr.sa_family == AF_INET6) {
+            if (sock_addr.ss_family == AF_INET6) {
                 sockaddr_in6 *sock_addr_ipv6 = reinterpret_cast<struct sockaddr_in6 *>(&sock_addr);
-                uv_ip6_name(&sock_addr_ipv6, ip, sizeof(ip));
+                uv_ip6_name(sock_addr_ipv6, ip, sizeof(ip));
                 peer_ip_ = ip;
                 peer_port_ = static_cast<int32_t>(sock_addr_ipv6->sin6_port);
             } else {
-                sockaddr_in6 *sock_addr_ipv4 = reinterpret_cast<struct sockaddr_in *>(&sock_addr);
-                uv_ip4_name(&sock_addr_ipv4, ip, sizeof(ip));
+                sockaddr_in *sock_addr_ipv4 = reinterpret_cast<struct sockaddr_in *>(&sock_addr);
+                uv_ip4_name(sock_addr_ipv4, ip, sizeof(ip));
                 peer_ip_ = ip;
-                peer_port_ = static_cast<int32_t>(sock_addr_ipv6->sin_port);
+                peer_port_ = static_cast<int32_t>(sock_addr_ipv4->sin_port);
             }
 
             return 0;
@@ -118,12 +129,11 @@ namespace atframe {
             return 0;
         }
 
-        int session::init_new_session(::atbus::node::id_t router, std::unique_ptr<proto_base> &proto) {
+        int session::init_new_session(::atbus::node::bus_id_t router) {
             static ::atframe::component::timestamp_id_allocator<id_t> id_alloc;
             // alloc id
             id_ = id_alloc.allocate();
             router_ = router;
-            proto_.swap(proto);
 
             set_flag(flag_t::EN_FT_INITED, true);
             return 0;
@@ -135,10 +145,18 @@ namespace atframe {
             router_ = sess.router_;
             limit_ = sess.limit_;
             proto_.swap(sess.proto_);
+            if (proto_) {
+                proto_->set_private_data(this);
+            }
+
+            if (sess.proto_) {
+                sess.proto_->set_private_data(&sess);
+            }
+
             private_data_ = sess.private_data_;
 
             set_flag(flag_t::EN_FT_INITED, true);
-            set_flag(flag_t::EN_FT_REGISTERED, sess.get_flag(flag_t::EN_FT_REGISTERED));
+            set_flag(flag_t::EN_FT_REGISTERED, sess.check_flag(flag_t::EN_FT_REGISTERED));
             sess.set_flag(flag_t::EN_FT_RECONNECTED, true);
             return 0;
         }
@@ -217,9 +235,9 @@ namespace atframe {
             return 0;
         }
 
-        void session::close(int reason) {
+        int session::close(int reason) {
             if (check_flag(flag_t::EN_FT_CLOSING)) {
-                return;
+                return 0;
             }
 
             set_flag(flag_t::EN_FT_CLOSING, true);
@@ -228,7 +246,7 @@ namespace atframe {
                 send_remove_session();
             }
 
-            close_fd(reason);
+            return close_fd(reason);
         }
 
         int session::close_fd(int reason) {
@@ -284,7 +302,7 @@ namespace atframe {
                 return error_code_t::EN_ECT_INVALID_ROUTER;
             }
 
-            if (NULL == mgr_) {
+            if (NULL == owner_) {
                 WLOGERROR("sesseion %llx has lost manager and can not send ss message any more", id_);
                 return error_code_t::EN_ECT_LOST_MANAGER;
             }
@@ -293,11 +311,11 @@ namespace atframe {
 
             // send to server with type = ::atframe::component::service_type::EN_ATST_GATEWAY
             std::stringstream ss;
-            msgpack::pack(ss, m);
+            msgpack::pack(ss, msg);
             std::string packed_buffer;
             ss.str().swap(packed_buffer);
 
-            return mgr_->post_data(router_, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(),
+            return owner_->post_data(router_, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(),
                                    packed_buffer.size());
         }
 
@@ -307,7 +325,7 @@ namespace atframe {
         uv_stream_t *session::get_uv_stream() { return &stream_handle_; }
         const uv_stream_t *session::get_uv_stream() const { return &stream_handle_; }
 
-        void session::session_manager::on_evt_shutdown(uv_shutdown_t *req, int status) {
+        void session::on_evt_shutdown(uv_shutdown_t *req, int status) {
             // call close API
             session *self = reinterpret_cast<session *>(req->handle->data);
             assert(self);
@@ -315,7 +333,7 @@ namespace atframe {
             uv_close(&self->raw_handle_, on_evt_closed);
         }
 
-        void session::session_manager::on_evt_closed(uv_handle_t *handle) {
+        void session::on_evt_closed(uv_handle_t *handle) {
             session *self = reinterpret_cast<session *>(handle->data);
             assert(self);
 

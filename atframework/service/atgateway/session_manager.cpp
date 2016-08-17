@@ -1,6 +1,15 @@
-#include "session_manager.h"
 #include <new>
+#include <sstream>
 
+#include "uv.h"
+
+#include <log/log_wrapper.h>
+#include <common/string_oprs.h>
+#include <time/time_utility.h>
+
+#include "config/atframe_service_types.h"
+
+#include "session_manager.h"
 
 namespace atframe {
     namespace gateway {
@@ -55,7 +64,7 @@ namespace atframe {
         int session_manager::listen(const char *address) {
             // make_address
             ::atbus::channel::channel_address_t addr;
-            ::atbus::detail::make_address(address, addr);
+            ::atbus::channel::make_address(address, addr);
 
             listen_handle_ptr_t res;
             // libuv listen and setup callbacks
@@ -83,7 +92,7 @@ namespace atframe {
                         return error_code_t::EN_ECT_NETWORK;
                     }
 
-                    if (0 != uv_listen(res.get(), conf_.backlog, on_evt_accept_tcp)) {
+                    if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp)) {
                         WLOGERROR("listen to %s failed", address);
                         return error_code_t::EN_ECT_NETWORK;
                     }
@@ -97,7 +106,7 @@ namespace atframe {
                         return error_code_t::EN_ECT_NETWORK;
                     }
 
-                    if (0 != uv_listen(res.get(), conf_.backlog, on_evt_accept_tcp)) {
+                    if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp)) {
                         WLOGERROR("listen to %s failed", address);
                         return error_code_t::EN_ECT_NETWORK;
                     }
@@ -124,7 +133,7 @@ namespace atframe {
                     return error_code_t::EN_ECT_NETWORK;
                 }
 
-                if (0 != uv_listen(res.get(), conf_.backlog, on_evt_accept_pipe)) {
+                if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_pipe)) {
                     WLOGERROR("listen to %s failed", address);
                     return error_code_t::EN_ECT_NETWORK;
                 }
@@ -150,8 +159,8 @@ namespace atframe {
             actived_sessions_.clear();
 
             for (std::list<session_timeout_t>::iterator iter = first_idle_.begin(); iter != first_idle_.end(); ++iter) {
-                if (iter->second) {
-                    iter->second->close(close_reason_t::EN_CRT_SERVER_CLOSED);
+                if (iter->s) {
+                    iter->s->close(close_reason_t::EN_CRT_SERVER_CLOSED);
                 }
             }
             first_idle_.clear();
@@ -164,8 +173,8 @@ namespace atframe {
             reconnect_cache_.clear();
 
             for (std::list<session_timeout_t>::iterator iter = reconnect_timeout_.begin(); iter != reconnect_timeout_.end(); ++iter) {
-                if (iter->second) {
-                    iter->second->close(close_reason_t::EN_CRT_SERVER_CLOSED);
+                if (iter->s) {
+                    iter->s->close(close_reason_t::EN_CRT_SERVER_CLOSED);
                 }
             }
             reconnect_timeout_.clear();
@@ -236,12 +245,12 @@ namespace atframe {
             if (conf_.reconnect_timeout > 0 && allow_reconnect) {
                 reconnect_timeout_.push_back(session_timeout_t());
                 session_timeout_t &sess_timer = reconnect_timeout_.back();
-                sess_timer.s = sess->shared_from_this();
+                sess_timer.s = iter->second;
                 sess_timer.timeout = util::time::time_utility::get_now() + conf_.reconnect_timeout;
-                reconnect_cache_[sess->get_id()] = s;
+                reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
 
                 // just close fd
-                sess->close_fd(reason);
+                sess_timer.s->close_fd(reason);
             } else {
                 iter->second->close(reason);
             }
@@ -251,11 +260,11 @@ namespace atframe {
             return 0;
         }
 
-        int session_manager::post_data(bus_id_t tid, ::atframe::gw::ss_msg &msg) {
+        int session_manager::post_data(::atbus::node::bus_id_t tid, ::atframe::gw::ss_msg &msg) {
             return post_data(tid, ::atframe::component::service_type::EN_ATST_GATEWAY, msg);
         }
 
-        int session_manager::post_data(bus_id_t tid, int type, ::atframe::gw::ss_msg &msg) {
+        int session_manager::post_data(::atbus::node::bus_id_t tid, int type, ::atframe::gw::ss_msg &msg) {
             // send to server with type = ::atframe::component::service_type::EN_ATST_GATEWAY
             std::stringstream ss;
             msgpack::pack(ss, msg);
@@ -265,7 +274,7 @@ namespace atframe {
             return post_data(tid, type, packed_buffer.data(), packed_buffer.size());
         }
 
-        int session_manager::post_data(bus_id_t tid, int type, const void *buffer, size_t s) {
+        int session_manager::post_data(::atbus::node::bus_id_t tid, int type, const void *buffer, size_t s) {
             // send to process
             if (!app_node_) {
                 return error_code_t::EN_ECT_HANDLE_NOT_FOUND;
@@ -301,13 +310,14 @@ namespace atframe {
             return ret;
         }
 
-        int session_manager::set_session_router(session::id_t sess_id, ::atbus::node::id_t router) {
+        int session_manager::set_session_router(session::id_t sess_id, ::atbus::node::bus_id_t router) {
             session_map_t::iterator iter = actived_sessions_.find(sess_id);
             if (actived_sessions_.end() == iter) {
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
 
-            return iter->second->set_router(router);
+            iter->second->set_router(router);
+            return 0;
         }
 
         int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
@@ -339,8 +349,6 @@ namespace atframe {
 
             // init with reconnect
             int ret = new_sess.init_reconnect(*iter->second);
-            new_sess.get_protocol_handle()->set_private_data(&new_sess);
-            iter->second->get_protocol_handle()->set_private_data((*iter->second).get());
             return ret;
         }
 
@@ -368,9 +376,7 @@ namespace atframe {
                 }
             }
 
-            if (sess && NULL != sess->get_protocol_handle()) {
-                sess->get_protocol_handle()->set_private_data(sess.get());
-            } else {
+            if (!sess || NULL == sess->get_protocol_handle()) {
                 WLOGERROR("create proto fn is null or create proto object failed or create session failed");
                 listen_handle_ptr_t sp;
                 uv_tcp_t *sock = detail::session_manager_make_stream_ptr<uv_tcp_t>(sp);
@@ -404,8 +410,18 @@ namespace atframe {
                 return;
             }
 
-            if (on_create_session_fn_) {
-                on_create_session_fn_(sess, sp.get());
+            if (mgr->on_create_session_fn_) {
+                mgr->on_create_session_fn_(sess.get(), sess->get_uv_stream());
+            }
+
+            // first idle timeout
+            mgr->first_idle_.push_back(session_timeout_t());
+            session_timeout_t& sess_timeout = mgr->first_idle_.back();
+            sess_timeout.s = sess;
+            if (mgr->conf_.first_idle_timeout > 0) {
+                sess_timeout.timeout = util::time::time_utility::get_now() + mgr->conf_.first_idle_timeout;
+            } else {
+                sess_timeout.timeout = util::time::time_utility::get_now() + 1;
             }
         }
 
@@ -462,8 +478,18 @@ namespace atframe {
                 return;
             }
 
-            if (on_create_session_fn_) {
-                on_create_session_fn_(sess, sp.get());
+            if (mgr->on_create_session_fn_) {
+                mgr->on_create_session_fn_(sess.get(), sess->get_uv_stream());
+            }
+
+            // first idle timeout
+            mgr->first_idle_.push_back(session_timeout_t());
+            session_timeout_t& sess_timeout = mgr->first_idle_.back();
+            sess_timeout.s = sess;
+            if (mgr->conf_.first_idle_timeout > 0) {
+                sess_timeout.timeout = util::time::time_utility::get_now() + mgr->conf_.first_idle_timeout;
+            } else {
+                sess_timeout.timeout = util::time::time_utility::get_now() + 1;
             }
         }
 

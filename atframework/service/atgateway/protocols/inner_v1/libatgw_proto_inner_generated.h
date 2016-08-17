@@ -5,18 +5,23 @@
 
 #include "flatbuffers/flatbuffers.h"
 
-
 namespace atframe {
 namespace gw {
 namespace inner {
 namespace v1 {
 
 struct cs_msg_head;
+
 struct cs_body_post;
+
 struct cs_body_kickoff;
+
 struct cs_body_rsa_cert;
+
 struct cs_body_handshake;
+
 struct cs_body_ping;
+
 struct cs_msg;
 
 enum error_code_t {
@@ -180,8 +185,8 @@ struct cs_msg_headBuilder {
 };
 
 inline flatbuffers::Offset<cs_msg_head> Createcs_msg_head(flatbuffers::FlatBufferBuilder &_fbb,
-   cs_msg_type_t type = cs_msg_type_t_EN_MTT_UNKNOWN,
-   uint64_t sequence = 0) {
+    cs_msg_type_t type = cs_msg_type_t_EN_MTT_UNKNOWN,
+    uint64_t sequence = 0) {
   cs_msg_headBuilder builder_(_fbb);
   builder_.add_sequence(sequence);
   builder_.add_type(type);
@@ -219,12 +224,18 @@ struct cs_body_postBuilder {
 };
 
 inline flatbuffers::Offset<cs_body_post> Createcs_body_post(flatbuffers::FlatBufferBuilder &_fbb,
-   uint64_t length = 0,
-   flatbuffers::Offset<flatbuffers::Vector<int8_t>> data = 0) {
+    uint64_t length = 0,
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> data = 0) {
   cs_body_postBuilder builder_(_fbb);
   builder_.add_length(length);
   builder_.add_data(data);
   return builder_.Finish();
+}
+
+inline flatbuffers::Offset<cs_body_post> Createcs_body_postDirect(flatbuffers::FlatBufferBuilder &_fbb,
+    uint64_t length = 0,
+    const std::vector<int8_t> *data = nullptr) {
+  return Createcs_body_post(_fbb, length, data ? _fbb.CreateVector<int8_t>(*data) : 0);
 }
 
 struct cs_body_kickoff FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
@@ -252,7 +263,7 @@ struct cs_body_kickoffBuilder {
 };
 
 inline flatbuffers::Offset<cs_body_kickoff> Createcs_body_kickoff(flatbuffers::FlatBufferBuilder &_fbb,
-   int32_t reason = 0) {
+    int32_t reason = 0) {
   cs_body_kickoffBuilder builder_(_fbb);
   builder_.add_reason(reason);
   return builder_.Finish();
@@ -292,9 +303,9 @@ struct cs_body_rsa_certBuilder {
 };
 
 inline flatbuffers::Offset<cs_body_rsa_cert> Createcs_body_rsa_cert(flatbuffers::FlatBufferBuilder &_fbb,
-   rsa_sign_t rsa_sign = rsa_sign_t_EN_RST_PKCS1,
-   hash_id_t hash_type = hash_id_t_EN_HIT_MD5,
-   flatbuffers::Offset<flatbuffers::Vector<int8_t>> pubkey = 0) {
+    rsa_sign_t rsa_sign = rsa_sign_t_EN_RST_PKCS1,
+    hash_id_t hash_type = hash_id_t_EN_HIT_MD5,
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> pubkey = 0) {
   cs_body_rsa_certBuilder builder_(_fbb);
   builder_.add_pubkey(pubkey);
   builder_.add_hash_type(hash_type);
@@ -302,17 +313,24 @@ inline flatbuffers::Offset<cs_body_rsa_cert> Createcs_body_rsa_cert(flatbuffers:
   return builder_.Finish();
 }
 
+inline flatbuffers::Offset<cs_body_rsa_cert> Createcs_body_rsa_certDirect(flatbuffers::FlatBufferBuilder &_fbb,
+    rsa_sign_t rsa_sign = rsa_sign_t_EN_RST_PKCS1,
+    hash_id_t hash_type = hash_id_t_EN_HIT_MD5,
+    const std::vector<int8_t> *pubkey = nullptr) {
+  return Createcs_body_rsa_cert(_fbb, rsa_sign, hash_type, pubkey ? _fbb.CreateVector<int8_t>(*pubkey) : 0);
+}
+
 ///
 /// crypt_param is used for different purpose depends on step and switch_type, that's
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : DH parameter
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : DH parameter
-///     step=EN_HST_DH_PUBKEY_REQ, switch_type=EN_SST_DH : DH public key
-///     step=EN_HST_DH_PUBKEY_RSP, switch_type=EN_SST_DH : nothing
+///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : nothing
+///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : DH public key of server
+///     step=EN_HST_DH_PUBKEY_REQ, switch_type=EN_SST_DH : DH public key of client
+///     step=EN_HST_DH_PUBKEY_RSP, switch_type=EN_SST_DH : verify data prefix
 ///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT: secret
 ///     step=EN_HST_START_RSP, switch_type=EN_SST_RSA: salt
 ///     step=EN_HST_RSA_SECRET_REQ, switch_type=EN_SST_RSA: encrypted secret
 ///     step=EN_HST_RSA_SECRET_RSP, switch_type=EN_SST_RSA: nothing
-///     step=EN_HST_VERIFY, switch_type=ANY : any message just for test
+///     step=EN_HST_VERIFY, switch_type=ANY : verify data prefix + suffix
 struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   enum {
     VT_SESSION_ID = 4,
@@ -364,13 +382,13 @@ struct cs_body_handshakeBuilder {
 };
 
 inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshake(flatbuffers::FlatBufferBuilder &_fbb,
-   uint64_t session_id = 0,
-   handshake_step_t step = handshake_step_t_EN_HST_START_REQ,
-   switch_secret_t switch_type = switch_secret_t_EN_SST_DIRECT,
-   crypt_type_t crypt_type = crypt_type_t_EN_ET_NONE,
-   uint32_t crypt_bits = 0,
-   flatbuffers::Offset<flatbuffers::Vector<int8_t>> crypt_param = 0,
-   flatbuffers::Offset<cs_body_rsa_cert> rsa_cert = 0) {
+    uint64_t session_id = 0,
+    handshake_step_t step = handshake_step_t_EN_HST_START_REQ,
+    switch_secret_t switch_type = switch_secret_t_EN_SST_DIRECT,
+    crypt_type_t crypt_type = crypt_type_t_EN_ET_NONE,
+    uint32_t crypt_bits = 0,
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> crypt_param = 0,
+    flatbuffers::Offset<cs_body_rsa_cert> rsa_cert = 0) {
   cs_body_handshakeBuilder builder_(_fbb);
   builder_.add_session_id(session_id);
   builder_.add_rsa_cert(rsa_cert);
@@ -380,6 +398,17 @@ inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshake(flatbuffer
   builder_.add_switch_type(switch_type);
   builder_.add_step(step);
   return builder_.Finish();
+}
+
+inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshakeDirect(flatbuffers::FlatBufferBuilder &_fbb,
+    uint64_t session_id = 0,
+    handshake_step_t step = handshake_step_t_EN_HST_START_REQ,
+    switch_secret_t switch_type = switch_secret_t_EN_SST_DIRECT,
+    crypt_type_t crypt_type = crypt_type_t_EN_ET_NONE,
+    uint32_t crypt_bits = 0,
+    const std::vector<int8_t> *crypt_param = nullptr,
+    flatbuffers::Offset<cs_body_rsa_cert> rsa_cert = 0) {
+  return Createcs_body_handshake(_fbb, session_id, step, switch_type, crypt_type, crypt_bits, crypt_param ? _fbb.CreateVector<int8_t>(*crypt_param) : 0, rsa_cert);
 }
 
 struct cs_body_ping FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
@@ -408,7 +437,7 @@ struct cs_body_pingBuilder {
 };
 
 inline flatbuffers::Offset<cs_body_ping> Createcs_body_ping(flatbuffers::FlatBufferBuilder &_fbb,
-   int64_t timepoint = 0) {
+    int64_t timepoint = 0) {
   cs_body_pingBuilder builder_(_fbb);
   builder_.add_timepoint(timepoint);
   return builder_.Finish();
@@ -450,9 +479,9 @@ struct cs_msgBuilder {
 };
 
 inline flatbuffers::Offset<cs_msg> Createcs_msg(flatbuffers::FlatBufferBuilder &_fbb,
-   flatbuffers::Offset<cs_msg_head> head = 0,
-   cs_msg_body body_type = cs_msg_body_NONE,
-   flatbuffers::Offset<void> body = 0) {
+    flatbuffers::Offset<cs_msg_head> head = 0,
+    cs_msg_body body_type = cs_msg_body_NONE,
+    flatbuffers::Offset<void> body = 0) {
   cs_msgBuilder builder_(_fbb);
   builder_.add_body(body);
   builder_.add_head(head);
@@ -473,11 +502,11 @@ inline bool Verifycs_msg_body(flatbuffers::Verifier &verifier, const void *union
 
 inline const atframe::gw::inner::v1::cs_msg *Getcs_msg(const void *buf) { return flatbuffers::GetRoot<atframe::gw::inner::v1::cs_msg>(buf); }
 
-inline bool Verifycs_msgBuffer(flatbuffers::Verifier &verifier) { return verifier.VerifyBuffer<atframe::gw::inner::v1::cs_msg>(); }
-
 inline const char *cs_msgIdentifier() { return "ATGW"; }
 
 inline bool cs_msgBufferHasIdentifier(const void *buf) { return flatbuffers::BufferHasIdentifier(buf, cs_msgIdentifier()); }
+
+inline bool Verifycs_msgBuffer(flatbuffers::Verifier &verifier) { return verifier.VerifyBuffer<atframe::gw::inner::v1::cs_msg>(cs_msgIdentifier()); }
 
 inline const char *cs_msgExtension() { return "atgw"; }
 

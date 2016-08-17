@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "session.h"
 #include <list>
 #include <map>
 #include <std/functional.h>
@@ -16,6 +15,8 @@
 #include <map>
 #define ATFRAME_GATEWAY_AUTO_MAP(...) std::map<__VA_ARGS__>
 #endif
+
+#include "session.h"
 
 namespace atframe {
     namespace gateway {
@@ -45,15 +46,16 @@ namespace atframe {
                 client_limit_t limits;
                 lister_conf_t listen;
                 time_t reconnect_timeout;
+                time_t first_idle_timeout;
                 size_t send_buffer_size;
-                ::atbus::node::id_t default_router;
+                ::atbus::node::bus_id_t default_router;
 
                 crypt_conf_t crypt;
             };
 
             typedef ATFRAME_GATEWAY_AUTO_MAP(session::id_t, session::ptr_t) session_map_t;
             typedef std::function<std::unique_ptr< ::atframe::gateway::proto_base>()> create_proto_fn_t;
-            typedef std::function<void(session *, uv_stream_t *server)> on_create_session_fn_t;
+            typedef std::function<int(session *, uv_stream_t *)> on_create_session_fn_t;
 
         public:
             int init(::atbus::node *bus_node, create_proto_fn_t fn);
@@ -70,14 +72,14 @@ namespace atframe {
             inline void *get_private_data() const { return private_data_; }
             inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
 
-            int post_data(bus_id_t tid, ::atframe::gw::ss_msg &msg);
-            int post_data(bus_id_t tid, int type, ::atframe::gw::ss_msg &msg);
-            int post_data(bus_id_t tid, int type, const void *buffer, size_t s);
+            int post_data(::atbus::node::bus_id_t tid, ::atframe::gw::ss_msg &msg);
+            int post_data(::atbus::node::bus_id_t tid, int type, ::atframe::gw::ss_msg &msg);
+            int post_data(::atbus::node::bus_id_t tid, int type, const void *buffer, size_t s);
 
             int push_data(session::id_t sess_id, const void *buffer, size_t s);
             int broadcast_data(const void *buffer, size_t s);
 
-            int set_session_router(session::id_t sess_id, ::atbus::node::id_t router);
+            int set_session_router(session::id_t sess_id, ::atbus::node::bus_id_t router);
 
             inline conf_t &get_conf() { return conf_; }
             inline const conf_t &get_conf() const { return conf_; }
@@ -113,7 +115,7 @@ namespace atframe {
             session_map_t reconnect_cache_;
             std::list<session_timeout_t> reconnect_timeout_;
             void *private_data_;
-        }
+        };
     }
 }
 

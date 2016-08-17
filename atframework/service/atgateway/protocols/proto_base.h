@@ -173,7 +173,7 @@ namespace atframe {
             struct flag_guard_t {
                 int *flags_;
                 int v_;
-                flag_guard_t(int &f, bool v);
+                flag_guard_t(int &f, int v);
                 ~flag_guard_t();
 
                 flag_guard_t(const flag_guard_t &other);
@@ -192,9 +192,10 @@ namespace atframe {
 
         protected:
             proto_base();
-            virtual ~proto_base() = 0;
 
         public:
+            virtual ~proto_base() = 0;
+
             bool check_flag(flag_t::type t) const;
 
             void set_flag(flag_t::type t, bool v);
@@ -361,6 +362,6 @@ namespace atframe {
 }
 
 #define ATFRAME_GATEWAY_ON_ERROR(errcode, errmsg) \
-    if (NULL != callbacks_ && callbacks_->on_error_fn) callbacks_->on_error_fn(__FILE__, __LINE__, errcode, errmsg)
+    if (NULL != callbacks_ && callbacks_->on_error_fn) callbacks_->on_error_fn(this, __FILE__, __LINE__, errcode, errmsg)
 
 #endif

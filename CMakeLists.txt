@@ -43,9 +43,9 @@ include("${ATFRAMEWORK_BASE_DIR}/atframework.macro.cmake")
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/atframework")
 # add_project_recurse("${CMAKE_CURRENT_LIST_DIR}/src")
 
-# if (PROJECT_ENABLE_SAMPLE)
-#     add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/sample")
-# endif()
+if (PROJECT_ENABLE_SAMPLE)
+    add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/sample")
+endif()
 #
 # if (PROJECT_ENABLE_UNITTEST)
 #     include ("${ATFRAME_UTILS_ROOT}/test/test.utils-macro.cmake")

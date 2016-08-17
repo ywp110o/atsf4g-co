@@ -1,4 +1,4 @@
-#ifndef _ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_INNER_V1_H_
+﻿#ifndef _ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_INNER_V1_H_
 #define _ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_INNER_V1_H_
 
 #pragma once
@@ -34,6 +34,20 @@ extern "C" {
 #include "mbedtls/sha1.h"
 #endif
 }
+
+
+// MSVC hack
+#ifdef _MSC_VER
+#ifdef max
+#undef max
+#endif
+
+#ifdef min
+#undef min
+#endif
+#endif
+
+#include "libatgw_proto_inner_generated.h"
 
 #ifndef ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE
 #define ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE 3072
@@ -102,7 +116,7 @@ namespace atframe {
             typedef std::shared_ptr<crypt_session_t> crypt_session_ptr_t;
 
             // ping/pong
-            typedef struct ping_data_t {
+            struct ping_data_t {
                 time_t last_ping;
                 time_t last_delta;
             };
@@ -111,7 +125,7 @@ namespace atframe {
             libatgw_proto_inner_v1();
             virtual ~libatgw_proto_inner_v1();
 
-            virtual void alloc_recv_buffer(size_t suggested_size, char *&out_buf, size_t &out_len) = 0;
+            virtual void alloc_recv_buffer(size_t suggested_size, char *&out_buf, size_t &out_len);
             virtual void read(int ssz, const char *buff, size_t len, int &errcode);
 
             void dispatch_data(const char *buff, size_t len, int errcode);
@@ -127,8 +141,10 @@ namespace atframe {
             int dispatch_handshake_rsa_secret_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
             int dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
 
-            int pack_handshake_start_rsp(uint64_t sess_id, ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body);
-            int pack_handshake_dh_pubkey_req(const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
+            int pack_handshake_start_rsp(flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id,
+                                         ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body);
+            int pack_handshake_dh_pubkey_req(flatbuffers::FlatBufferBuilder &builder,
+                                             const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
                                              ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body);
 
             int try_write();
@@ -152,7 +168,7 @@ namespace atframe {
             virtual int handshake_update();
 
             int start_session();
-            int reconnect_session(uint64_t sess_id, int type, const std::string &secret, uint32_r keybits);
+            int reconnect_session(uint64_t sess_id, int type, const std::string &secret, uint32_t keybits);
 
             int send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len);
             int send_ping(time_t tp);

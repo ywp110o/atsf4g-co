@@ -1,5 +1,5 @@
 
-#include "proto_impl.h"
+#include "proto_base.h"
 #include "std/thread.h"
 
 
@@ -58,8 +58,8 @@ namespace atframe {
 
 namespace atframe {
     namespace gateway {
-        proto_base::flag_guard_t::flag_guard_t(int &f, bool v) : flags_(&f), v_(0) {
-            if (v == (f & v)) {
+        proto_base::flag_guard_t::flag_guard_t(int &f, int v) : flags_(&f), v_(0) {
+            if (0 == (f & v)) {
                 flags_ = NULL;
             } else {
                 v_ = (f | v) ^ f;
@@ -72,7 +72,7 @@ namespace atframe {
                 return;
             }
 
-            flags_ &= ~v_;
+            *flags_ &= ~v_;
         }
 
         proto_base::proto_base() : flags_(0), write_header_offset_(0), callbacks_(NULL), private_data_(NULL) {}
@@ -108,8 +108,8 @@ namespace atframe {
         }
 
         int proto_base::close(int reason) {
-            set_flag(flag_t::EN_FT_CLOSING, true);
-            set_flag(flag_t::EN_FT_CLOSED, true);
+            set_flag(flag_t::EN_PFT_CLOSING, true);
+            set_flag(flag_t::EN_PFT_CLOSED, true);
 
             if (NULL != callbacks_ && callbacks_->close_fn) {
                 return callbacks_->close_fn(this, reason);

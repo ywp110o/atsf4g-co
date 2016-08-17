@@ -16,6 +16,9 @@ include("${PROJECT_3RD_PARTY_ROOT_DIR}/libcurl/libcurl.cmake")
 # =========== 3rd_party - rapidjson ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/rapidjson/rapidjson.cmake")
 
+# =========== 3rd_party - flatbuffers ===========
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/flatbuffers/flatbuffers.cmake")
+
 # =========== 3rd_party - openssl/libressl/mbedtls ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/openssl/openssl.cmake")
 if (NOT OPENSSL_FOUND)

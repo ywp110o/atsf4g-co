@@ -28,9 +28,14 @@ list(APPEND SAMPLE_SRC_LIST ${ATFRAMEWORK_ATBUS_SRC_DIR}/detail/buffer.cpp)
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/std/thread.h
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/std/smart_ptr.h
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/std/functional.h
-# ${ATFRAMEWORK_ATBUS_INC_DIR}/detail/buffer.h
+# ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/design_pattern/noncopyable.h
+# ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/lock/atomic_int_type.h
+# ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/lock/lock_holder.h
+# ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/lock/spin_lock.h
+# ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/lock/seq_alloc.h
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/algorithm/xxtea.h
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/algorithm/murmur_hash.h
+# ${ATFRAMEWORK_ATBUS_INC_DIR}/detail/buffer.h
 # ${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols/proto_base.h
 
 # ${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols/proto_base.cpp
@@ -38,6 +43,15 @@ list(APPEND SAMPLE_SRC_LIST ${ATFRAMEWORK_ATBUS_SRC_DIR}/detail/buffer.cpp)
 # ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/xxtea.cpp
 # ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/murmur_hash.cpp
 # ${ATFRAMEWORK_ATBUS_SRC_DIR}/detail/buffer.cpp
+
+# protocol hack
+if (OPENSSL_FOUND)
+    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL=1)
+elseif(LIBRESSL_FOUND)
+    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL=1)
+elseif(MBEDTLS_FOUND)
+    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS=1)
+endif()
 
 if (OPENSSL_FOUND)
     include_directories(${OPENSSL_INCLUDE_DIR})

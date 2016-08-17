@@ -10,7 +10,9 @@
 
 #include <std/smart_ptr.h>
 
-#include "protocol/libatgw_server_protocol.h"
+#include "libatbus.h"
+#include "protocols/libatgw_server_protocol.h"
+#include "protocols/inner_v1/libatgw_proto_inner.h"
 
 namespace atframe {
     namespace gateway {
@@ -57,7 +59,7 @@ namespace atframe {
             int accept_tcp(uv_stream_t *server);
             int accept_pipe(uv_stream_t *server);
 
-            int init_new_session(::atbus::node::id_t router);
+            int init_new_session(::atbus::node::bus_id_t router);
 
             int init_reconnect(session &sess);
 
@@ -89,15 +91,16 @@ namespace atframe {
         public:
             inline void *get_private_data() const { return private_data_; }
             inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
-            inline ::atbus::node::id_t get_router() const { return router_; }
-            inline void set_router(::atbus::node::id_t id) { router_ = id; }
+            inline ::atbus::node::bus_id_t get_router() const { return router_; }
+            inline void set_router(::atbus::node::bus_id_t id) { router_ = id; }
 
             inline const std::string &get_peer_host() const { return peer_ip_; }
             inline int32_t get_peer_port() const { return peer_port_; }
+            inline session_manager * get_manager() const { return owner_; }
 
         private:
             id_t id_;
-            ::atbus::node::id_t router_;
+            ::atbus::node::bus_id_t router_;
             session_manager *owner_;
 
             limit_t limit_;
