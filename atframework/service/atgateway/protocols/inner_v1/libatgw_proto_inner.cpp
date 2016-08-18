@@ -22,6 +22,10 @@
 #endif
 #endif
 
+#ifndef UNUSED
+#define UNUSED(x) ((void)x)
+#endif
+
 namespace atframe {
     namespace gateway {
         namespace detail {
@@ -53,6 +57,7 @@ namespace atframe {
 
                         FILE *pem = NULL;
                         UTIL_FS_OPEN(pem_file_e, pem, conf_.dh_param.c_str(), "r");
+                        UNUSED(pem_file_e);
                         if (NULL == pem) {
                             ret = error_code_t::EN_ECT_CRYPT_READ_DHPARAM_FILE;
                             break;
@@ -91,7 +96,8 @@ namespace atframe {
                         // test
                         mbedtls_dhm_context test_dh_ctx;
                         mbedtls_dhm_init(&test_dh_ctx);
-                        if (0 != mbedtls_dhm_parse_dhm(&test_dh_ctx, reinterpret_cast<const unsigned char*>(mbedtls_dh_param_.data()), pem_sz)) {
+                        if (0 != mbedtls_dhm_parse_dhm(&test_dh_ctx, reinterpret_cast<const unsigned char *>(mbedtls_dh_param_.data()),
+                                                       pem_sz)) {
                             ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         }
                         mbedtls_dhm_free(&test_dh_ctx);
@@ -438,9 +444,9 @@ namespace atframe {
                 return;
             }
 
+            ::flatbuffers::Verifier cs_msg_verify(reinterpret_cast<const uint8_t *>(buffer), len);
             // verify
-            if (false ==
-                atframe::gw::inner::v1::Verifycs_msgBuffer(::flatbuffers::Verifier(reinterpret_cast<const uint8_t *>(buffer), len))) {
+            if (false == atframe::gw::inner::v1::Verifycs_msgBuffer(cs_msg_verify)) {
                 close(close_reason_t::EN_CRT_INVALID_DATA);
                 return;
             }
@@ -818,7 +824,7 @@ namespace atframe {
                 // ===============================================
                 // generate next_secret
                 BIGNUM *pubkey = BN_bin2bn(reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()),
-                    peer_body.crypt_param()->size(), NULL);
+                                           peer_body.crypt_param()->size(), NULL);
                 if (NULL == pubkey) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                     ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl DH decode public key failed");
@@ -844,9 +850,9 @@ namespace atframe {
                     break;
                 }
 
-                int res = mbedtls_dhm_read_public(&handshake_.dh.mbedtls_dh_ctx_, 
-                    reinterpret_cast<const unsigned char*>(peer_body.crypt_param()->data()),
-                    peer_body.crypt_param()->size());
+                int res = mbedtls_dhm_read_public(&handshake_.dh.mbedtls_dh_ctx_,
+                                                  reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()),
+                                                  peer_body.crypt_param()->size());
 
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH read param failed");
@@ -857,9 +863,9 @@ namespace atframe {
                 size_t psz = handshake_.dh.mbedtls_dh_ctx_.len;
                 // generate next_secret
                 crypt_handshake_->secret.resize(psz, 0);
-                res = mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, 
-                    reinterpret_cast<unsigned char*>(&crypt_handshake_->secret[0]), psz, &psz,
-                                              mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
+                res =
+                    mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]),
+                                            psz, &psz, mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH compute key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1052,9 +1058,9 @@ namespace atframe {
                     size_t psz = mbedtls_mpi_size(&handshake_.dh.mbedtls_dh_ctx_.P);
                     size_t olen = 0;
                     crypt_handshake_->param.resize(psz, 0);
-                    int res = mbedtls_dhm_make_params(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz), 
-                        reinterpret_cast<unsigned char*>(&crypt_handshake_->param[0]),
-                                                      &olen, mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
+                    int res = mbedtls_dhm_make_params(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz),
+                                                      reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), &olen,
+                                                      mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
                     if (0 != res) {
                         ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH generate check public key failed");
                         ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1148,7 +1154,7 @@ namespace atframe {
 
                 // generate next_secret
                 BIGNUM *pubkey = BN_bin2bn(reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()),
-                    peer_body.crypt_param()->size(), NULL);
+                                           peer_body.crypt_param()->size(), NULL);
                 if (NULL == pubkey) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                     ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl DH decode public key failed");
@@ -1173,11 +1179,10 @@ namespace atframe {
                     break;
                 }
 
-				unsigned char* dh_params_beg = const_cast<unsigned char*>(
-					reinterpret_cast<const unsigned char*>(peer_body.crypt_param()->data())
-				);
+                unsigned char *dh_params_beg =
+                    const_cast<unsigned char *>(reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()));
                 int res = mbedtls_dhm_read_params(&handshake_.dh.mbedtls_dh_ctx_, &dh_params_beg,
-					dh_params_beg + peer_body.crypt_param()->size());
+                                                  dh_params_beg + peer_body.crypt_param()->size());
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH read param failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1186,9 +1191,9 @@ namespace atframe {
 
                 size_t psz = handshake_.dh.mbedtls_dh_ctx_.len;
                 crypt_handshake_->param.resize(psz, 0);
-                res = mbedtls_dhm_make_public(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz), 
-					reinterpret_cast<unsigned char*>(&crypt_handshake_->param[0]), psz,
-                                                  mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
+                res = mbedtls_dhm_make_public(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz),
+                                              reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), psz, mbedtls_ctr_drbg_random,
+                                              &handshake_.dh.mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH make public key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1197,9 +1202,9 @@ namespace atframe {
 
                 // generate secret
                 crypt_handshake_->secret.resize(psz, 0);
-                res = mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, 
-					reinterpret_cast<unsigned char*>(&crypt_handshake_->secret[0]), psz, &psz,
-                                              mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
+                res =
+                    mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]),
+                                            psz, &psz, mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH compute key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1283,9 +1288,10 @@ namespace atframe {
                         break;
                     }
 
-                    res = mbedtls_dhm_parse_dhm(&handshake_.dh.mbedtls_dh_ctx_, 
-                        reinterpret_cast<const unsigned char*>(crypt_handshake_->shared_conf->mbedtls_dh_param_.data()),
-                                                crypt_handshake_->shared_conf->mbedtls_dh_param_.size());
+                    res = mbedtls_dhm_parse_dhm(
+                        &handshake_.dh.mbedtls_dh_ctx_,
+                        reinterpret_cast<const unsigned char *>(crypt_handshake_->shared_conf->mbedtls_dh_param_.data()),
+                        crypt_handshake_->shared_conf->mbedtls_dh_param_.size());
                     if (0 != res) {
                         ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls parse dhm failed");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
@@ -1385,7 +1391,7 @@ namespace atframe {
             }
 
             // first 32bits is hash code, and then 32bits length
-            const size_t msg_header_len = sizeof(uint32_t) + sizeof(uint32_t);
+            // const size_t msg_header_len = sizeof(uint32_t) + sizeof(uint32_t);
 
             // closing or closed, cancle writing
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
@@ -1424,8 +1430,6 @@ namespace atframe {
             }
 
             int ret = 0;
-            void *buffer = NULL;
-            size_t sz = 0;
             bool is_done = false;
 
             // if not in writing mode, try to merge and write data
@@ -1552,7 +1556,7 @@ namespace atframe {
             size_t nread, nwrite;
 
             // first 32bits is hash code, and then 32bits length
-            const size_t msg_header_len = sizeof(uint32_t) + sizeof(uint32_t);
+            // const size_t msg_header_len = sizeof(uint32_t) + sizeof(uint32_t);
 
             // popup the lost callback
             while (true) {

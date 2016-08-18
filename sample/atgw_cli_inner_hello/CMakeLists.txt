@@ -1,14 +1,10 @@
-﻿EchoWithColor(COLOR GREEN "-- Configure ${CMAKE_CURRENT_LIST_DIR}")
-
-# ============ sample - [...] ============
+﻿# ============ sample - [...] ============
 get_filename_component(SAMPLE_SRC_BIN_NAME ${CMAKE_CURRENT_LIST_DIR} NAME_WE)
+set(SAMPLE_SRC_BIN_NAME "sample_${SAMPLE_SRC_BIN_NAME}")
+EchoWithColor(COLOR GREEN "-- Configure ${SAMPLE_SRC_BIN_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR} SAMPLE_SRC_LIST)
 set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/sample")
-
-if (MINGW)
-    list(APPEND EXTENTION_LINK_LIB stdc++)
-endif()
 
 # special setting for sample
 add_compiler_define(ATBUS_MACRO_MSG_LIMIT=65536)
@@ -53,20 +49,13 @@ elseif(MBEDTLS_FOUND)
     add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS=1)
 endif()
 
-if (OPENSSL_FOUND)
-    include_directories(${OPENSSL_INCLUDE_DIR})
-    list(APPEND EXTENTION_LINK_LIB ${OPENSSL_CRYPTO_LIBRARY})
-elseif (LIBRESSL_FOUND)
-    include_directories(${LIBRESSL_INCLUDE_DIR})
-    list(APPEND EXTENTION_LINK_LIB ${LIBRESSL_CRYPTO_LIBRARY})
-elseif (MBEDTLS_FOUND)
-    include_directories(${MbedTLS_INCLUDE_DIRS})
-    list(APPEND EXTENTION_LINK_LIB ${MbedTLS_CRYPTO_LIBRARIES})
+if (MINGW)
+    list(APPEND EXTENTION_LINK_LIB stdc++)
 endif()
 
-add_executable("${SAMPLE_SRC_BIN_NAME}" ${SAMPLE_SRC_LIST})
-target_link_libraries("${SAMPLE_SRC_BIN_NAME}"
-    ${PROJECT_LIB_LINK}
+add_executable(${SAMPLE_SRC_BIN_NAME} ${SAMPLE_SRC_LIST})
+target_link_libraries(${SAMPLE_SRC_BIN_NAME}
     ${3RD_PARTY_LIBUV_LINK_NAME}
+    ${3RD_PARTY_CRYPT_LINK_NAME}
     ${EXTENTION_LINK_LIB}
 )

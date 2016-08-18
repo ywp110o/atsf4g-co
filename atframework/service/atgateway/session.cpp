@@ -2,8 +2,9 @@
 
 #include "uv.h"
 
-#include <log/log_wrapper.h>
 #include <common/file_system.h>
+#include <log/log_wrapper.h>
+
 
 #include "config/atframe_service_types.h"
 #include "core/timestamp_id_allocator.h"
@@ -169,7 +170,7 @@ namespace atframe {
             // send new msg
             ::atframe::gw::ss_msg msg;
             msg.init(ATFRAME_GW_CMD_SESSION_ADD, id_);
-            ::atframe::gw::ss_body_session *s = msg.body.make_session(peer_ip_, peer_port_);
+            msg.body.make_session(peer_ip_, peer_port_);
 
             int ret = send_to_server(msg);
             if (0 == ret) {
@@ -316,7 +317,7 @@ namespace atframe {
             ss.str().swap(packed_buffer);
 
             return owner_->post_data(router_, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(),
-                                   packed_buffer.size());
+                                     packed_buffer.size());
         }
 
         proto_base *session::get_protocol_handle() { return proto_.get(); }

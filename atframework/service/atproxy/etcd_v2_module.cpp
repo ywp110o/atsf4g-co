@@ -26,9 +26,8 @@
 
 namespace atframe {
     namespace proxy {
-        etcd_v2_module::etcd_v2_module() : curl_handle_(NULL), 
-            rpc_watch_index_(0), 
-            next_keepalive_refresh(false), next_tick_update_etcd_mebers(0){
+        etcd_v2_module::etcd_v2_module()
+            : curl_handle_(NULL), rpc_watch_index_(0), next_keepalive_refresh(false), next_tick_update_etcd_mebers(0) {
             conf_.path = "/";
             conf_.http_renew_ttl_timeout = 5000;
             conf_.http_watch_timeout = 3600000;
@@ -250,8 +249,8 @@ namespace atframe {
             new_req->set_opt_bool(CURLOPT_FORBID_REUSE, true);
 
             new_req->set_on_complete(std::bind(&etcd_v2_module::on_watch_complete, this, std::placeholders::_1));
-            new_req->set_on_header(std::bind(&etcd_v2_module::on_watch_header, this
-                , std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
+            new_req->set_on_header(std::bind(&etcd_v2_module::on_watch_header, this, std::placeholders::_1, std::placeholders::_2,
+                                             std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
 
             // etcd must use PUT method
             int ret = new_req->start(util::network::http_request::method_t::EN_MT_GET, false);
@@ -320,8 +319,9 @@ namespace atframe {
             }
 
             int ret = new_req->start(util::network::http_request::method_t::EN_MT_GET, waiting);
-            if (waiting && util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
-                util::network::http_request::get_status_code_group(new_req->get_response_code())) {
+            if (waiting &&
+                util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
+                    util::network::http_request::get_status_code_group(new_req->get_response_code())) {
                 WLOGERROR("get etcd member failed, http code: %d\n%s", new_req->get_response_code(), new_req->get_error_msg());
 
                 setup_update_etcd_members();
@@ -332,7 +332,7 @@ namespace atframe {
                 ret = select_host(new_req->get_response_stream().str());
                 new_req.reset();
 
-            } else if(0 != ret) {
+            } else if (0 != ret) {
                 WLOGERROR("send update members request failed, ret: %d", ret);
                 new_req.reset();
 
@@ -340,7 +340,7 @@ namespace atframe {
             } else {
                 rpc_update_members_.swap(new_req);
             }
-            
+
             return ret;
         }
 
@@ -374,16 +374,14 @@ namespace atframe {
                 conf_.hosts.clear();
                 // get all cluster member
                 rapidjson::Document::Array all_members = members->value.GetArray();
-                for (rapidjson::Document::Array::ValueIterator iter = all_members.begin(); iter != all_members.end(); ++ iter) {
+                for (rapidjson::Document::Array::ValueIterator iter = all_members.begin(); iter != all_members.end(); ++iter) {
                     rapidjson::Document::MemberIterator client_urls = iter->FindMember("clientURLs");
                     if (client_urls == iter->MemberEnd()) {
                         continue;
                     }
                     rapidjson::Document::Array all_client_urls = client_urls->value.GetArray();
                     for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.begin();
-                        cli_url_iter != all_client_urls.end();
-                        ++cli_url_iter
-                        ) {
+                         cli_url_iter != all_client_urls.end(); ++cli_url_iter) {
                         if (cli_url_iter->GetStringLength() > 0) {
                             conf_.hosts.push_back(cli_url_iter->GetString());
                         }
@@ -419,7 +417,7 @@ namespace atframe {
             next_tick_update_etcd_mebers = util::time::time_utility::get_now() + 1;
         }
 
-        void etcd_v2_module::unpack(node_info_t &out, rapidjson::Value &node, rapidjson::Value* prev_node, bool reset_data) {
+        void etcd_v2_module::unpack(node_info_t &out, rapidjson::Value &node, rapidjson::Value *prev_node, bool reset_data) {
             if (reset_data) {
                 out.action = node_action_t::EN_NAT_UNKNOWN;
                 out.created_index = 0;
@@ -436,12 +434,12 @@ namespace atframe {
             rapidjson::Value::MemberIterator iter;
             bool has_data = false;
 
-#define     IF_SELECT_DATA(x) \
-            has_data = (node.MemberEnd() != (iter = node.FindMember(x))); \
-            if(!has_data && NULL != prev_node) {\
-                has_data = (prev_node->MemberEnd() != (iter = prev_node->FindMember(x))); \
-            }\
-            if(has_data)
+#define IF_SELECT_DATA(x)                                                         \
+    has_data = (node.MemberEnd() != (iter = node.FindMember(x)));                 \
+    if (!has_data && NULL != prev_node) {                                         \
+        has_data = (prev_node->MemberEnd() != (iter = prev_node->FindMember(x))); \
+    }                                                                             \
+    if (has_data)
 
             if (reset_data) {
                 IF_SELECT_DATA("action") {
@@ -466,17 +464,11 @@ namespace atframe {
                 }
             }
 
-            IF_SELECT_DATA("modifiedIndex") {
-                out.modify_index = iter->value.GetUint64();
-            }
+            IF_SELECT_DATA("modifiedIndex") { out.modify_index = iter->value.GetUint64(); }
 
-            IF_SELECT_DATA("createdIndex") {
-                out.created_index = iter->value.GetUint64();
-            }
+            IF_SELECT_DATA("createdIndex") { out.created_index = iter->value.GetUint64(); }
 
-            IF_SELECT_DATA("errorCode") {
-                out.error_code = iter->value.GetInt();
-            }
+            IF_SELECT_DATA("errorCode") { out.error_code = iter->value.GetInt(); }
 
             IF_SELECT_DATA("value") {
                 rapidjson::Document doc;
@@ -495,14 +487,15 @@ namespace atframe {
                         }
                     }
                 }
-            } else {
+            }
+            else {
                 IF_SELECT_DATA("node") {
                     rapidjson::Value::MemberIterator prev_iter = node.FindMember("prevNode");
                     unpack(out, iter->value, node.MemberEnd() == prev_iter ? NULL : &prev_iter->value, false);
                 }
             }
 
-#undef      IF_SELECT_DATA
+#undef IF_SELECT_DATA
         }
 
         void etcd_v2_module::unpack(node_list_t &out, rapidjson::Value &node, bool reset_data) {
@@ -518,7 +511,6 @@ namespace atframe {
             }
 
             rapidjson::Value::MemberIterator iter;
-            bool has_data = false;
 
             if (reset_data && node.MemberEnd() != (iter = node.FindMember("action"))) {
                 const char *action = iter->value.GetString();
@@ -557,7 +549,7 @@ namespace atframe {
                 rapidjson::Document::Array nodes = iter->value.GetArray();
                 for (rapidjson::Document::Array::ValueIterator iter = nodes.begin(); iter != nodes.end(); ++iter) {
                     out.nodes.push_back(node_info_t());
-                    node_info_t& n = out.nodes.back();
+                    node_info_t &n = out.nodes.back();
                     unpack(n, *iter, NULL, true);
 
                     if (0 == out.created_index) {
@@ -586,7 +578,7 @@ namespace atframe {
                     rapidjson::Value::MemberIterator prev_iter = node.FindMember("prevNode");
 
                     out.nodes.push_back(node_info_t());
-                    node_info_t& n = out.nodes.back();
+                    node_info_t &n = out.nodes.back();
                     unpack(n, iter->value, node.MemberEnd() == prev_iter ? NULL : &prev_iter->value, false);
 
                     if (0 == out.created_index) {
@@ -639,8 +631,7 @@ namespace atframe {
             listens.SetArray();
             for (std::list<std::string>::const_iterator iter = src.listens.begin(); iter != src.listens.end(); ++iter) {
                 // only report the channel available on different machine
-                if (0 != UTIL_STRFUNC_STRNCASE_CMP("mem:", iter->c_str(), 4) &&
-                    0 != UTIL_STRFUNC_STRNCASE_CMP("shm:", iter->c_str(), 4)) {
+                if (0 != UTIL_STRFUNC_STRNCASE_CMP("mem:", iter->c_str(), 4) && 0 != UTIL_STRFUNC_STRNCASE_CMP("shm:", iter->c_str(), 4)) {
                     listens.PushBack(rapidjson::StringRef((*iter).c_str(), (*iter).size()), doc.GetAllocator());
                 }
             }
@@ -655,15 +646,16 @@ namespace atframe {
         }
 
         int etcd_v2_module::on_keepalive_complete(util::network::http_request &req) {
-            if (0 != req.get_error_code() || util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
-                util::network::http_request::get_status_code_group(req.get_response_code())) {
+            if (0 != req.get_error_code() ||
+                util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
+                    util::network::http_request::get_status_code_group(req.get_response_code())) {
 
                 // only network error will trigger a etcd member update
                 if (0 != req.get_error_code()) {
                     setup_update_etcd_members();
                 }
-                WLOGERROR("keepalive failed, error code: %d, http code: %d\n%s", 
-                    req.get_error_code(), req.get_response_code(), req.get_error_msg());
+                WLOGERROR("keepalive failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(),
+                          req.get_error_msg());
             }
 
             // if not found, keepalive(false)
@@ -687,10 +679,11 @@ namespace atframe {
             return 0;
         }
 
-        int etcd_v2_module::on_watch_complete(util::network::http_request& req) {
+        int etcd_v2_module::on_watch_complete(util::network::http_request &req) {
             int errcode = req.get_error_code();
-            if (0 != errcode || util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
-                util::network::http_request::get_status_code_group(req.get_response_code())) {
+            if (0 != errcode ||
+                util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
+                    util::network::http_request::get_status_code_group(req.get_response_code())) {
 
                 // skip timeout
                 if (CURLE_AGAIN == errcode || CURLE_OPERATION_TIMEDOUT == errcode) {
@@ -701,8 +694,8 @@ namespace atframe {
                     if (0 != errcode) {
                         setup_update_etcd_members();
                     }
-                    WLOGERROR("watch failed, error code: %d, http code: %d\n%s",
-                        req.get_error_code(), req.get_response_code(), req.get_error_msg());
+                    WLOGERROR("watch failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(),
+                              req.get_error_msg());
                 }
             }
 
@@ -719,8 +712,7 @@ namespace atframe {
             } else {
                 // if it not a get request, the header will contain previews index
                 uint64_t index = 0;
-                for (std::list<node_info_t>::iterator iter = nl.nodes.begin();
-                    iter != nl.nodes.end(); ++iter) {
+                for (std::list<node_info_t>::iterator iter = nl.nodes.begin(); iter != nl.nodes.end(); ++iter) {
                     if (iter->modify_index > index) {
                         index = iter->modify_index;
                     }
@@ -759,7 +751,8 @@ namespace atframe {
             return 0;
         }
 
-        int etcd_v2_module::on_watch_header(util::network::http_request& req, const char* key, size_t keylen, const char* val, size_t vallen) {
+        int etcd_v2_module::on_watch_header(util::network::http_request &req, const char *key, size_t keylen, const char *val,
+                                            size_t vallen) {
             if (NULL != key && 0 == UTIL_STRFUNC_STRNCASE_CMP("X-Etcd-Index", key, keylen)) {
                 if (NULL != val && vallen > 0) {
                     rpc_watch_index_ = static_cast<uint64_t>(strtoull(val, NULL, 10)) + 1;
@@ -769,14 +762,15 @@ namespace atframe {
             return 0;
         }
 
-        int etcd_v2_module::on_update_etcd_complete(util::network::http_request& req) {
+        int etcd_v2_module::on_update_etcd_complete(util::network::http_request &req) {
             node_list_t nl;
 
-            if (0 != req.get_error_code() || util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
-                util::network::http_request::get_status_code_group(req.get_response_code())) {
+            if (0 != req.get_error_code() ||
+                util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
+                    util::network::http_request::get_status_code_group(req.get_response_code())) {
                 setup_update_etcd_members();
-                WLOGERROR("update etcd members failed, error code: %d, http code: %d\n%s",
-                    req.get_error_code(), req.get_response_code(), req.get_error_msg());
+                WLOGERROR("update etcd members failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(),
+                          req.get_error_msg());
             }
 
             std::string msg = req.get_response_stream().str();

@@ -11,13 +11,14 @@
 #include <std/smart_ptr.h>
 
 #include "libatbus.h"
-#include "protocols/libatgw_server_protocol.h"
 #include "protocols/inner_v1/libatgw_proto_inner.h"
+#include "protocols/libatgw_server_protocol.h"
+
 
 namespace atframe {
     namespace gateway {
         class session_manager;
-        class session : std::enable_shared_from_this<session> {
+        class session : public std::enable_shared_from_this<session> {
         public:
             struct limit_t {
                 size_t total_recv_bytes;
@@ -96,7 +97,7 @@ namespace atframe {
 
             inline const std::string &get_peer_host() const { return peer_ip_; }
             inline int32_t get_peer_port() const { return peer_port_; }
-            inline session_manager * get_manager() const { return owner_; }
+            inline session_manager *get_manager() const { return owner_; }
 
         private:
             id_t id_;

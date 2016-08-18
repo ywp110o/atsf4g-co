@@ -4,10 +4,11 @@
 #include <cstring>
 #include <iostream>
 #include <sstream>
-#include <vector>
 #include <std/functional.h>
 #include <std/ref.h>
 #include <std/smart_ptr.h>
+#include <vector>
+
 
 #include <uv.h>
 
@@ -40,14 +41,14 @@ public:
             typedef std::unique_ptr< ::atframe::gateway::proto_base> proto_ptr_t;
             gw_mgr_.init(get_app()->get_bus_node().get(), std::bind<proto_ptr_t>(&gateway_module::create_proto_inner, this));
 
-            gw_mgr_.set_on_create_session(std::bind<int>(&gateway_module::proto_inner_callback_on_create_session, this, 
-                std::placeholders::_1, std::placeholders::_2));
+            gw_mgr_.set_on_create_session(std::bind<int>(&gateway_module::proto_inner_callback_on_create_session, this,
+                                                         std::placeholders::_1, std::placeholders::_2));
 
             // init callbacks
             proto_callbacks_.write_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_write, this, std::placeholders::_1,
-                                                  std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+                                                       std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
             proto_callbacks_.message_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_message, this, std::placeholders::_1,
-                                                    std::placeholders::_2, std::placeholders::_3);
+                                                         std::placeholders::_2, std::placeholders::_3);
             proto_callbacks_.new_session_fn =
                 std::bind<int>(&gateway_module::proto_inner_callback_on_new_session, this, std::placeholders::_1, std::placeholders::_2);
             proto_callbacks_.reconnect_fn =
@@ -55,8 +56,9 @@ public:
             proto_callbacks_.close_fn =
                 std::bind<int>(&gateway_module::proto_inner_callback_on_close, this, std::placeholders::_1, std::placeholders::_2);
 
-            proto_callbacks_.on_error_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_error, this, std::placeholders::_1,
-                                                     std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
+            proto_callbacks_.on_error_fn =
+                std::bind<int>(&gateway_module::proto_inner_callback_on_error, this, std::placeholders::_1, std::placeholders::_2,
+                               std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
 
 
         } else {
@@ -229,7 +231,9 @@ private:
         sess->on_alloc_read(suggested_size, buf->base, len);
         buf->len = static_cast<ULONG>(len);
 #else
-        sess->on_alloc_read(suggested_size, buf->base, buf->len);
+        size_t len = 0;
+        sess->on_alloc_read(suggested_size, buf->base, len);
+        buf->len = len;
 #endif
     }
 
@@ -507,7 +511,7 @@ struct app_handle_on_recv {
         }
         case ATFRAME_GW_CMD_SET_ROUTER_REQ: {
             int res = mod_.get().get_session_manager().set_session_router(msg.head.session_id, msg.body.router);
-            WLOGINFO("from server 0x%llx: session 0x%llx set router to %0xllx by server, res: %d", header->src_bus_id, msg.head.session_id,
+            WLOGINFO("from server 0x%llx: session 0x%llx set router to 0x%llx by server, res: %d", header->src_bus_id, msg.head.session_id,
                      msg.body.router, res);
 
             ::atframe::gw::ss_msg rsp;

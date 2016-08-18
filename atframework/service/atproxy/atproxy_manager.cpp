@@ -1,11 +1,12 @@
 #include <algorithm>
 
-#include <time/time_utility.h>
 #include "atproxy_manager.h"
+#include <time/time_utility.h>
+
 
 namespace atframe {
     namespace proxy {
-        int atproxy_manager::tick(const ::atapp::app& app) {
+        int atproxy_manager::tick(const ::atapp::app &app) {
             time_t now = util::time::time_utility::get_now();
 
             int ret = 0;
@@ -25,7 +26,7 @@ namespace atframe {
                     continue;
                 }
 
-                std::map<::atapp::app::app_id_t, node_info_t>::iterator iter = proxy_set_.find(ci.proxy_id);
+                std::map< ::atapp::app::app_id_t, node_info_t>::iterator iter = proxy_set_.find(ci.proxy_id);
                 // already removed, skip
                 if (iter == proxy_set_.end()) {
                     continue;
@@ -48,8 +49,7 @@ namespace atframe {
                         ++ret;
                     } else {
                         WLOGERROR("try to connect to proxy: %llx, address: %s failed, res: %d",
-                            static_cast<unsigned long long>(iter->second.id, iter->second.listens.front().c_str(), res)
-                        );
+                                  static_cast<unsigned long long>(iter->second.id), iter->second.listens.front().c_str(), res);
                         ci.timeout_sec = now + app.get_bus_node()->get_conf().retry_interval;
                         if (ci.timeout_sec <= now) {
                             ci.timeout_sec = now + 1;
@@ -76,7 +76,7 @@ namespace atframe {
             return ret;
         }
 
-        int atproxy_manager::set(node_info_t& proxy_info) {
+        int atproxy_manager::set(node_info_t &proxy_info) {
             check_info_t ci;
             ci.timeout_sec = util::time::time_utility::get_now();
             ci.proxy_id = proxy_info.id;
@@ -94,11 +94,9 @@ namespace atframe {
             return 0;
         }
 
-        int atproxy_manager::reset(node_list_t& all_proxys) {
+        int atproxy_manager::reset(node_list_t &all_proxys) {
             proxy_set_.clear();
-            for (std::list<node_info_t>::iterator iter = all_proxys.nodes.begin();
-                iter != all_proxys.nodes.end();
-                ++iter) {
+            for (std::list<node_info_t>::iterator iter = all_proxys.nodes.begin(); iter != all_proxys.nodes.end(); ++iter) {
 
                 // skip all empty
                 if (iter->listens.empty()) {
@@ -118,11 +116,9 @@ namespace atframe {
             return 0;
         }
 
-        int atproxy_manager::on_connected(const ::atapp::app& app, ::atapp::app::app_id_t id) {
-            return 0;
-        }
+        int atproxy_manager::on_connected(const ::atapp::app &app, ::atapp::app::app_id_t id) { return 0; }
 
-        int atproxy_manager::on_disconnected(const ::atapp::app& app, ::atapp::app::app_id_t id) {
+        int atproxy_manager::on_disconnected(const ::atapp::app &app, ::atapp::app::app_id_t id) {
             if (proxy_set_.end() != proxy_set_.find(id)) {
                 check_info_t ci;
 
@@ -138,7 +134,7 @@ namespace atframe {
             return 0;
         }
 
-        void atproxy_manager::swap(node_info_t& l, node_info_t& r) {
+        void atproxy_manager::swap(node_info_t &l, node_info_t &r) {
             using std::swap;
             swap(l.action, r.action);
             swap(l.created_index, r.created_index);
@@ -147,6 +143,5 @@ namespace atframe {
             swap(l.listens, r.listens);
             swap(l.modify_index, r.modify_index);
         }
-
     }
 }

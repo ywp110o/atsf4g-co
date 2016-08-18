@@ -30,7 +30,7 @@ namespace atframe {
         template <typename TKey = uint64_t>
         class timestamp_id_allocator {
         public:
-            typedef typename TKey value_type;
+            typedef TKey value_type;
 
             static const value_type npos = 0; /** invalid key **/
         public:
