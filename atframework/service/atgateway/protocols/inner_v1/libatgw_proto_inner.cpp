@@ -179,6 +179,7 @@ namespace atframe {
                 std::string mbedtls_dh_param_;
 #endif
 
+                // TODO move mbedtls_ctr_drbg_context and mbedtls_entropy_context here
                 static ptr_t &current() {
                     static ptr_t ret;
                     return ret;
@@ -1045,6 +1046,9 @@ namespace atframe {
                     // write big number into buffer, the size must be no less than BN_num_bytes()
                     // @see https://www.openssl.org/docs/manmaster/crypto/BN_bn2bin.html
                     size_t dhparam_bnsz = BN_num_bytes(handshake_.dh.openssl_dh_ptr_->pub_key);
+
+                    // TODO dump P,G,GX
+                    // @see int ssl3_send_server_key_exchange(SSL *s) in s3_srvr.c
                     crypt_handshake_->param.resize(dhparam_bnsz, 0);
                     BN_bn2bin(handshake_.dh.openssl_dh_ptr_->pub_key, reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]));
 
@@ -1055,6 +1059,7 @@ namespace atframe {
                         break;
                     }
 
+                    // TODO size is P,G,GX
                     size_t psz = mbedtls_mpi_size(&handshake_.dh.mbedtls_dh_ctx_.P);
                     size_t olen = 0;
                     crypt_handshake_->param.resize(psz, 0);
@@ -1066,6 +1071,8 @@ namespace atframe {
                         ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                         break;
                     }
+
+                    // TODO resize if P,G,GX is small than crypt_handshake_->param
 
                     assert(olen <= psz);
                     if (olen < psz) {
@@ -1132,6 +1139,9 @@ namespace atframe {
                 }
 
                 // ===============================================
+                // TODO import P,G,GY
+                // @see int ssl3_get_key_exchange(SSL *s) in s3_clnt.c
+
                 int res = DH_generate_key(handshake_.dh.openssl_dh_ptr_);
                 if (1 != res) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1252,6 +1262,7 @@ namespace atframe {
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 handshake_.dh.openssl_dh_ptr_ = NULL;
                 do {
+                    // TODO client mode, just init , do not read PEM file
                     handshake_.dh.openssl_dh_ptr_ = PEM_read_bio_DHparams(crypt_handshake_->shared_conf->openssl_dh_bio_, NULL, NULL, NULL);
                     if (!handshake_.dh.openssl_dh_ptr_) {
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
@@ -1288,6 +1299,7 @@ namespace atframe {
                         break;
                     }
 
+                    // TODO client mode, just init , do not read PEM file
                     res = mbedtls_dhm_parse_dhm(
                         &handshake_.dh.mbedtls_dh_ctx_,
                         reinterpret_cast<const unsigned char *>(crypt_handshake_->shared_conf->mbedtls_dh_param_.data()),
