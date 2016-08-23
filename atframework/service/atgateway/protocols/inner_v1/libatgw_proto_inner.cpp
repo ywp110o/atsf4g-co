@@ -1832,6 +1832,10 @@ namespace atframe {
             return write_msg(builder);
         }
 
+        int libatgw_proto_inner_v1::send_post(const void *buffer, size_t len) {
+            return send_post(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST, buffer, len);
+        }
+
         int libatgw_proto_inner_v1::send_ping(time_t tp) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;

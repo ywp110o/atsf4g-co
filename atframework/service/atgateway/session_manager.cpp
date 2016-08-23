@@ -405,7 +405,7 @@ namespace atframe {
 
             // check session number limit
             if (mgr->conf_.limits.max_client_number > 0 &&
-                mgr->actived_sessions_.size() + mgr->actived_sessions_.size() >= mgr->conf_.limits.max_client_number) {
+                mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.limits.max_client_number) {
                 sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
                 return;
             }
@@ -473,7 +473,7 @@ namespace atframe {
 
             // check session number limit
             if (mgr->conf_.limits.max_client_number > 0 &&
-                mgr->actived_sessions_.size() + mgr->actived_sessions_.size() >= mgr->conf_.limits.max_client_number) {
+                mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.limits.max_client_number) {
                 sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
                 return;
             }

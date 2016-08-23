@@ -172,6 +172,7 @@ namespace atframe {
             int reconnect_session(uint64_t sess_id, int type, const std::string &secret, uint32_t keybits);
 
             int send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len);
+            int send_post(const void *buffer, size_t len);
             int send_ping(time_t tp);
             int send_pong(time_t tp);
             int send_key_syn();

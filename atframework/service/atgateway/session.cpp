@@ -1,9 +1,14 @@
 #include <sstream>
 
+#if (defined(__cplusplus) && __cplusplus >= 201103L) || (defined(_MSC_VER) && _MSC_VER >= 1900)
+#include <type_traits>
+#endif
+
 #include "uv.h"
 
 #include <common/file_system.h>
 #include <log/log_wrapper.h>
+#include <time/time_utility.h>
 
 
 #include "config/atframe_service_types.h"
@@ -14,6 +19,10 @@
 
 namespace atframe {
     namespace gateway {
+#if (defined(__cplusplus) && __cplusplus >= 201103L) || (defined(_MSC_VER) && _MSC_VER >= 1900)
+        static_assert(std::is_pod<session::limit_t>::value, "session::limit_t must be a POD type");
+#endif
+
         session::session() : id_(0), router_(0), owner_(NULL), flags_(0), peer_port_(0), private_data_(NULL) {
             memset(&limit_, 0, sizeof(limit_));
             raw_handle_.data = this;
@@ -292,8 +301,18 @@ namespace atframe {
                 return error_code_t::EN_ECT_BAD_PROTOCOL;
             }
 
-            // TODO send limit
-            return proto_->write(data, len);
+            // send limit
+            limit_.hour_send_bytes += len;
+            limit_.minute_send_bytes += len;
+            limit_.total_send_bytes += len;
+
+            int ret = proto_->write(data, len);
+
+            check_hour_limit(false, true);
+            check_minute_limit(false, true);
+            check_total_limit(false, true);
+
+            return ret;
         }
 
         int session::send_to_server(::atframe::gw::ss_msg &msg) {
@@ -308,16 +327,25 @@ namespace atframe {
                 return error_code_t::EN_ECT_LOST_MANAGER;
             }
 
-            // TODO recv limit
-
             // send to server with type = ::atframe::component::service_type::EN_ATST_GATEWAY
             std::stringstream ss;
             msgpack::pack(ss, msg);
             std::string packed_buffer;
             ss.str().swap(packed_buffer);
 
-            return owner_->post_data(router_, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(),
-                                     packed_buffer.size());
+            size_t len = packed_buffer.size();
+            // recv limit
+            limit_.hour_recv_bytes += len;
+            limit_.minute_recv_bytes += len;
+            limit_.total_recv_bytes += len;
+
+            int ret = owner_->post_data(router_, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(), len);
+
+            check_hour_limit(true, false);
+            check_minute_limit(true, false);
+            check_total_limit(true, false);
+
+            return ret;
         }
 
         proto_base *session::get_protocol_handle() { return proto_.get(); }
@@ -342,6 +370,76 @@ namespace atframe {
             ptr_t *holder = reinterpret_cast<ptr_t *>(self->shutdown_req_.data);
             assert(holder);
             delete holder;
+        }
+
+        void session::check_hour_limit(bool check_recv, bool check_send) {
+            time_t now_hr = ::util::time::time_utility::get_now() / ::util::time::time_utility::DAY_SECONDS;
+            if (now_hr != limit_.hour_timepoint) {
+                limit_.hour_timepoint = now_hr;
+                limit_.hour_recv_bytes = 0;
+                limit_.hour_send_bytes = 0;
+                return;
+            }
+
+            if (NULL == owner_) {
+                return;
+            }
+
+            if (check_flag(flag_t::EN_FT_CLOSING)) {
+                return;
+            }
+
+            if (check_recv && owner_->get_conf().limits.hour_recv_limit > 0 && limit_.hour_recv_bytes > owner_->get_conf().limits.hour_recv_limit) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+            }
+
+            if (check_send && owner_->get_conf().limits.hour_send_limit > 0 && limit_.hour_send_bytes > owner_->get_conf().limits.hour_send_limit) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+            }
+        }
+
+        void session::check_minute_limit(bool check_recv, bool check_send) {
+            time_t now_mi = ::util::time::time_utility::get_now() / ::util::time::time_utility::MINITE_SECONDS;
+            if (now_mi != limit_.hour_timepoint) {
+                limit_.minute_timepoint = now_mi;
+                limit_.minute_recv_bytes = 0;
+                limit_.minute_send_bytes = 0;
+                return;
+            }
+
+            if (NULL == owner_) {
+                return;
+            }
+
+            if (check_flag(flag_t::EN_FT_CLOSING)) {
+                return;
+            }
+
+            if (check_recv && owner_->get_conf().limits.minute_recv_limit > 0 && limit_.minute_recv_bytes > owner_->get_conf().limits.minute_recv_limit) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+            }
+
+            if (check_send && owner_->get_conf().limits.minute_send_limit > 0 && limit_.minute_send_bytes > owner_->get_conf().limits.minute_send_limit) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+            }
+        }
+
+        void session::check_total_limit(bool check_recv, bool check_send) {
+            if (NULL == owner_) {
+                return;
+            }
+
+            if (check_flag(flag_t::EN_FT_CLOSING)) {
+                return;
+            }
+
+            if (check_recv && owner_->get_conf().limits.total_recv_limit > 0 && limit_.total_recv_bytes > owner_->get_conf().limits.total_recv_limit) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+            }
+
+            if (check_send && owner_->get_conf().limits.total_send_limit > 0 && limit_.total_send_bytes > owner_->get_conf().limits.total_send_limit) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+            }
         }
     }
 }

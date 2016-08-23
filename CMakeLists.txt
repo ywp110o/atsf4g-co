@@ -41,7 +41,7 @@ include("${ATFRAMEWORK_BASE_DIR}/atframework.macro.cmake")
 
 ## 导入所有工程项目
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/atframework")
-# add_project_recurse("${CMAKE_CURRENT_LIST_DIR}/src")
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/src")
 
 if (PROJECT_ENABLE_SAMPLE)
     add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/sample")

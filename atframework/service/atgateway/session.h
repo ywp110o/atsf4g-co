@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <stdint.h>
+#include <ctime>
 
 #include "uv.h"
 
@@ -27,6 +28,9 @@ namespace atframe {
                 size_t hour_send_bytes;
                 size_t minute_recv_bytes;
                 size_t minute_send_bytes;
+
+                time_t hour_timepoint;
+                time_t minute_timepoint;
             };
 
             typedef uint64_t id_t;
@@ -89,6 +93,9 @@ namespace atframe {
             static void on_evt_shutdown(uv_shutdown_t *req, int status);
             static void on_evt_closed(uv_handle_t *handle);
 
+            void check_hour_limit(bool check_recv, bool check_send);
+            void check_minute_limit(bool check_recv, bool check_send);
+            void check_total_limit(bool check_recv, bool check_send);
         public:
             inline void *get_private_data() const { return private_data_; }
             inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
