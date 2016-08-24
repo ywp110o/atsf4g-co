@@ -4,6 +4,8 @@
 #pragma once
 
 #include "std/smart_ptr.h"
+#include <vector>
+
 
 #include "algorithm/xxtea.h"
 #include "detail/buffer.h"
@@ -25,14 +27,15 @@ extern "C" {
 #include <openssl/sha.h>
 
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-#include "mbedtls/platform.h"
 #include "mbedtls/aes.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/dhm.h"
 #include "mbedtls/entropy.h"
 #include "mbedtls/net.h"
+#include "mbedtls/platform.h"
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha1.h"
+
 #endif
 }
 
@@ -97,11 +100,11 @@ namespace atframe {
 
             struct crypt_session_t {
                 std::shared_ptr<detail::crypt_global_configure_t> shared_conf;
-                int type;           /** crypt type. XXTEA, AES and etc. **/
-                std::string secret; /** crypt secret. **/
-                uint32_t keybits;   /** key length in bits. **/
+                int type;                          /** crypt type. XXTEA, AES and etc. **/
+                std::vector<unsigned char> secret; /** crypt secret. **/
+                uint32_t keybits;                  /** key length in bits. **/
 
-                std::string param; /** cache data used for generate key, dhparam if using DH algorithm. **/
+                std::vector<unsigned char> param; /** cache data used for generate key, dhparam if using DH algorithm. **/
 
                 crypt_session_t();
                 ~crypt_session_t();
@@ -158,7 +161,7 @@ namespace atframe {
 
             void setup_crypt(int type, const void *key, size_t keylen, uint32_t keybits);
 
-            int setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf);
+            int setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf, bool client_mode);
             void close_handshake(int status);
 
             virtual bool check_reconnect(proto_base *other);
@@ -220,6 +223,7 @@ namespace atframe {
             struct handshake_t {
                 int switch_secret_type;
                 bool has_data;
+                bool client_mode;
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 struct dh_t {
                     DH *openssl_dh_ptr_;
@@ -227,8 +231,6 @@ namespace atframe {
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 struct dh_t {
                     mbedtls_dhm_context mbedtls_dh_ctx_;
-                    mbedtls_ctr_drbg_context mbedtls_ctr_drbg_;
-                    mbedtls_entropy_context mbedtls_entropy_;
                 };
 #endif
                 union {

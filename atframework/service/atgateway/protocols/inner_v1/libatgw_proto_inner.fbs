@@ -84,7 +84,7 @@ table cs_body_rsa_cert {
 ///
 /// crypt_param is used for different purpose depends on step and switch_type, that's
 ///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : nothing
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : DH public key of server
+///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : DH Parameters: P,G,GX (GX means G^X and pub_key in openssl). KeyExchangeData as in SSL3
 ///     step=EN_HST_DH_PUBKEY_REQ, switch_type=EN_SST_DH : DH public key of client
 ///     step=EN_HST_DH_PUBKEY_RSP, switch_type=EN_SST_DH : verify data prefix
 ///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT: secret

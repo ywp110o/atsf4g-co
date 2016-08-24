@@ -52,6 +52,19 @@ namespace atframe {
                         return ret;
                     }
 
+// init random engine
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                    mbedtls_ctr_drbg_init(&mbedtls_ctr_drbg_);
+                    mbedtls_entropy_init(&mbedtls_entropy_);
+
+                    ret = mbedtls_ctr_drbg_seed(&mbedtls_ctr_drbg_, mbedtls_entropy_func, &mbedtls_entropy_, NULL, 0);
+                    if (0 != ret) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls setup seed failed");
+                        return error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                    }
+#endif
+
                     switch (conf_.switch_secret_type) {
                     case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
 
@@ -168,6 +181,13 @@ namespace atframe {
                         break;
                     }
                     }
+
+// close random engine
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                    mbedtls_ctr_drbg_free(&mbedtls_ctr_drbg_);
+                    mbedtls_entropy_free(&mbedtls_entropy_);
+#endif
                 }
 
                 libatgw_proto_inner_v1::crypt_conf_t conf_;
@@ -177,6 +197,8 @@ namespace atframe {
                 BIO *openssl_dh_bio_;
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 std::string mbedtls_dh_param_;
+                mbedtls_ctr_drbg_context mbedtls_ctr_drbg_;
+                mbedtls_entropy_context mbedtls_entropy_;
 #endif
 
                 // TODO move mbedtls_ctr_drbg_context and mbedtls_entropy_context here
@@ -611,16 +633,9 @@ namespace atframe {
             }
 
             std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
-            int ret = setup_handshake(global_cfg);
+            int ret = setup_handshake(global_cfg, false);
             if (ret < 0) {
                 return ret;
-            }
-
-            // check switch type
-            if (body_handshake.switch_type() != handshake_.switch_secret_type) {
-                ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "switch key type between client and server not matched.");
-                close(error_code_t::EN_ECT_HANDSHAKE, true);
-                return error_code_t::EN_ECT_HANDSHAKE;
             }
 
             callbacks_->new_session_fn(this, session_id_);
@@ -647,7 +662,7 @@ namespace atframe {
         int libatgw_proto_inner_v1::dispatch_handshake_start_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
             // check switch type
             // check if start new session success
-            if (0 == body_handshake.session_id() || body_handshake.switch_type() != handshake_.switch_secret_type) {
+            if (0 == body_handshake.session_id()) {
                 ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "start new session refused.");
                 return error_code_t::EN_ECT_HANDSHAKE;
             }
@@ -664,6 +679,7 @@ namespace atframe {
                 return 0;
             }
 
+            handshake_.switch_secret_type = body_handshake.switch_type();
             if (NULL == body_handshake.crypt_param()) {
                 ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "has no secret");
                 return error_code_t::EN_ECT_HANDSHAKE;
@@ -864,9 +880,8 @@ namespace atframe {
                 size_t psz = handshake_.dh.mbedtls_dh_ctx_.len;
                 // generate next_secret
                 crypt_handshake_->secret.resize(psz, 0);
-                res =
-                    mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]),
-                                            psz, &psz, mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
+                res = mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_,
+                                              reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]), psz, &psz, NULL, NULL);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH compute key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1045,12 +1060,28 @@ namespace atframe {
 
                     // write big number into buffer, the size must be no less than BN_num_bytes()
                     // @see https://www.openssl.org/docs/manmaster/crypto/BN_bn2bin.html
-                    size_t dhparam_bnsz = BN_num_bytes(handshake_.dh.openssl_dh_ptr_->pub_key);
-
-                    // TODO dump P,G,GX
+                    // dump P,G,GX
                     // @see int ssl3_send_server_key_exchange(SSL *s) in s3_srvr.c
-                    crypt_handshake_->param.resize(dhparam_bnsz, 0);
-                    BN_bn2bin(handshake_.dh.openssl_dh_ptr_->pub_key, reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]));
+                    {
+                        BIGNUM *r[4] = {handshake_.dh.openssl_dh_ptr_->p, handshake_.dh.openssl_dh_ptr_->g,
+                                        handshake_.dh.openssl_dh_ptr_->pub_key, NULL};
+
+                        size_t olen = 0;
+                        unsigned int nr[4] = {0};
+                        for (int i = 0; i < 4 && r[i] != NULL; i++) {
+                            nr[i] = BN_num_bytes(r[i]);
+                            // DHM_MPI_EXPORT in mbedtls/polarssl use 2 byte to store length, so openssl/libressl should use OPENSSL_NO_SRP
+                            olen += static_cast<size_t>(nr[i] + 2);
+                        }
+
+                        crypt_handshake_->param.resize(olen, 0);
+                        unsigned char *p = &crypt_handshake_->param[0];
+                        for (int i = 0; i < 4 && r[i] != NULL; i++) {
+                            s2n(nr[i], p);
+                            BN_bn2bin(r[i], p);
+                            p += nr[i];
+                        }
+                    }
 
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                     if (false == handshake_.has_data) {
@@ -1059,23 +1090,25 @@ namespace atframe {
                         break;
                     }
 
-                    // TODO size is P,G,GX
+                    // size is P,G,GX
                     size_t psz = mbedtls_mpi_size(&handshake_.dh.mbedtls_dh_ctx_.P);
+                    size_t gsz = mbedtls_mpi_size(&handshake_.dh.mbedtls_dh_ctx_.G);
                     size_t olen = 0;
-                    crypt_handshake_->param.resize(psz, 0);
+                    // @see mbedtls_dhm_make_params, output P,G,GX. GX is smaller than P
+                    crypt_handshake_->param.resize(psz + psz + gsz, 0);
                     int res = mbedtls_dhm_make_params(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz),
                                                       reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), &olen,
-                                                      mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
+                                                      crypt_handshake_->shared_conf->mbedtls_ctr_drbg_random,
+                                                      &crypt_handshake_->shared_conf->handshake_.dh.mbedtls_ctr_drbg_);
                     if (0 != res) {
                         ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH generate check public key failed");
                         ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                         break;
                     }
 
-                    // TODO resize if P,G,GX is small than crypt_handshake_->param
-
+                    // resize if P,G,GX is small than crypt_handshake_->param
                     assert(olen <= psz);
-                    if (olen < psz) {
+                    if (olen < crypt_handshake_->param.size()) {
                         crypt_handshake_->param.resize(olen);
                     }
 #endif
@@ -1116,7 +1149,7 @@ namespace atframe {
             handshake_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_DH_PUBKEY_REQ);
 
             int ret = 0;
-            if (0 == peer_body.session_id() || NULL == peer_body.crypt_param()) {
+            if (0 == peer_body.session_id() || NULL == peer_body.crypt_param() || !crypt_handshake_->shared_conf) {
                 // empty data
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
@@ -1130,6 +1163,9 @@ namespace atframe {
             handshake_body.add_crypt_bits(peer_body.crypt_bits());
             crypt_handshake_->param.clear();
 
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+            BIGNUM *pubkey = NULL;
+#endif
             do {
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 if (NULL == handshake_.dh.openssl_dh_ptr_ || false == handshake_.has_data) {
@@ -1140,7 +1176,97 @@ namespace atframe {
 
                 // ===============================================
                 // TODO import P,G,GY
-                // @see int ssl3_get_key_exchange(SSL *s) in s3_clnt.c
+                // @see int ssl3_get_key_exchange(SSL *s) in s3_clnt.c or s3_clnt.c
+                {
+                    unsigned int i = 0, param_len = 2, n = static_cast<unsigned int>(peer_body.crypt_param()->size());
+                    const unsigned char *p = reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data());
+
+                    // P
+                    if (param_len > n) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: P SSL_R_LENGTH_TOO_SHORT");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+                    n2s(p, i);
+
+                    if (i > n - param_len) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: P SSL_R_BAD_DH_P_LENGTH");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+
+                    param_len += i;
+                    if (!(handshake_.dh.openssl_dh_ptr_->p = BN_bin2bn(p, i, NULL))) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: P ERR_R_BN_LIB");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+                    p += i;
+
+                    if (BN_is_zero(handshake_.dh.openssl_dh_ptr_->p)) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: P SSL_R_BAD_DH_P_VALUE");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+
+                    // G
+                    param_len += 2;
+                    if (param_len > n) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: G SSL_R_LENGTH_TOO_SHORT");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+                    n2s(p, i);
+
+                    if (i > n - param_len) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: G SSL_R_BAD_DH_G_LENGTH");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+
+                    param_len += i;
+                    if (!(handshake_.dh.openssl_dh_ptr_->g = BN_bin2bn(p, i, NULL))) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: G ERR_R_BN_LIB");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+                    p += i;
+
+                    if (BN_is_zero(handshake_.dh.openssl_dh_ptr_->g)) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: G SSL_R_BAD_DH_G_VALUE");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+
+                    // GY
+                    param_len += 2;
+                    if (param_len > n) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: GY SSL_R_LENGTH_TOO_SHORT");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+                    n2s(p, i);
+
+                    if (i > n - param_len) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: GY SSL_R_BAD_DH_PUB_KEY_LENGTH");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+
+                    param_len += i;
+                    if (!(pubkey = BN_bin2bn(p, i, NULL))) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: GY ERR_R_BN_LIB");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+                    p += i;
+
+                    if (BN_is_zero(pubkey)) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: GY SSL_R_BAD_DH_PUB_KEY_VALUE");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+                }
 
                 int res = DH_generate_key(handshake_.dh.openssl_dh_ptr_);
                 if (1 != res) {
@@ -1163,17 +1289,9 @@ namespace atframe {
                 BN_bn2bin(handshake_.dh.openssl_dh_ptr_->pub_key, reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]));
 
                 // generate next_secret
-                BIGNUM *pubkey = BN_bin2bn(reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()),
-                                           peer_body.crypt_param()->size(), NULL);
-                if (NULL == pubkey) {
-                    ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                    ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl DH decode public key failed");
-                    break;
-                };
                 crypt_handshake_->secret.resize(static_cast<size_t>(sizeof(unsigned char) * (DH_size(handshake_.dh.openssl_dh_ptr_))), 0);
                 errcode =
                     DH_compute_key(reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]), pubkey, handshake_.dh.openssl_dh_ptr_);
-                BN_free(pubkey);
                 if (errcode < 0) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                     ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl DH compute key failed");
@@ -1202,8 +1320,9 @@ namespace atframe {
                 size_t psz = handshake_.dh.mbedtls_dh_ctx_.len;
                 crypt_handshake_->param.resize(psz, 0);
                 res = mbedtls_dhm_make_public(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz),
-                                              reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), psz, mbedtls_ctr_drbg_random,
-                                              &handshake_.dh.mbedtls_ctr_drbg_);
+                                              reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), psz,
+                                              crypt_handshake_->shared_conf->mbedtls_ctr_drbg_random,
+                                              &crypt_handshake_->shared_conf->handshake_.dh.mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH make public key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1214,7 +1333,8 @@ namespace atframe {
                 crypt_handshake_->secret.resize(psz, 0);
                 res =
                     mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]),
-                                            psz, &psz, mbedtls_ctr_drbg_random, &handshake_.dh.mbedtls_ctr_drbg_);
+                                            psz, &psz, crypt_handshake_->shared_conf->mbedtls_ctr_drbg_random,
+                                            &crypt_handshake_->shared_conf->handshake_.dh.mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH compute key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1226,6 +1346,12 @@ namespace atframe {
 #endif
             } while (false);
 
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+            if (NULL != pubkey) {
+                BN_free(pubkey);
+                pubkey = NULL;
+            }
+#endif
             // send send first parameter
             handshake_body.add_crypt_param(
                 builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size()));
@@ -1240,7 +1366,7 @@ namespace atframe {
             return ret;
         }
 
-        int libatgw_proto_inner_v1::setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf) {
+        int libatgw_proto_inner_v1::setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf, bool client_mode) {
             if (handshake_.has_data) {
                 return 0;
             }
@@ -1255,6 +1381,7 @@ namespace atframe {
                 return ret;
             }
 
+            handshake_.client_mode = client_mode;
             handshake_.switch_secret_type = crypt_handshake_->shared_conf->conf_.switch_secret_type;
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
@@ -1262,8 +1389,13 @@ namespace atframe {
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 handshake_.dh.openssl_dh_ptr_ = NULL;
                 do {
-                    // TODO client mode, just init , do not read PEM file
-                    handshake_.dh.openssl_dh_ptr_ = PEM_read_bio_DHparams(crypt_handshake_->shared_conf->openssl_dh_bio_, NULL, NULL, NULL);
+                    // client mode, just init , do not read PEM file
+                    if (handshake_.client_mode) {
+                        handshake_.dh.openssl_dh_ptr_ = DH_new();
+                    } else {
+                        handshake_.dh.openssl_dh_ptr_ =
+                            PEM_read_bio_DHparams(crypt_handshake_->shared_conf->openssl_dh_bio_, NULL, NULL, NULL);
+                    }
                     if (!handshake_.dh.openssl_dh_ptr_) {
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl parse dhm failed");
@@ -1288,32 +1420,22 @@ namespace atframe {
                 // mbedtls_dhm_read_params
                 do {
                     mbedtls_dhm_init(&handshake_.dh.mbedtls_dh_ctx_);
-                    mbedtls_ctr_drbg_init(&handshake_.dh.mbedtls_ctr_drbg_);
-                    mbedtls_entropy_init(&handshake_.dh.mbedtls_entropy_);
 
-                    int res = mbedtls_ctr_drbg_seed(&handshake_.dh.mbedtls_ctr_drbg_, mbedtls_entropy_func, &handshake_.dh.mbedtls_entropy_,
-                                                    NULL, 0);
-                    if (0 != res) {
-                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
-                        ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls setup seed failed");
-                        break;
-                    }
-
-                    // TODO client mode, just init , do not read PEM file
-                    res = mbedtls_dhm_parse_dhm(
-                        &handshake_.dh.mbedtls_dh_ctx_,
-                        reinterpret_cast<const unsigned char *>(crypt_handshake_->shared_conf->mbedtls_dh_param_.data()),
-                        crypt_handshake_->shared_conf->mbedtls_dh_param_.size());
-                    if (0 != res) {
-                        ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls parse dhm failed");
-                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
-                        break;
+                    // client mode, just init , do not read PEM file
+                    if (false == handshake_.client_mode) {
+                        int res = mbedtls_dhm_parse_dhm(
+                            &handshake_.dh.mbedtls_dh_ctx_,
+                            reinterpret_cast<const unsigned char *>(crypt_handshake_->shared_conf->mbedtls_dh_param_.data()),
+                            crypt_handshake_->shared_conf->mbedtls_dh_param_.size());
+                        if (0 != res) {
+                            ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls parse dhm failed");
+                            ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                            break;
+                        }
                     }
                 } while (false);
 
                 if (0 != ret) {
-                    mbedtls_ctr_drbg_free(&handshake_.dh.mbedtls_ctr_drbg_);
-                    mbedtls_entropy_free(&handshake_.dh.mbedtls_entropy_);
                     mbedtls_dhm_free(&handshake_.dh.mbedtls_dh_ctx_);
                 }
 #endif
@@ -1359,8 +1481,6 @@ namespace atframe {
 // PEM_read_DHparams
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 // mbedtls_dhm_read_params
-                mbedtls_ctr_drbg_free(&handshake_.dh.mbedtls_ctr_drbg_);
-                mbedtls_entropy_free(&handshake_.dh.mbedtls_entropy_);
                 mbedtls_dhm_free(&handshake_.dh.mbedtls_dh_ctx_);
 #endif
                 break;
@@ -1728,7 +1848,7 @@ namespace atframe {
             }
 
             std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
-            int ret = setup_handshake(global_cfg);
+            int ret = setup_handshake(global_cfg, true);
             if (ret < 0) {
                 return ret;
             }
@@ -1773,7 +1893,7 @@ namespace atframe {
             }
 
             std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
-            int ret = setup_handshake(crypt_handshake_->shared_conf);
+            int ret = setup_handshake(crypt_handshake_->shared_conf, true);
             if (ret < 0) {
                 return ret;
             }
@@ -1917,7 +2037,7 @@ namespace atframe {
 
             // and then, just like start rsp
             std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
-            int ret = setup_handshake(global_cfg);
+            int ret = setup_handshake(global_cfg, handshake_.client_mode);
             if (ret < 0) {
                 return ret;
             }
