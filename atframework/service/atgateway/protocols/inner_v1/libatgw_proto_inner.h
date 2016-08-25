@@ -27,12 +27,13 @@ extern "C" {
 #include <openssl/sha.h>
 
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+#include "mbedtls/platform.h"
+// "mbedtls/platform.h" must be the first
 #include "mbedtls/aes.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/dhm.h"
 #include "mbedtls/entropy.h"
 #include "mbedtls/net.h"
-#include "mbedtls/platform.h"
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha1.h"
 
@@ -172,7 +173,7 @@ namespace atframe {
             virtual int handshake_update();
 
             int start_session();
-            int reconnect_session(uint64_t sess_id, int type, const std::string &secret, uint32_t keybits);
+            int reconnect_session(uint64_t sess_id, int type, const std::vector<unsigned char> &secret, uint32_t keybits);
 
             int send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len);
             int send_post(const void *buffer, size_t len);

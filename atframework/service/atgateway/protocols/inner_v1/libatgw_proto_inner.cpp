@@ -26,6 +26,22 @@
 #define UNUSED(x) ((void)x)
 #endif
 
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+
+// copy from ssl_locl.h
+#ifndef n2s
+# define n2s(c,s)        ((s=(((unsigned int)(c[0]))<< 8)| \
+                            (((unsigned int)(c[1]))    )),c+=2)
+#endif
+
+// copy from ssl_locl.h
+#ifndef s2n
+# define s2n(s,c)        ((c[0]=(unsigned char)(((s)>> 8)&0xff), \
+                          c[1]=(unsigned char)(((s)    )&0xff)),c+=2)
+#endif
+
+#endif
+
 namespace atframe {
     namespace gateway {
         namespace detail {
@@ -60,7 +76,6 @@ namespace atframe {
 
                     ret = mbedtls_ctr_drbg_seed(&mbedtls_ctr_drbg_, mbedtls_entropy_func, &mbedtls_entropy_, NULL, 0);
                     if (0 != ret) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls setup seed failed");
                         return error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                     }
 #endif
@@ -232,7 +247,7 @@ namespace atframe {
                     return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                 }
 
-                ::util::xxtea_setup(&xtea_key.util_xxtea_ctx, reinterpret_cast<const unsigned char *>(secret.c_str()));
+                ::util::xxtea_setup(&xtea_key.util_xxtea_ctx, reinterpret_cast<const unsigned char *>(secret.data()));
                 break;
             }
             case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
@@ -241,12 +256,12 @@ namespace atframe {
                 }
 
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-                int res = AES_set_encrypt_key(reinterpret_cast<const unsigned char *>(secret.c_str()), kb, &aes_key.openssl_encrypt_key);
+                int res = AES_set_encrypt_key(reinterpret_cast<const unsigned char *>(secret.data()), kb, &aes_key.openssl_encrypt_key);
                 if (res < 0) {
                     return res;
                 }
 
-                res = AES_set_encrypt_key(reinterpret_cast<const unsigned char *>(secret.c_str()), kb, &aes_key.openssl_decrypt_key);
+                res = AES_set_encrypt_key(reinterpret_cast<const unsigned char *>(secret.data()), kb, &aes_key.openssl_decrypt_key);
                 if (res < 0) {
                     return res;
                 }
@@ -255,12 +270,12 @@ namespace atframe {
                 mbedtls_aes_init(&aes_key.mbedtls_aes_encrypt_ctx);
                 mbedtls_aes_init(&aes_key.mbedtls_aes_decrypt_ctx);
                 int res =
-                    mbedtls_aes_setkey_enc(&aes_key.mbedtls_aes_encrypt_ctx, reinterpret_cast<const unsigned char *>(secret.c_str()), kb);
+                    mbedtls_aes_setkey_enc(&aes_key.mbedtls_aes_encrypt_ctx, reinterpret_cast<const unsigned char *>(secret.data()), kb);
                 if (res < 0) {
                     return res;
                 }
 
-                res = mbedtls_aes_setkey_enc(&aes_key.mbedtls_aes_decrypt_ctx, reinterpret_cast<const unsigned char *>(secret.c_str()), kb);
+                res = mbedtls_aes_setkey_enc(&aes_key.mbedtls_aes_decrypt_ctx, reinterpret_cast<const unsigned char *>(secret.data()), kb);
                 if (res < 0) {
                     return res;
                 }
@@ -688,8 +703,9 @@ namespace atframe {
             int ret = 0;
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
-                crypt_handshake_->secret.assign(reinterpret_cast<const char *>(body_handshake.crypt_param()->data()),
-                                                body_handshake.crypt_param()->size());
+                crypt_handshake_->secret.resize(body_handshake.crypt_param()->size());
+                memcpy(crypt_handshake_->secret.data(), body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size());
+
                 crypt_handshake_->setup(body_handshake.crypt_type(), body_handshake.crypt_bits());
                 crypt_read_ = crypt_handshake_;
                 crypt_write_ = crypt_handshake_;
@@ -746,7 +762,8 @@ namespace atframe {
             // assign crypt options
             const flatbuffers::Vector<int8_t> *secret = body_handshake.crypt_param();
             if (NULL != secret) {
-                crypt_handshake_->secret.assign(reinterpret_cast<const char *>(secret->data()), secret->size());
+                crypt_handshake_->secret.resize(body_handshake.crypt_param()->size());
+                memcpy(crypt_handshake_->secret.data(), secret->data(), secret->size());
             }
 
             int ret = callbacks_->reconnect_fn(this, body_handshake.session_id());
@@ -902,7 +919,9 @@ namespace atframe {
                                    crypt_handshake_->shared_conf->conf_.default_key.size(), outbuf, outsz);
             }
             if (0 == ret) {
-                crypt_handshake_->param.assign(reinterpret_cast<const char *>(outbuf), outsz);
+                crypt_handshake_->param.resize(outsz);
+                memcpy(crypt_handshake_->param.data(), outbuf, outsz);
+
                 pubkey_rsp_body.add_crypt_param(
                     builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size()));
             } else {
@@ -1025,7 +1044,9 @@ namespace atframe {
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
                 // TODO generate a secret key
-                crypt_handshake_->secret = crypt_handshake_->shared_conf->conf_.default_key;
+                crypt_handshake_->secret.resize(crypt_handshake_->shared_conf->conf_.default_key.size());
+                memcpy(crypt_handshake_->secret.data(), crypt_handshake_->shared_conf->conf_.default_key.data(), crypt_handshake_->shared_conf->conf_.default_key.size());
+
                 crypt_handshake_->setup(crypt_handshake_->shared_conf->conf_.type, crypt_handshake_->shared_conf->conf_.keybits);
 
                 crypt_write_ = crypt_handshake_;
@@ -1098,8 +1119,8 @@ namespace atframe {
                     crypt_handshake_->param.resize(psz + psz + gsz, 0);
                     int res = mbedtls_dhm_make_params(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz),
                                                       reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), &olen,
-                                                      crypt_handshake_->shared_conf->mbedtls_ctr_drbg_random,
-                                                      &crypt_handshake_->shared_conf->handshake_.dh.mbedtls_ctr_drbg_);
+                                                      mbedtls_ctr_drbg_random,
+                                                      &crypt_handshake_->shared_conf->mbedtls_ctr_drbg_);
                     if (0 != res) {
                         ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH generate check public key failed");
                         ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1321,8 +1342,8 @@ namespace atframe {
                 crypt_handshake_->param.resize(psz, 0);
                 res = mbedtls_dhm_make_public(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz),
                                               reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), psz,
-                                              crypt_handshake_->shared_conf->mbedtls_ctr_drbg_random,
-                                              &crypt_handshake_->shared_conf->handshake_.dh.mbedtls_ctr_drbg_);
+                                              mbedtls_ctr_drbg_random,
+                                              &crypt_handshake_->shared_conf->mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH make public key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1333,8 +1354,8 @@ namespace atframe {
                 crypt_handshake_->secret.resize(psz, 0);
                 res =
                     mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]),
-                                            psz, &psz, crypt_handshake_->shared_conf->mbedtls_ctr_drbg_random,
-                                            &crypt_handshake_->shared_conf->handshake_.dh.mbedtls_ctr_drbg_);
+                                            psz, &psz, mbedtls_ctr_drbg_random,
+                                            &crypt_handshake_->shared_conf->mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH compute key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1879,7 +1900,7 @@ namespace atframe {
             return write_msg(builder);
         }
 
-        int libatgw_proto_inner_v1::reconnect_session(uint64_t sess_id, int type, const std::string &secret, uint32_t keybits) {
+        int libatgw_proto_inner_v1::reconnect_session(uint64_t sess_id, int type, const std::vector<unsigned char> &secret, uint32_t keybits) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
             }
