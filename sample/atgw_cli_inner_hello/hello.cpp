@@ -97,34 +97,59 @@ static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
     g_client_sess.proto.reset(new ::atframe::gateway::libatgw_proto_inner_v1());
     g_client_sess.proto->set_recv_buffer_limit(2 * 1024 * 1024, 0);
     g_client_sess.proto->set_send_buffer_limit(2 * 1024 * 1024, 0);
+    g_client_sess.proto->set_callbacks(&g_client_sess.callbacks);
 
     int ret = g_client_sess.proto->start_session();
     if (0 != ret) {
-        fprintf(stderr, "start session failed, res: %d", ret);
+        fprintf(stderr, "start session failed, res: %d\n", ret);
         g_client_sess.proto->close(0);
     }
 }
 
 static void libuv_dns_callback(uv_getaddrinfo_t* req, int status, struct addrinfo* res) {
     req->data = NULL;
-    if (0 != status) {
-        fprintf(stderr, "uv_getaddrinfo callback failed, msg: %s\n", uv_strerror(status));
-        uv_stop(req->loop);
-        return;
-    }
+    do {
+        if (0 != status) {
+            fprintf(stderr, "uv_getaddrinfo callback failed, msg: %s\n", uv_strerror(status));
+            uv_stop(req->loop);
+            break;
+        }
 
-    if (NULL != g_client.dns_req.data || NULL != g_client.tcp_sock.data) {
-        return;
-    }
+        if (NULL != g_client.dns_req.data || NULL != g_client.tcp_sock.data) {
+            break;
+        }
 
-    uv_tcp_init(req->loop, &g_client.tcp_sock);
-    int res_code = uv_tcp_connect(&g_client.tcp_req, &g_client.tcp_sock, res->ai_addr, libuv_tcp_connect_callback);
-    if (0 != res_code) {
-        fprintf(stderr, "uv_tcp_connect failed, msg: %s\n", uv_strerror(res_code));
-        uv_stop(req->loop);
+        sockaddr_storage real_addr;
+        uv_tcp_init(req->loop, &g_client.tcp_sock);
+        if (AF_INET == res->ai_family) {
+            sockaddr_in *res_c = (struct sockaddr_in *)(res->ai_addr);
+            char ip[17] = { 0 };
+            uv_ip4_name(res_c, ip, sizeof(ip));
+            uv_ip4_addr(ip, g_port, (struct sockaddr_in *)&real_addr);
+        } else if (AF_INET6 == res->ai_family) {
+            sockaddr_in6 *res_c = (struct sockaddr_in6 *)(res->ai_addr);
+            char ip[40] = { 0 };
+            uv_ip6_name(res_c, ip, sizeof(ip));
+            uv_ip6_addr(ip, g_port, (struct sockaddr_in6 *)&real_addr);
+        } else {
+            fprintf(stderr, "uv_tcp_connect failed, ai_family not supported: %d\n", res->ai_family);
+            break;
+        }
+
+        int res_code = uv_tcp_connect(&g_client.tcp_req, &g_client.tcp_sock, (struct sockaddr *)&real_addr, libuv_tcp_connect_callback);
+        if (0 != res_code) {
+            fprintf(stderr, "uv_tcp_connect failed, msg: %s\n", uv_strerror(res_code));
+            uv_stop(req->loop);
+            break;
+        }
+        g_client.dns_req.data = &g_client;
+        g_client.tcp_sock.data = &g_client;
+    } while (false);
+
+    // free addrinfo
+    if (NULL != res) {
+        uv_freeaddrinfo(res);
     }
-    g_client.dns_req.data = &g_client;
-    g_client.tcp_sock.data = &g_client;
 }
 
 static int start_connect() {
@@ -256,7 +281,7 @@ static void libuv_tick_timer_callback(uv_timer_t* handle) {
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s <ip> <port> [dhparam] [mode]\n\tmode can only be tick\n", argv[0]);
+        fprintf(stderr, "usage: %s <ip> <port> [mode]\n\tmode can only be tick\n", argv[0]);
         return -1;
     }
 
@@ -284,14 +309,9 @@ int main(int argc, char *argv[]) {
     g_host = argv[1];
     g_port = static_cast<int>(strtol(argv[2], NULL, 10));
     memset(&g_client, 0, sizeof(g_client));
-    if (argc > 3) {
-        g_crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA;
-        g_crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH;
-        g_crypt_conf.dh_param = argv[3];
-    }
 
-    if (argc > 4) {
-        mode = argv[4];
+    if (argc > 3) {
+        mode = argv[3];
         std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
     }
 

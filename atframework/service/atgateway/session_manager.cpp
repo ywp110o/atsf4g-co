@@ -36,6 +36,12 @@ namespace atframe {
             }
         }
 
+        session_manager::session_manager():evloop_(NULL), app_node_(NULL), private_data_(NULL) {}
+
+        session_manager::~session_manager() {
+            reset();
+        }
+
         int session_manager::init(::atbus::node *bus_node, create_proto_fn_t fn) {
             evloop_ = bus_node->get_evloop();
             app_node_ = bus_node;
@@ -58,7 +64,7 @@ namespace atframe {
                 }
             }
 
-            return 0;
+            return ret;
         }
 
         int session_manager::listen(const char *address) {
@@ -68,8 +74,8 @@ namespace atframe {
 
             listen_handle_ptr_t res;
             // libuv listen and setup callbacks
-            if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv4:", addr.scheme.c_str(), 5) ||
-                0 == UTIL_STRFUNC_STRNCASE_CMP("ipv6:", addr.scheme.c_str(), 5)) {
+            if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv4", addr.scheme.c_str(), 4) ||
+                0 == UTIL_STRFUNC_STRNCASE_CMP("ipv6", addr.scheme.c_str(), 4)) {
                 uv_tcp_t *tcp_handle = ::atframe::gateway::detail::session_manager_make_stream_ptr<uv_tcp_t>(res);
                 if (res) {
                     uv_stream_set_blocking(res.get(), 0);
@@ -114,7 +120,7 @@ namespace atframe {
                     tcp_handle->data = this;
                 }
 
-            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("unix:", addr.scheme.c_str(), 5)) {
+            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("unix", addr.scheme.c_str(), 4)) {
                 uv_pipe_t *pipe_handle = ::atframe::gateway::detail::session_manager_make_stream_ptr<uv_pipe_t>(res);
                 if (res) {
                     uv_stream_set_blocking(res.get(), 0);

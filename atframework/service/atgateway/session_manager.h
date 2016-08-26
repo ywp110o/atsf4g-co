@@ -58,6 +58,9 @@ namespace atframe {
             typedef std::function<int(session *, uv_stream_t *)> on_create_session_fn_t;
 
         public:
+            session_manager();
+            ~session_manager();
+
             int init(::atbus::node *bus_node, create_proto_fn_t fn);
             /**
              * @brief listen all address in configure

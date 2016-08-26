@@ -317,7 +317,7 @@ namespace atframe {
 
             read_head_.len = 0;
 
-            ping_.last_ping = 0;
+            ping_.last_ping = ping_data_t::clk_t::from_time_t(0);
             ping_.last_delta = 0;
 
             handshake_.has_data = false;
@@ -546,8 +546,7 @@ namespace atframe {
                     static_cast<const ::atframe::gw::inner::v1::cs_body_ping *>(msg->body());
 
                 // response pong
-                ping_.last_ping = static_cast<time_t>(msg_body->timepoint());
-                send_pong(ping_.last_ping);
+                send_pong(msg_body->timepoint());
                 break;
             }
             case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PONG: {
@@ -560,8 +559,8 @@ namespace atframe {
                     static_cast<const ::atframe::gw::inner::v1::cs_body_ping *>(msg->body());
 
                 // update ping/pong duration
-                if (0 != ping_.last_ping) {
-                    ping_.last_delta = static_cast<time_t>(msg_body->timepoint()) - ping_.last_ping;
+                if (0 != ping_data_t::clk_t::to_time_t(ping_.last_ping)) {
+                    ping_.last_delta = static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(ping_data_t::clk_t::now() - ping_.last_ping).count());
                 }
                 break;
             }
@@ -655,22 +654,18 @@ namespace atframe {
 
             callbacks_->new_session_fn(this, session_id_);
 
+            using namespace ::atframe::gw::inner::v1;
+
             flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_handshakeBuilder handshake_body(builder);
-
-
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
+                                                                     ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_body_handshake> handshake_body;
             ret = pack_handshake_start_rsp(builder, session_id_, handshake_body);
             if (ret < 0) {
                 return ret;
             }
 
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
-            msg.add_body(handshake_body.Finish().Union());
-
-            builder.Finish(msg.Finish());
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()));
             return write_msg(builder);
         }
 
@@ -717,22 +712,19 @@ namespace atframe {
             }
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
                 // if in DH handshake, generate and send pubkey
+                using namespace ::atframe::gw::inner::v1;
+
                 flatbuffers::FlatBufferBuilder builder;
-                ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-                msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
-                                                                         ::atframe::gateway::detail::alloc_seq()));
-                ::atframe::gw::inner::v1::cs_body_handshakeBuilder dh_pubkey_body(builder);
+                flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
+                    ::atframe::gateway::detail::alloc_seq());
+                flatbuffers::Offset<cs_body_handshake> handshake_body;
 
-
-                ret = pack_handshake_dh_pubkey_req(builder, body_handshake, dh_pubkey_body);
+                ret = pack_handshake_dh_pubkey_req(builder, body_handshake, handshake_body);
                 if (ret < 0) {
                     break;
                 }
 
-                msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
-                msg.add_body(dh_pubkey_body.Finish().Union());
-
-                builder.Finish(msg.Finish());
+                builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()));
                 ret = write_msg(builder);
                 break;
             }
@@ -773,29 +765,26 @@ namespace atframe {
                 ret = error_code_t::EN_ECT_HANDSHAKE;
             }
 
+            using namespace ::atframe::gw::inner::v1;
+
             flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_handshakeBuilder reconn_body(builder);
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
+                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_body_handshake> reconn_body;
 
-
+            uint64_t sess_id = 0;
             if (0 == ret) {
-                reconn_body.add_session_id(session_id_);
-            } else {
-                reconn_body.add_session_id(0);
+                sess_id = session_id_;
             }
-            reconn_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_RECONNECT_RSP);
 
-            // copy data
-            reconn_body.add_switch_type(static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type));
-            reconn_body.add_crypt_type(static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->type));
-            reconn_body.add_crypt_bits(crypt_handshake_->keybits);
+            reconn_body = Createcs_body_handshake(builder,
+                sess_id, handshake_step_t_EN_HST_RECONNECT_RSP,
+                static_cast<::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
+                static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->type),
+                crypt_handshake_->keybits
+            );
 
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
-            msg.add_body(reconn_body.Finish().Union());
-
-            builder.Finish(msg.Finish());
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, reconn_body.Union()));
 
             if (0 != ret) {
                 close_handshake(ret);
@@ -832,19 +821,13 @@ namespace atframe {
                 return error_code_t::EN_ECT_HANDSHAKE;
             }
 
+            using namespace ::atframe::gw::inner::v1;
             flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_handshakeBuilder pubkey_rsp_body(builder);
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
+                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_body_handshake> pubkey_rsp_body;
 
-            pubkey_rsp_body.add_session_id(session_id_);
-            pubkey_rsp_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_DH_PUBKEY_RSP);
 
-            // copy data
-            pubkey_rsp_body.add_switch_type(peer_body.switch_type());
-            pubkey_rsp_body.add_crypt_type(peer_body.crypt_type());
-            pubkey_rsp_body.add_crypt_bits(peer_body.crypt_bits());
             crypt_handshake_->param.clear();
 
             do {
@@ -918,21 +901,23 @@ namespace atframe {
                 ret = encrypt_data(*crypt_handshake_, crypt_handshake_->shared_conf->conf_.default_key.data(),
                                    crypt_handshake_->shared_conf->conf_.default_key.size(), outbuf, outsz);
             }
+
             if (0 == ret) {
                 crypt_handshake_->param.resize(outsz);
                 memcpy(crypt_handshake_->param.data(), outbuf, outsz);
 
-                pubkey_rsp_body.add_crypt_param(
-                    builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size()));
+                pubkey_rsp_body = Createcs_body_handshake(builder, session_id_, handshake_step_t_EN_HST_DH_PUBKEY_RSP,
+                    peer_body.switch_type(), peer_body.crypt_type(), peer_body.crypt_bits(),
+                    builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), outsz)
+                );
             } else {
-                pubkey_rsp_body.add_session_id(0);
-                pubkey_rsp_body.add_crypt_param(builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+                pubkey_rsp_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_DH_PUBKEY_RSP,
+                    peer_body.switch_type(), peer_body.crypt_type(), peer_body.crypt_bits(),
+                    builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0)
+                );
             }
 
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
-            msg.add_body(pubkey_rsp_body.Finish().Union());
-
-            builder.Finish(msg.Finish());
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, pubkey_rsp_body.Union()));
             ret = write_msg(builder);
             return ret;
         }
@@ -982,9 +967,9 @@ namespace atframe {
         int libatgw_proto_inner_v1::dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
             // check crypt info
             int ret = 0;
-            if (handshake_.switch_secret_type != body_handshake.switch_type() || !crypt_handshake_->shared_conf ||
-                crypt_handshake_->shared_conf->conf_.type != body_handshake.crypt_type() ||
-                crypt_handshake_->shared_conf->conf_.keybits != body_handshake.crypt_bits()) {
+            if (handshake_.switch_secret_type != body_handshake.switch_type() || !crypt_handshake_ ||
+                crypt_handshake_->type != body_handshake.crypt_type() ||
+                crypt_handshake_->keybits != body_handshake.crypt_bits()) {
                 ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "crypt information between client and server not matched.");
                 close(error_code_t::EN_ECT_HANDSHAKE, true);
                 return error_code_t::EN_ECT_HANDSHAKE;
@@ -1012,20 +997,18 @@ namespace atframe {
         }
 
         int libatgw_proto_inner_v1::pack_handshake_start_rsp(flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id,
-                                                             ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body) {
-
-            handshake_body.add_session_id(sess_id);
-            handshake_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_START_RSP);
+            flatbuffers::Offset<::atframe::gw::inner::v1::cs_body_handshake> &handshake_data) {
+            using namespace ::atframe::gw::inner::v1;
 
             int ret = 0;
             // if not use crypt, assign crypt information and close_handshake(0)
             if (0 == sess_id || !crypt_handshake_->shared_conf ||
                 ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == crypt_handshake_->shared_conf->conf_.type) {
                 // empty data
-                handshake_body.add_switch_type(::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT);
-                handshake_body.add_crypt_type(::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE);
-                handshake_body.add_crypt_bits(0);
-                handshake_body.add_crypt_param(builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+                handshake_data = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_START_RSP,
+                    switch_secret_t_EN_SST_DIRECT, crypt_type_t_EN_ET_NONE, 0,
+                    builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0)
+                );
 
                 crypt_handshake_->setup(::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE, 0);
                 crypt_read_ = crypt_handshake_;
@@ -1034,13 +1017,7 @@ namespace atframe {
                 return ret;
             }
 
-            // use the global switch type
-            handshake_body.add_switch_type(static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type));
-            // use the global crypt type
-            handshake_body.add_crypt_type(static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->shared_conf->conf_.type));
-            handshake_body.add_crypt_bits(crypt_handshake_->shared_conf->conf_.keybits);
             crypt_handshake_->param.clear();
-
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
                 // TODO generate a secret key
@@ -1048,10 +1025,15 @@ namespace atframe {
                 memcpy(crypt_handshake_->secret.data(), crypt_handshake_->shared_conf->conf_.default_key.data(), crypt_handshake_->shared_conf->conf_.default_key.size());
 
                 crypt_handshake_->setup(crypt_handshake_->shared_conf->conf_.type, crypt_handshake_->shared_conf->conf_.keybits);
-
                 crypt_write_ = crypt_handshake_;
-                handshake_body.add_crypt_param(builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->secret.data()),
-                                                                    crypt_handshake_->secret.size()));
+
+                handshake_data = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_START_RSP,
+                    static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type), 
+                    static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->type), 
+                    crypt_handshake_->keybits,
+                    builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->secret.data()), crypt_handshake_->secret.size())
+                );
+
                 break;
             }
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
@@ -1136,8 +1118,13 @@ namespace atframe {
 
                 } while (false);
                 // send send first parameter
-                handshake_body.add_crypt_param(
-                    builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size()));
+                handshake_data = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_START_RSP,
+                    static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
+                    static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->shared_conf->conf_.type),
+                    crypt_handshake_->shared_conf->conf_.keybits,
+                    builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size())
+                );
+
                 break;
             }
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
@@ -1164,24 +1151,21 @@ namespace atframe {
 
         int libatgw_proto_inner_v1::pack_handshake_dh_pubkey_req(flatbuffers::FlatBufferBuilder &builder,
                                                                  const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
-                                                                 ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body) {
-
-            handshake_body.add_session_id(peer_body.session_id());
-            handshake_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_DH_PUBKEY_REQ);
+            flatbuffers::Offset<::atframe::gw::inner::v1::cs_body_handshake> &handshake_data) {
+            using namespace ::atframe::gw::inner::v1;
 
             int ret = 0;
             if (0 == peer_body.session_id() || NULL == peer_body.crypt_param() || !crypt_handshake_->shared_conf) {
                 // empty data
+                handshake_data = Createcs_body_handshake(builder, peer_body.session_id(), handshake_step_t_EN_HST_DH_PUBKEY_REQ,
+                    switch_secret_t_EN_SST_DIRECT, crypt_type_t_EN_ET_NONE, 0,
+                    builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0)
+                );
+
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
 
             handshake_.switch_secret_type = peer_body.switch_type();
-            // use the global switch type
-            handshake_body.add_switch_type(static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type));
-            // use the global crypt type
-
-            handshake_body.add_crypt_type(peer_body.crypt_type());
-            handshake_body.add_crypt_bits(peer_body.crypt_bits());
             crypt_handshake_->param.clear();
 
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
@@ -1196,7 +1180,7 @@ namespace atframe {
                 }
 
                 // ===============================================
-                // TODO import P,G,GY
+                // import P,G,GY
                 // @see int ssl3_get_key_exchange(SSL *s) in s3_clnt.c or s3_clnt.c
                 {
                     unsigned int i = 0, param_len = 2, n = static_cast<unsigned int>(peer_body.crypt_param()->size());
@@ -1374,8 +1358,11 @@ namespace atframe {
             }
 #endif
             // send send first parameter
-            handshake_body.add_crypt_param(
-                builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size()));
+            handshake_data = Createcs_body_handshake(builder, peer_body.session_id(), handshake_step_t_EN_HST_DH_PUBKEY_REQ,
+                static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type), 
+                peer_body.crypt_type(), peer_body.crypt_bits(),
+                builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size())
+            );
 
             // TODO if switch type is RSA
             // ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
@@ -1860,10 +1847,6 @@ namespace atframe {
                 return error_code_t::EN_ECT_CLOSING;
             }
 
-            if (NULL == callbacks_ || !callbacks_->write_fn || !crypt_write_) {
-                return error_code_t::EN_ECT_MISS_CALLBACKS;
-            }
-
             if (0 != session_id_) {
                 return error_code_t::EN_ECT_SESSION_ALREADY_EXIST;
             }
@@ -1874,39 +1857,29 @@ namespace atframe {
                 return ret;
             }
 
+            if (NULL == callbacks_ || !callbacks_->write_fn) {
+                return error_code_t::EN_ECT_MISS_CALLBACKS;
+            }
+
+            using namespace ::atframe::gw::inner::v1;
+
             flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_handshakeBuilder handshake_body(builder);
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
+                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_body_handshake> handshake_body;
 
-            handshake_body.add_session_id(0);
-            handshake_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_START_REQ);
-            handshake_body.add_switch_type(::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT);
-            handshake_body.add_crypt_type(::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE);
-            handshake_body.add_crypt_bits(0);
-            handshake_body.add_crypt_param(builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+            handshake_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_START_REQ,
+                switch_secret_t_EN_SST_DIRECT, crypt_type_t_EN_ET_NONE, 0, 
+                builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0)
+            );
 
-            ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
-            rsa_cert.add_rsa_sign(::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1);
-            rsa_cert.add_hash_type(::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5);
-            rsa_cert.add_pubkey(builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
-            handshake_body.add_rsa_cert(rsa_cert.Finish());
-
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
-            msg.add_body(handshake_body.Finish().Union());
-
-            builder.Finish(msg.Finish());
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()));
             return write_msg(builder);
         }
 
         int libatgw_proto_inner_v1::reconnect_session(uint64_t sess_id, int type, const std::vector<unsigned char> &secret, uint32_t keybits) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
-            }
-
-            if (NULL == callbacks_ || !callbacks_->write_fn) {
-                return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
 
             if (0 == session_id_) {
@@ -1919,6 +1892,10 @@ namespace atframe {
                 return ret;
             }
 
+            if (NULL == callbacks_ || !callbacks_->write_fn) {
+                return error_code_t::EN_ECT_MISS_CALLBACKS;
+            }
+
             // encrypt secrets
             crypt_handshake_->secret = secret;
             crypt_handshake_->setup(type, keybits);
@@ -1927,29 +1904,20 @@ namespace atframe {
             size_t secret_length = secret.size();
             encrypt_data(*crypt_handshake_, secret.data(), secret.size(), secret_buffer, secret_length);
 
+            using namespace ::atframe::gw::inner::v1;
+
             flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_handshakeBuilder handshake_body(builder);
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
+                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_body_handshake> handshake_body;
 
-            handshake_body.add_session_id(sess_id);
-            handshake_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_RECONNECT_REQ);
-            handshake_body.add_switch_type(::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT);
-            handshake_body.add_crypt_type(static_cast< ::atframe::gw::inner::v1::crypt_type_t>(type));
-            handshake_body.add_crypt_bits(keybits);
-            handshake_body.add_crypt_param(builder.CreateVector(reinterpret_cast<const int8_t *>(secret_buffer), secret_length));
+            handshake_body = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_RECONNECT_REQ,
+                static_cast<switch_secret_t>(handshake_.switch_secret_type), 
+                static_cast< ::atframe::gw::inner::v1::crypt_type_t>(type), keybits,
+                builder.CreateVector(reinterpret_cast<const int8_t *>(secret_buffer), secret_length)
+            );
 
-            ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
-            rsa_cert.add_rsa_sign(::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1);
-            rsa_cert.add_hash_type(::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5);
-            rsa_cert.add_pubkey(builder.CreateVector(reinterpret_cast<const int8_t *>(secret.data()), secret.size()));
-            handshake_body.add_rsa_cert(rsa_cert.Finish());
-
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
-            msg.add_body(handshake_body.Finish().Union());
-
-            builder.Finish(msg.Finish());
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()));
             return write_msg(builder);
         }
 
@@ -1970,18 +1938,17 @@ namespace atframe {
             }
 
             // pack
+            using namespace ::atframe::gw::inner::v1;
+
             flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, msg_type, ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_postBuilder post_body(builder);
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, msg_type,
+                ::atframe::gateway::detail::alloc_seq());
 
-            post_body.add_length(static_cast<uint64_t>(ori_len));
-            post_body.add_data(builder.CreateVector(reinterpret_cast<const int8_t *>(buffer), len));
+            flatbuffers::Offset<cs_body_post> post_body = Createcs_body_post(builder, static_cast<uint64_t>(ori_len),
+                builder.CreateVector(reinterpret_cast<const int8_t *>(buffer), len)
+            );
 
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_post);
-            msg.add_body(post_body.Finish().Union());
-
-            builder.Finish(msg.Finish());
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_post, post_body.Union()));
             return write_msg(builder);
         }
 
@@ -1989,7 +1956,7 @@ namespace atframe {
             return send_post(::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST, buffer, len);
         }
 
-        int libatgw_proto_inner_v1::send_ping(time_t tp) {
+        int libatgw_proto_inner_v1::send_ping() {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
             }
@@ -1998,24 +1965,23 @@ namespace atframe {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
 
-            ping_.last_ping = tp;
+            ping_.last_ping = ping_data_t::clk_t::now();
+
+            using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PING,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_pingBuilder ping_body(builder);
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_PING,
+                ::atframe::gateway::detail::alloc_seq());
 
-            ping_body.add_timepoint(static_cast<int64_t>(tp));
+            flatbuffers::Offset<cs_body_ping> ping_body = Createcs_body_ping(builder, 
+                static_cast<int64_t>(ping_.last_ping.time_since_epoch().count())
+            );
 
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_ping);
-            msg.add_body(ping_body.Finish().Union());
-
-            builder.Finish(msg.Finish());
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_ping, ping_body.Union()));
             return write_msg(builder);
         }
 
-        int libatgw_proto_inner_v1::send_pong(time_t tp) {
+        int libatgw_proto_inner_v1::send_pong(int64_t tp) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
             }
@@ -2024,18 +1990,15 @@ namespace atframe {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
 
+            using namespace ::atframe::gw::inner::v1;
+
             flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_PONG,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_pingBuilder ping_body(builder);
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_PONG,
+                ::atframe::gateway::detail::alloc_seq());
 
-            ping_body.add_timepoint(static_cast<int64_t>(tp));
+            flatbuffers::Offset<cs_body_ping> ping_body = Createcs_body_ping(builder, tp);
 
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_ping);
-            msg.add_body(ping_body.Finish().Union());
-
-            builder.Finish(msg.Finish());
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_ping, ping_body.Union()));
             return write_msg(builder);
         }
 
@@ -2063,22 +2026,19 @@ namespace atframe {
                 return ret;
             }
 
-            flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_SYN,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_handshakeBuilder handshake_body(builder);
+            using namespace ::atframe::gw::inner::v1;
 
+            flatbuffers::FlatBufferBuilder builder;
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_POST_KEY_SYN,
+                ::atframe::gateway::detail::alloc_seq());
+
+            flatbuffers::Offset<cs_body_handshake> handshake_body;
             ret = pack_handshake_start_rsp(builder, session_id_, handshake_body);
             if (ret < 0) {
                 return ret;
             }
 
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
-            msg.add_body(handshake_body.Finish().Union());
-
-            builder.Finish(msg.Finish());
-            ret = write_msg(builder);
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()));
             return ret;
         }
 
@@ -2091,18 +2051,15 @@ namespace atframe {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
 
+            using namespace ::atframe::gw::inner::v1;
+
             flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_KICKOFF,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_kickoffBuilder kickoff_body(builder);
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_KICKOFF,
+                ::atframe::gateway::detail::alloc_seq());
 
-            kickoff_body.add_reason(reason);
+            flatbuffers::Offset<cs_body_kickoff> kickoff_body = Createcs_body_kickoff(builder, reason);
 
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_kickoff);
-            msg.add_body(kickoff_body.Finish().Union());
-
-            builder.Finish(msg.Finish());
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_kickoff, kickoff_body.Union()));
             return write_msg(builder);
         }
 
@@ -2116,19 +2073,7 @@ namespace atframe {
             }
 
             // pack
-            flatbuffers::FlatBufferBuilder builder;
-            ::atframe::gw::inner::v1::cs_msgBuilder msg(builder);
-            msg.add_head(::atframe::gw::inner::v1::Createcs_msg_head(builder, ::atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE,
-                                                                     ::atframe::gateway::detail::alloc_seq()));
-            ::atframe::gw::inner::v1::cs_body_handshakeBuilder verify_body(builder);
-
-            verify_body.add_session_id(session_id_);
-            verify_body.add_step(::atframe::gw::inner::v1::handshake_step_t_EN_HST_VERIFY);
-
-            // copy data
-            verify_body.add_switch_type(static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type));
-            verify_body.add_crypt_type(static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_write_->type));
-            verify_body.add_crypt_bits(crypt_write_->keybits);
+            uint64_t sess_id = session_id_;
 
             const void *outbuf = NULL;
             size_t outsz = 0;
@@ -2137,17 +2082,26 @@ namespace atframe {
                 ret = encrypt_data(*crypt_write_, buf, sz, outbuf, outsz);
             }
 
-            if (0 == ret) {
-                verify_body.add_crypt_param(builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), outsz));
-            } else {
-                verify_body.add_session_id(0);
-                verify_body.add_crypt_param(builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+            if (0 != ret) {
+                sess_id = 0;
+                outbuf = NULL;
+                outsz = 0;
             }
 
-            msg.add_body_type(::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake);
-            msg.add_body(verify_body.Finish().Union());
+            using namespace ::atframe::gw::inner::v1;
 
-            builder.Finish(msg.Finish());
+            flatbuffers::FlatBufferBuilder builder;
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
+                ::atframe::gateway::detail::alloc_seq());
+
+            flatbuffers::Offset<cs_body_handshake> verify_body = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_VERIFY,
+                static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
+                static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_write_->type),
+                crypt_write_->keybits,
+                builder.CreateVector<int8_t>(reinterpret_cast<const int8_t*>(outbuf), outsz)
+            );
+
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, verify_body.Union()));
             return write_msg(builder);
         }
 

@@ -3,7 +3,8 @@
 
 #pragma once
 
-#include "std/smart_ptr.h"
+#include <std/smart_ptr.h>
+#include <std/chrono.h>
 #include <vector>
 
 
@@ -122,7 +123,8 @@ namespace atframe {
 
             // ping/pong
             struct ping_data_t {
-                time_t last_ping;
+                typedef std::chrono::system_clock clk_t;
+                clk_t::time_point last_ping;
                 time_t last_delta;
             };
 
@@ -147,10 +149,10 @@ namespace atframe {
             int dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
 
             int pack_handshake_start_rsp(flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id,
-                                         ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body);
+                flatbuffers::Offset<::atframe::gw::inner::v1::cs_body_handshake> &handshake_body);
             int pack_handshake_dh_pubkey_req(flatbuffers::FlatBufferBuilder &builder,
                                              const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
-                                             ::atframe::gw::inner::v1::cs_body_handshakeBuilder &handshake_body);
+                flatbuffers::Offset<::atframe::gw::inner::v1::cs_body_handshake> &handshake_body);
 
             int try_write();
             int write_msg(flatbuffers::FlatBufferBuilder &builder);
@@ -177,8 +179,8 @@ namespace atframe {
 
             int send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len);
             int send_post(const void *buffer, size_t len);
-            int send_ping(time_t tp);
-            int send_pong(time_t tp);
+            int send_ping();
+            int send_pong(int64_t tp);
             int send_key_syn();
             int send_kickoff(int reason);
             int send_verify(const void *buf, size_t sz);
