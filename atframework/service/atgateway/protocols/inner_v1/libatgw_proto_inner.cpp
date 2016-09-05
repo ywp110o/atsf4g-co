@@ -64,10 +64,6 @@ namespace atframe {
                     int ret = 0;
                     close();
 
-                    if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == conf_.type) {
-                        return ret;
-                    }
-
 // init random engine
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
@@ -80,8 +76,17 @@ namespace atframe {
                     }
 #endif
 
+                    if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == conf_.type) {
+                        inited_ = true;
+                        return ret;
+                    }
+
                     switch (conf_.switch_secret_type) {
                     case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
+                        // do nothing in client mode
+                        if (conf_.client_mode) {
+                            break;
+                        }
 
                         FILE *pem = NULL;
                         UTIL_FS_OPEN(pem_file_e, pem, conf_.dh_param.c_str(), "r");
@@ -105,6 +110,19 @@ namespace atframe {
                             }
                             fread(pem_buf, sizeof(unsigned char), pem_sz, pem);
                             openssl_dh_bio_ = BIO_new_mem_buf(pem_buf, static_cast<int>(pem_sz));
+
+                            // check 
+                            DH* test_dh_ctx = PEM_read_bio_DHparams(openssl_dh_bio_, NULL, NULL, NULL);
+                            if (NULL == test_dh_ctx) {
+                                ret = error_code_t::EN_ECT_CRYPT_READ_DHPARAM_FILE;
+                            } else {
+                                int errcode = 0;
+                                DH_check(test_dh_ctx, &errcode);
+                                if (((DH_CHECK_P_NOT_SAFE_PRIME | DH_NOT_SUITABLE_GENERATOR | DH_UNABLE_TO_CHECK_GENERATOR) & errcode)) {
+                                    ret = error_code_t::EN_ECT_CRYPT_READ_DHPARAM_FILE;
+                                }
+                                DH_free(test_dh_ctx);
+                            }
                         } while (false);
 
                         if (0 == ret) {
@@ -127,8 +145,9 @@ namespace atframe {
                         if (0 != mbedtls_dhm_parse_dhm(&test_dh_ctx, reinterpret_cast<const unsigned char *>(mbedtls_dh_param_.data()),
                                                        pem_sz)) {
                             ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        } else {
+                            mbedtls_dhm_free(&test_dh_ctx);
                         }
-                        mbedtls_dhm_free(&test_dh_ctx);
 
                         if (0 == ret) {
                             inited_ = true;
@@ -169,6 +188,10 @@ namespace atframe {
 
                     switch (conf_.switch_secret_type) {
                     case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
+                        // do nothing in client mode
+                        if (conf_.client_mode) {
+                            break;
+                        }
 // free DH param file
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                         if (NULL != openssl_dh_bio_) {
@@ -203,6 +226,16 @@ namespace atframe {
                     mbedtls_ctr_drbg_free(&mbedtls_ctr_drbg_);
                     mbedtls_entropy_free(&mbedtls_entropy_);
 #endif
+                }
+
+                static void default_crypt_configure(libatgw_proto_inner_v1::crypt_conf_t& dconf) {
+                    dconf.default_key = "atgw-key";
+                    dconf.dh_param.clear();
+                    dconf.keybits = 128;
+                    dconf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT;
+                    dconf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE;
+                    dconf.update_interval = 1200;
+                    dconf.client_mode = false;
                 }
 
                 libatgw_proto_inner_v1::crypt_conf_t conf_;
@@ -288,6 +321,13 @@ namespace atframe {
 
             type = t;
             keybits = kb;
+
+            // TODO debug
+            printf("[DEBUG] setup crypt type=%d, keybits=%u, secret=", t, keybits);
+            for (size_t i = 0; i < secret.size(); ++i) {
+                printf("%02x", secret[i]);
+            }
+            printf("\n");
             return 0;
         }
 
@@ -647,7 +687,7 @@ namespace atframe {
             }
 
             std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
-            int ret = setup_handshake(global_cfg, false);
+            int ret = setup_handshake(global_cfg);
             if (ret < 0) {
                 return ret;
             }
@@ -665,7 +705,7 @@ namespace atframe {
                 return ret;
             }
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
         }
 
@@ -679,6 +719,36 @@ namespace atframe {
 
             // assign session id,
             session_id_ = body_handshake.session_id();
+
+            // if is running handshake, can not handshake again
+            if (!handshake_.has_data) {
+                // make a new crypt session for handshake
+                if (crypt_handshake_->shared_conf) {
+                    crypt_handshake_ = std::make_shared<crypt_session_t>();
+                }
+
+
+                std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
+                // check if global configure changed
+                if (!global_cfg || global_cfg->conf_.type != body_handshake.crypt_type() ||
+                    global_cfg->conf_.switch_secret_type != body_handshake.switch_type() ||
+                    global_cfg->conf_.keybits != body_handshake.crypt_bits()) {
+                    crypt_conf_t global_crypt_cfg;
+                    detail::crypt_global_configure_t::default_crypt_configure(global_crypt_cfg);
+                    global_crypt_cfg.type = body_handshake.crypt_type();
+                    global_crypt_cfg.switch_secret_type = body_handshake.switch_type();
+                    global_crypt_cfg.keybits = body_handshake.crypt_bits();
+                    global_crypt_cfg.client_mode = true;
+                    ::atframe::gateway::libatgw_proto_inner_v1::global_reload(global_crypt_cfg);
+                    global_cfg = detail::crypt_global_configure_t::current();
+                }
+                int ret = setup_handshake(global_cfg);
+                if (ret < 0) {
+                    return ret;
+                }
+            } else {
+                return error_code_t::EN_ECT_HANDSHAKE;
+            }
 
             // if not use crypt, assign crypt information and close_handshake(0)
             if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == body_handshake.crypt_type()) {
@@ -724,7 +794,7 @@ namespace atframe {
                     break;
                 }
 
-                builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()));
+                builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
                 ret = write_msg(builder);
                 break;
             }
@@ -784,7 +854,7 @@ namespace atframe {
                 crypt_handshake_->keybits
             );
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, reconn_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, reconn_body.Union()), cs_msgIdentifier());
 
             if (0 != ret) {
                 close_handshake(ret);
@@ -793,6 +863,9 @@ namespace atframe {
             } else {
                 ret = write_msg(builder);
                 close_handshake(ret);
+                if (ret < 0) {
+                    close(ret, true);
+                }
             }
 
             return ret;
@@ -917,7 +990,7 @@ namespace atframe {
                 );
             }
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, pubkey_rsp_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, pubkey_rsp_body.Union()), cs_msgIdentifier());
             ret = write_msg(builder);
             return ret;
         }
@@ -990,8 +1063,9 @@ namespace atframe {
                 // than read key updated
                 close_handshake(0);
             } else {
-                ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "verify failed.");
-                close(error_code_t::EN_ECT_HANDSHAKE, true);
+                ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_CRYPT_VERIFY, "verify failed.");
+                close_handshake(error_code_t::EN_ECT_CRYPT_VERIFY);
+                close(close_reason_t::EN_CRT_HANDSHAKE, true);
             }
             return ret;
         }
@@ -1374,7 +1448,7 @@ namespace atframe {
             return ret;
         }
 
-        int libatgw_proto_inner_v1::setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf, bool client_mode) {
+        int libatgw_proto_inner_v1::setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf) {
             if (handshake_.has_data) {
                 return 0;
             }
@@ -1389,7 +1463,6 @@ namespace atframe {
                 return ret;
             }
 
-            handshake_.client_mode = client_mode;
             handshake_.switch_secret_type = crypt_handshake_->shared_conf->conf_.switch_secret_type;
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
@@ -1398,9 +1471,10 @@ namespace atframe {
                 handshake_.dh.openssl_dh_ptr_ = NULL;
                 do {
                     // client mode, just init , do not read PEM file
-                    if (handshake_.client_mode) {
+                    if (crypt_handshake_->shared_conf->conf_.client_mode) {
                         handshake_.dh.openssl_dh_ptr_ = DH_new();
                     } else {
+                        BIO_reset(crypt_handshake_->shared_conf->openssl_dh_bio_);
                         handshake_.dh.openssl_dh_ptr_ =
                             PEM_read_bio_DHparams(crypt_handshake_->shared_conf->openssl_dh_bio_, NULL, NULL, NULL);
                     }
@@ -1410,7 +1484,7 @@ namespace atframe {
                         break;
                     }
 
-                    if (1 != DH_generate_key(handshake_.dh.openssl_dh_ptr_)) {
+                    if (!crypt_handshake_->shared_conf->conf_.client_mode && 1 != DH_generate_key(handshake_.dh.openssl_dh_ptr_)) {
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl generate key failed");
                         break;
@@ -1851,12 +1925,6 @@ namespace atframe {
                 return error_code_t::EN_ECT_SESSION_ALREADY_EXIST;
             }
 
-            std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
-            int ret = setup_handshake(global_cfg, true);
-            if (ret < 0) {
-                return ret;
-            }
-
             if (NULL == callbacks_ || !callbacks_->write_fn) {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
@@ -1873,7 +1941,7 @@ namespace atframe {
                 builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0)
             );
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
         }
 
@@ -1884,12 +1952,6 @@ namespace atframe {
 
             if (0 == session_id_) {
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
-            }
-
-            std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
-            int ret = setup_handshake(crypt_handshake_->shared_conf, true);
-            if (ret < 0) {
-                return ret;
             }
 
             if (NULL == callbacks_ || !callbacks_->write_fn) {
@@ -1917,7 +1979,7 @@ namespace atframe {
                 builder.CreateVector(reinterpret_cast<const int8_t *>(secret_buffer), secret_length)
             );
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
         }
 
@@ -1948,7 +2010,7 @@ namespace atframe {
                 builder.CreateVector(reinterpret_cast<const int8_t *>(buffer), len)
             );
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_post, post_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_post, post_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
         }
 
@@ -1977,7 +2039,7 @@ namespace atframe {
                 static_cast<int64_t>(ping_.last_ping.time_since_epoch().count())
             );
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_ping, ping_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_ping, ping_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
         }
 
@@ -1998,7 +2060,7 @@ namespace atframe {
 
             flatbuffers::Offset<cs_body_ping> ping_body = Createcs_body_ping(builder, tp);
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_ping, ping_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_ping, ping_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
         }
 
@@ -2021,7 +2083,7 @@ namespace atframe {
 
             // and then, just like start rsp
             std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
-            int ret = setup_handshake(global_cfg, handshake_.client_mode);
+            int ret = setup_handshake(global_cfg);
             if (ret < 0) {
                 return ret;
             }
@@ -2038,7 +2100,7 @@ namespace atframe {
                 return ret;
             }
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
             return ret;
         }
 
@@ -2059,7 +2121,7 @@ namespace atframe {
 
             flatbuffers::Offset<cs_body_kickoff> kickoff_body = Createcs_body_kickoff(builder, reason);
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_kickoff, kickoff_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_kickoff, kickoff_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
         }
 
@@ -2101,7 +2163,7 @@ namespace atframe {
                 builder.CreateVector<int8_t>(reinterpret_cast<const int8_t*>(outbuf), outsz)
             );
 
-            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, verify_body.Union()));
+            builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, verify_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
         }
 
@@ -2162,7 +2224,7 @@ namespace atframe {
 
             switch (crypt_info.type) {
             case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
-                size_t outsz = ((insz - 1) | 0x03) + 1;
+                outsz = ((insz - 1) | 0x03) + 1;
 
                 if (len < outsz) {
                     return error_code_t::EN_ECT_MSG_TOO_LARGE;
@@ -2181,7 +2243,7 @@ namespace atframe {
                 unsigned char iv[AES_BLOCK_SIZE];
                 memset(iv, 0, sizeof(iv));
 
-                size_t outsz = ((insz - 1) | (AES_BLOCK_SIZE - 1)) + 1;
+                outsz = ((insz - 1) | (AES_BLOCK_SIZE - 1)) + 1;
 
                 if (len < outsz) {
                     return error_code_t::EN_ECT_MSG_TOO_LARGE;
@@ -2234,7 +2296,7 @@ namespace atframe {
 
             switch (crypt_info.type) {
             case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
-                size_t outsz = ((insz - 1) | 0x03) + 1;
+                outsz = ((insz - 1) | 0x03) + 1;
 
                 if (len < outsz) {
                     return error_code_t::EN_ECT_MSG_TOO_LARGE;
@@ -2253,7 +2315,7 @@ namespace atframe {
                 unsigned char iv[AES_BLOCK_SIZE];
                 memset(iv, 0, sizeof(iv));
 
-                size_t outsz = ((insz - 1) | (AES_BLOCK_SIZE - 1)) + 1;
+                outsz = ((insz - 1) | (AES_BLOCK_SIZE - 1)) + 1;
 
                 if (len < outsz) {
                     return error_code_t::EN_ECT_MSG_TOO_LARGE;

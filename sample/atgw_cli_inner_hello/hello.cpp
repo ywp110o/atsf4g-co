@@ -76,7 +76,7 @@ static void libuv_tcp_recv_read_fn(uv_stream_t *stream, ssize_t nread, const uv_
 
     if (g_client_sess.proto) {
         int errcode = 0;
-        g_client_sess.proto->read(static_cast<int>(nread), buf->base, buf->len, errcode);
+        g_client_sess.proto->read(static_cast<int>(nread), buf->base, static_cast<size_t>(nread), errcode);
         if (0 != errcode) {
             fprintf(stderr, "[Read]: failed, res: %d\n", errcode);
             close_sock();
@@ -201,13 +201,6 @@ static int proto_inner_callback_on_write(::atframe::gateway::proto_base *proto, 
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
 
-    if (0 == g_client_sess.session_id) {
-        if (NULL != is_done) {
-            *is_done = true;
-        }
-        return -1;
-    }
-
     uv_buf_t bufs[1] = { uv_buf_init(reinterpret_cast<char *>(buffer), static_cast<unsigned int>(sz)) };
     int ret = uv_write(&g_client.write_req, (uv_stream_t*)&g_client.tcp_sock, bufs, 1, proto_inner_callback_on_written_fn);
     if (0 != ret) {
@@ -302,8 +295,8 @@ int main(int argc, char *argv[]) {
     g_crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE;
     g_crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT;
     g_crypt_conf.keybits = 128;
-    g_crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
-    g_crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5;
+    //g_crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
+    //g_crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5;
 
     std::string mode = "tick";
     g_host = argv[1];

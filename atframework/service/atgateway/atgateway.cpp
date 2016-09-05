@@ -125,11 +125,12 @@ public:
         crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE;
         crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT;
         crypt_conf.keybits = 128;
+        crypt_conf.client_mode = false;
 
-        crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
-        crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5;
-        crypt_conf.rsa_public_key.clear();
-        crypt_conf.rsa_private_key.clear();
+        // crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
+        // crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5;
+        // crypt_conf.rsa_public_key.clear();
+        // crypt_conf.rsa_private_key.clear();
         crypt_conf.dh_param.clear();
         do {
             std::string val;
@@ -148,21 +149,21 @@ public:
             }
 
             // rsa
-            cfg.dump_to("atgateway.client.crypt.rsa.public_key", crypt_conf.rsa_public_key);
-            cfg.dump_to("atgateway.client.crypt.rsa.private_key", crypt_conf.rsa_private_key);
-            if (!crypt_conf.rsa_public_key.empty() && !crypt_conf.rsa_private_key.empty()) {
-                crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA;
-
-                val.clear();
-                cfg.dump_to("atgateway.client.crypt.rsa.sign", val);
-                if (0 == UTIL_STRFUNC_STRNCASE_CMP("pkcs1_v15", val.c_str(), 9)) {
-                    crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1_V15;
-                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("pkcs1", val.c_str(), 5)) {
-                    crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
-                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("pss", val.c_str(), 3)) {
-                    crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PSS;
-                }
-            }
+            // cfg.dump_to("atgateway.client.crypt.rsa.public_key", crypt_conf.rsa_public_key);
+            // cfg.dump_to("atgateway.client.crypt.rsa.private_key", crypt_conf.rsa_private_key);
+            // if (!crypt_conf.rsa_public_key.empty() && !crypt_conf.rsa_private_key.empty()) {
+            //     crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA;
+            // 
+            //     val.clear();
+            //     cfg.dump_to("atgateway.client.crypt.rsa.sign", val);
+            //     if (0 == UTIL_STRFUNC_STRNCASE_CMP("pkcs1_v15", val.c_str(), 9)) {
+            //         crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1_V15;
+            //     } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("pkcs1", val.c_str(), 5)) {
+            //         crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
+            //     } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("pss", val.c_str(), 3)) {
+            //         crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PSS;
+            //     }
+            // }
 
             // dh
             cfg.dump_to("atgateway.client.crypt.dhparam", crypt_conf.dh_param);
@@ -171,17 +172,17 @@ public:
             }
 
             // hash id
-            val.clear();
-            cfg.dump_to("atgateway.client.crypt.hash_id", val);
-            if (0 == UTIL_STRFUNC_STRNCASE_CMP("md5", val.c_str(), 3)) {
-                crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5;
-            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha512", val.c_str(), 6)) {
-                crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA512;
-            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha256", val.c_str(), 6)) {
-                crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA256;
-            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha1", val.c_str(), 4)) {
-                crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA1;
-            }
+            // val.clear();
+            // cfg.dump_to("atgateway.client.crypt.hash_id", val);
+            // if (0 == UTIL_STRFUNC_STRNCASE_CMP("md5", val.c_str(), 3)) {
+            //     crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5;
+            // } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha512", val.c_str(), 6)) {
+            //     crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA512;
+            // } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha256", val.c_str(), 6)) {
+            //     crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA256;
+            // } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha1", val.c_str(), 4)) {
+            //     crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA1;
+            // }
         } while (false);
 
         // protocol reload
@@ -264,7 +265,7 @@ private:
         }
 
         if (NULL != buf) {
-            sess->on_read(static_cast<int>(nread), buf->base, buf->len);
+            sess->on_read(static_cast<int>(nread), buf->base, static_cast<size_t>(nread));
         }
     }
 
@@ -323,7 +324,7 @@ private:
             assert(sizeof(uv_write_t) <= proto->get_write_header_offset());
 
             uv_buf_t bufs[1] = {
-                uv_buf_init(reinterpret_cast<char *>(real_buffer), static_cast<unsigned int>(sz - proto->get_write_header_offset()))};
+                uv_buf_init(reinterpret_cast<char *>(real_buffer), static_cast<unsigned int>(sz))};
             sess->set_flag(::atframe::gateway::session::flag_t::EN_FT_WRITING_FD, true);
             ret = uv_write(req, sess->get_uv_stream(), bufs, 1, proto_inner_callback_on_written_fn);
             if (0 != ret) {

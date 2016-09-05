@@ -79,11 +79,14 @@ namespace atframe {
                 int switch_secret_type;  /** how to generate the secret key, dh, rsa or direct send. recommander to use DH **/
                 uint32_t keybits;        /** key length in bits. **/
 
-                int rsa_sign_type;           /** RSA sign type. PKCS1, PKCS1_V15 or PSS **/
-                int hash_id;                 /** hash id, md5,sha1,sha256,sha512 **/
-                std::string rsa_public_key;  /** RSA public key file path. **/
-                std::string rsa_private_key; /** RSA private key file path. **/
+                // Not supported now
+                // int rsa_sign_type;           /** RSA sign type. PKCS1, PKCS1_V15 or PSS **/
+                // int hash_id;                 /** hash id, md5,sha1,sha256,sha512 **/
+                // std::string rsa_public_key;  /** RSA public key file path. **/
+                // std::string rsa_private_key; /** RSA private key file path. **/
                 std::string dh_param;        /** DH parameter file path. **/
+
+                bool client_mode;         /** client mode, must be false in server when call global_reload(cfg) **/
             };
 
             struct crypt_session_aes_t {
@@ -162,9 +165,7 @@ namespace atframe {
             virtual int close(int reason);
             int close(int reason, bool is_send_kickoff);
 
-            void setup_crypt(int type, const void *key, size_t keylen, uint32_t keybits);
-
-            int setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf, bool client_mode);
+            int setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf);
             void close_handshake(int status);
 
             virtual bool check_reconnect(proto_base *other);
@@ -226,7 +227,6 @@ namespace atframe {
             struct handshake_t {
                 int switch_secret_type;
                 bool has_data;
-                bool client_mode;
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 struct dh_t {
                     DH *openssl_dh_ptr_;

@@ -37,10 +37,11 @@ namespace atframe {
                 EN_ECT_NO_DATA = -1023,
                 EN_ECT_MALLOC = -1024,
                 EN_ECT_CRYPT_ALREADY_INITED = -1101,
-                EN_ECT_CRYPT_READ_DHPARAM_FILE = -1102,
-                EN_ECT_CRYPT_INIT_DHPARAM = -1103,
-                EN_ECT_CRYPT_READ_RSA_PUBKEY = -1104,
-                EN_ECT_CRYPT_READ_RSA_PRIKEY = -1105,
+                EN_ECT_CRYPT_VERIFY = -1102,
+                EN_ECT_CRYPT_READ_DHPARAM_FILE = -1103,
+                EN_ECT_CRYPT_INIT_DHPARAM = -1104,
+                EN_ECT_CRYPT_READ_RSA_PUBKEY = -1105,
+                EN_ECT_CRYPT_READ_RSA_PRIKEY = -1106,
             };
         };
 

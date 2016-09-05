@@ -60,6 +60,7 @@ namespace atframe {
                 if (0 != res) {
                     WLOGERROR("try to listen %s failed, res: %d", (*iter).c_str(), res);
                 } else {
+                    WLOGDEBUG("listen to %s success", (*iter).c_str());
                     ++ret;
                 }
             }
