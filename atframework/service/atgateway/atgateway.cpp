@@ -455,6 +455,56 @@ private:
         return 0;
     }
 
+public:
+    int cmd_on_kickoff(util::cli::callback_param params) {
+        if (params.get_params_number() < 1) {
+            WLOGERROR("kickoff command require session id");
+            return 0;
+        }
+
+        ::atframe::gateway::session::id_t sess_id = 0;
+        util::string::str2int(sess_id, params[0]->to_string());
+
+        int reason = ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF;
+        if (params.get_params_number() > 1) {
+            util::string::str2int(reason, params[1]->to_string());
+        }
+
+        // do not allow reconnect
+        int res = gw_mgr_.close(sess_id, reason, false);
+        if (0 != res) {
+            WLOGERROR("command kickoff session 0x%llx failed, res: %d", sess_id, res);
+        } else {
+            WLOGINFO("command kickoff session 0x%llx success", sess_id);
+        }
+
+        return 0;
+    }
+
+    int cmd_on_disconnect(util::cli::callback_param params) {
+        if (params.get_params_number() < 1) {
+            WLOGERROR("disconnect command require session id");
+            return 0;
+        }
+
+        ::atframe::gateway::session::id_t sess_id = 0;
+        util::string::str2int(sess_id, params[0]->to_string());
+
+        int reason = ::atframe::gateway::close_reason_t::EN_CRT_RESET;
+        if (params.get_params_number() > 1) {
+            util::string::str2int(reason, params[1]->to_string());
+        }
+
+        // do not allow reconnect
+        int res = gw_mgr_.close(sess_id, reason, true);
+        if (0 != res) {
+            WLOGERROR("command disconnect session 0x%llx failed, res: %d", sess_id, res);
+        } else {
+            WLOGINFO("command disconnect session 0x%llx success", sess_id);
+        }
+
+        return 0;
+    }
 private:
     ::atframe::gateway::session_manager gw_mgr_;
     ::atframe::gateway::proto_base::proto_callbacks_t proto_callbacks_;
@@ -563,6 +613,14 @@ int main(int argc, char *argv[]) {
 
     // setup module
     app.add_module(gw_mod);
+
+    // setup cmd
+    util::cli::cmd_option_ci::ptr_type cmgr = app.get_command_manager();
+    cmgr->bind_cmd("kickoff", &gateway_module::cmd_on_kickoff, gw_mod.get())
+        ->set_help_msg("kickoff <session id> [reason]          kickoff a session, session can not be reconnected anymore.");
+
+    cmgr->bind_cmd("disconnect", &gateway_module::cmd_on_disconnect, gw_mod.get())
+        ->set_help_msg("disconnect <session id> [reason]       disconnect a session, session can be reconnected later.");
 
     // setup message handle
     app.set_evt_on_send_fail(app_handle_on_send_fail);

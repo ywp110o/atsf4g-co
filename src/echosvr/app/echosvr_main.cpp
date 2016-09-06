@@ -141,7 +141,8 @@ int main(int argc, char *argv[]) {
 
     // setup cmd
     util::cli::cmd_option_ci::ptr_type cmgr = app.get_command_manager();
-    cmgr->bind_cmd("kickoff", app_command_handler_kickoff(&app, &gws));
+    cmgr->bind_cmd("kickoff", app_command_handler_kickoff(&app, &gws))
+        ->set_help_msg("kickoff <session id>                   kickoff a client.");
 
     // setup message handle
     app.set_evt_on_recv_msg(app_handle_on_msg(&gws));

@@ -229,6 +229,7 @@ namespace atframe {
 
                 if (reconnect_timeout_.front().s) {
                     session::ptr_t s = reconnect_timeout_.front().s;
+                    WLOGINFO("session 0x%llx reconnect timeout, cleanup", s->get_id());
                     reconnect_cache_.erase(s->get_id());
                     s->close_with_manager(close_reason_t::EN_CRT_LOGOUT, this);
                 }

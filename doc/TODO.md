@@ -12,7 +12,7 @@ TODO
 9. [测试] atgateway: 断线重连+无加密
 10. [测试] atgateway: 断线重连+DH密钥交换
 11. [测试] atgateway: 主动踢出，禁止重连
-12. [测试] atgateway: 掉线和主动踢出的Remove通知
+12. ~~[测试] atgateway: 掉线和主动踢出的Remove通知~~
 13. [测试] atgateway: 连接数过载保护
 14. [测试] atgateway: 总流量过载保护
 15. [测试] atgateway: 每小时流量过载保护

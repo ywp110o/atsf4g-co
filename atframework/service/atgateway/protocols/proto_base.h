@@ -56,6 +56,7 @@ namespace atframe {
                 EN_CRT_TRAFIC_EXTENDED = 6,
                 EN_CRT_INVALID_DATA = 7,
                 EN_CRT_HANDSHAKE = 8,
+                EN_CRT_RESET = 9,
             };
         };
 
