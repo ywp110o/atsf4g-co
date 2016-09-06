@@ -436,7 +436,7 @@ private:
 
             int res = gw_mgr_.active_session(sess->shared_from_this());
             if (0 != res) {
-                WLOGERROR("session %llx send new session to router server failed, res: %d", res);
+                WLOGERROR("session %llx send new session to router server failed, res: %d", sess->get_id(), res);
                 return -1;
             }
         }

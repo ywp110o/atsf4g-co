@@ -591,9 +591,6 @@ namespace atframe {
                     break;
                 }
 
-                const ::atframe::gw::inner::v1::cs_body_ping *msg_body =
-                    static_cast<const ::atframe::gw::inner::v1::cs_body_ping *>(msg->body());
-
                 // update ping/pong duration
                 if (0 != ping_data_t::clk_t::to_time_t(ping_.last_ping)) {
                     ping_.last_delta = static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(ping_data_t::clk_t::now() - ping_.last_ping).count());
