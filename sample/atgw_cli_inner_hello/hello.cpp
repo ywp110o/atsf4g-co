@@ -244,6 +244,18 @@ static int proto_inner_callback_on_close(::atframe::gateway::proto_base *proto, 
     return 0;
 }
 
+static int proto_inner_callback_on_handshake(::atframe::gateway::proto_base * proto, int status) {
+    if (0 == status) {
+        printf("[Info]: handshake done\n%s\n", proto->get_info().c_str());
+        g_client_sess.session_id = g_client_sess.proto->get_session_id();
+    } else {
+        fprintf(stderr, "[Error]: handshake failed, status=%d\n", status);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int proto_inner_callback_on_error(::atframe::gateway::proto_base *, const char *filename, int line, int errcode, const char *errmsg) {
     fprintf(stderr, "[Error][%s:%d]: error code: %d, msg: %s\n", filename, line, errcode, errmsg);
     return 0;
@@ -284,6 +296,7 @@ int main(int argc, char *argv[]) {
     g_client_sess.callbacks.new_session_fn = proto_inner_callback_on_new_session;
     g_client_sess.callbacks.reconnect_fn = proto_inner_callback_on_reconnect;
     g_client_sess.callbacks.close_fn = proto_inner_callback_on_close;
+    g_client_sess.callbacks.on_handshake_done_fn = proto_inner_callback_on_handshake;
     g_client_sess.callbacks.on_error_fn = proto_inner_callback_on_error;
 
     g_client_sess.session_id = 0;

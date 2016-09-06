@@ -74,11 +74,15 @@ namespace atframe {
 
             int close(int reason);
 
+            int close_with_manager(int reason, session_manager * mgr);
+
             int close_fd(int reason);
 
             int send_to_client(const void *data, size_t len);
 
             int send_to_server(::atframe::gw::ss_msg &msg);
+
+            int send_to_server(::atframe::gw::ss_msg &msg, session_manager * mgr);
 
             proto_base *get_protocol_handle();
             const proto_base *get_protocol_handle() const;
@@ -86,9 +90,11 @@ namespace atframe {
             uv_stream_t *get_uv_stream();
             const uv_stream_t *get_uv_stream() const;
 
-        private:
             int send_new_session();
+        private:
             int send_remove_session();
+
+            int send_remove_session(session_manager * mgr);
 
             static void on_evt_shutdown(uv_shutdown_t *req, int status);
             static void on_evt_closed(uv_handle_t *handle);

@@ -1,7 +1,7 @@
 TODO
 ======
 
-1. [测试] atgateway: openssl+DH密钥交换流程
+1. ~~[测试] atgateway: openssl+DH密钥交换流程~~
 2. [测试] atgateway: openssl+直接发送密钥流程
 3. [测试] atgateway: 无加密传输流程
 4. [测试] atgateway: mbedtls+DH密钥交换流程
@@ -17,6 +17,6 @@ TODO
 14. [测试] atgateway: 总流量过载保护
 15. [测试] atgateway: 每小时流量过载保护
 16. [测试] atgateway: 每分钟流量过载保护
-17. [测试] atgateway: 握手超时保护(DDOS)
+17. ~~[测试] atgateway: 握手超时保护(DDOS)~~
 18. [测试] valgrind --leak-check=full --tool=memcheck --show-leak-kinds=all --log-file=memcheck.log --malloc-fill=0x5E
 19. [测试] cppcheck 无ERROR

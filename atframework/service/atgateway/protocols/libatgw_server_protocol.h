@@ -95,16 +95,11 @@ namespace atframe {
 
         class ss_msg_body {
         public:
-            union {
-                ss_body_post *post;
-                ss_body_session *session;
-                uint64_t router;
-            };
+            ss_body_post *post;
+            ss_body_session *session;
+            uint64_t router;
 
-            ss_msg_body() {
-                post = NULL;
-                session = NULL;
-                router = 0;
+            ss_msg_body(): post(NULL), session(NULL), router(0) {
             }
             ~ss_msg_body() {
                 if (NULL != post) {
@@ -313,7 +308,8 @@ namespace msgpack {
                         break;
                     }
 
-                    default: { // just cmd
+                    default: { // just cmd, body is nil
+                        o.pack_nil();
                         break;
                     }
                     }
@@ -333,7 +329,7 @@ namespace msgpack {
                     v.head.msgpack_object(&o.via.map.ptr[0].val, o.zone);
 
                     // pack body using head.cmd
-                    o.via.map.ptr[1].key = msgpack::object(1);
+                    o.via.map.ptr[1].key = msgpack::object(2);
                     switch (v.head.cmd) {
 
                     case ATFRAME_GW_CMD_POST: {
@@ -355,6 +351,7 @@ namespace msgpack {
                     }
 
                     default: { // invalid cmd
+                        o.via.map.ptr[1].val = msgpack::object();
                         break;
                     }
                     }

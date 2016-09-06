@@ -92,6 +92,7 @@ namespace atframe {
 
             int reconnect(session &new_sess, session::id_t old_sess_id);
 
+            int active_session(session::ptr_t sess);
         private:
             static void on_evt_accept_tcp(uv_stream_t *server, int status);
             static void on_evt_accept_pipe(uv_stream_t *server, int status);

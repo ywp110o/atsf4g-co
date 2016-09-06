@@ -1,4 +1,7 @@
-﻿#include "algorithm/murmur_hash.h"
+﻿#include <sstream>
+
+#include "common/string_oprs.h"
+#include "algorithm/murmur_hash.h"
 #include "lock/lock_holder.h"
 #include "lock/seq_alloc.h"
 #include "lock/spin_lock.h"
@@ -321,13 +324,6 @@ namespace atframe {
 
             type = t;
             keybits = kb;
-
-            // TODO debug
-            printf("[DEBUG] setup crypt type=%d, keybits=%u, secret=", t, keybits);
-            for (size_t i = 0; i < secret.size(); ++i) {
-                printf("%02x", secret[i]);
-            }
-            printf("\n");
             return 0;
         }
 
@@ -866,6 +862,11 @@ namespace atframe {
                 if (ret < 0) {
                     close(ret, true);
                 }
+
+                // change key immediately, in case of Man-in-the-Middle Attack
+                crypt_read_ = crypt_handshake_;
+                crypt_write_ = crypt_handshake_;
+                ret = send_key_syn();
             }
 
             return ret;
@@ -874,11 +875,37 @@ namespace atframe {
         int libatgw_proto_inner_v1::dispatch_handshake_reconn_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
             // if success, session id is not 0, and assign all data
             if (0 == body_handshake.session_id()) {
-                ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "start new session refused.");
+                ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_REFUSE_RECONNECT, "reconnect to old session refused.");
+
+                // force to trigger handshake done
+                handshake_update();
+                close_handshake(error_code_t::EN_ECT_REFUSE_RECONNECT);
                 return error_code_t::EN_ECT_HANDSHAKE;
             }
 
+            std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
+            // check if global configure changed
+            if (!global_cfg || global_cfg->conf_.type != body_handshake.crypt_type() ||
+                global_cfg->conf_.switch_secret_type != body_handshake.switch_type() ||
+                global_cfg->conf_.keybits != body_handshake.crypt_bits()) {
+                crypt_conf_t global_crypt_cfg;
+                detail::crypt_global_configure_t::default_crypt_configure(global_crypt_cfg);
+                global_crypt_cfg.type = body_handshake.crypt_type();
+                global_crypt_cfg.switch_secret_type = body_handshake.switch_type();
+                global_crypt_cfg.keybits = body_handshake.crypt_bits();
+                global_crypt_cfg.client_mode = true;
+                ::atframe::gateway::libatgw_proto_inner_v1::global_reload(global_crypt_cfg);
+                global_cfg = detail::crypt_global_configure_t::current();
+            }
+            int ret = setup_handshake(global_cfg);
+            if (ret < 0) {
+                return ret;
+            }
+
             session_id_ = body_handshake.session_id();
+            crypt_read_ = crypt_handshake_;
+            crypt_write_ = crypt_handshake_;
+
             close_handshake(0);
             return 0;
         }
@@ -1916,6 +1943,54 @@ namespace atframe {
 
         int libatgw_proto_inner_v1::handshake_update() { return send_key_syn(); }
 
+        std::string libatgw_proto_inner_v1::get_info() const {
+            std::stringstream ss;
+            size_t limit_sz = 0;
+            ss << "atgateway inner protocol: session id=" << session_id_ << std::endl;
+            ss << "    last ping delta=" << ping_.last_delta << std::endl;
+            ss << "    handshake=" << (handshake_.has_data? "running": "not running")<< ", switch type="<< handshake_.switch_secret_type << std::endl;
+            ss << "    status: writing="<< check_flag(flag_t::EN_PFT_WRITING)<<
+                ",closing="<< check_flag(flag_t::EN_PFT_CLOSING) <<
+                ",closed="<< check_flag(flag_t::EN_PFT_CLOSED) <<
+                ",handshake done="<< check_flag(flag_t::EN_PFT_HANDSHAKE_DONE) <<
+                ",handshake update="<< check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE) << std::endl;
+
+            if (read_buffers_.limit().limit_size_ > 0) {
+                limit_sz = read_buffers_.limit().limit_size_ + sizeof(read_head_.buffer) - read_head_.len - read_buffers_.limit().cost_size_;
+                ss << "    read buffer: used size=" << (read_head_.len + read_buffers_.limit().cost_size_) << ", free size=" << limit_sz << std::endl;
+            } else {
+                ss << "    read buffer: used size=" << (read_head_.len + read_buffers_.limit().cost_size_) << ", free size=unlimited" << std::endl;
+            }
+
+            if (write_buffers_.limit().limit_size_ > 0) {
+                limit_sz = write_buffers_.limit().limit_size_ - write_buffers_.limit().cost_size_;
+                ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=" << limit_sz << std::endl;
+            } else {
+                ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=unlimited" << std::endl;
+            }
+
+#define DUMP_INFO(name, h) \
+            if (h) { \
+                if (&h != &crypt_handshake_ && h == crypt_handshake_) {\
+                    ss << "    "<< name<< " handle: == handshake handle" << std::endl; \
+                } else {\
+                    ss << "    " << name << " handle: crypt type=" << h->type << ", crypt keybits=" << h->keybits << ", crypt secret="; \
+                    util::string::dumphex(h->secret.data(), h->secret.size(), ss); \
+                    ss << std::endl; \
+                }\
+            } else { \
+                ss << "    "<< name<< " handle: unset" << std::endl; \
+            }
+
+            DUMP_INFO("read", crypt_read_);
+            DUMP_INFO("write", crypt_write_);
+            DUMP_INFO("handshake", crypt_handshake_);
+
+#undef DUMP_INFO
+
+            return ss.str();
+        }
+
         int libatgw_proto_inner_v1::start_session() {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
@@ -1948,10 +2023,6 @@ namespace atframe {
         int libatgw_proto_inner_v1::reconnect_session(uint64_t sess_id, int type, const std::vector<unsigned char> &secret, uint32_t keybits) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
-            }
-
-            if (0 == session_id_) {
-                return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
 
             if (NULL == callbacks_ || !callbacks_->write_fn) {
@@ -2165,6 +2236,18 @@ namespace atframe {
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, verify_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
+        }
+
+        const libatgw_proto_inner_v1::crypt_session_ptr_t& libatgw_proto_inner_v1::get_crypt_read() const {
+            return crypt_read_;
+        }
+
+        const libatgw_proto_inner_v1::crypt_session_ptr_t& libatgw_proto_inner_v1::get_crypt_write() const {
+            return crypt_write_;
+        }
+
+        const libatgw_proto_inner_v1::crypt_session_ptr_t& libatgw_proto_inner_v1::get_crypt_handshake() const {
+            return crypt_handshake_;
         }
 
         int libatgw_proto_inner_v1::encode_post(const void *in, size_t insz, const void *&out, size_t &outsz) {

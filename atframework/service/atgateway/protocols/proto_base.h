@@ -284,6 +284,12 @@ namespace atframe {
              */
             virtual int handshake_update();
 
+            /**
+            * @biref get protocol information
+            * @return protocol information
+            */
+            virtual std::string get_info() const;
+
         public:
             /**
              * @biref get thread-local storage buffer limit for message encrypt/decrypt, zip/unzip and etc

@@ -55,7 +55,8 @@ public:
                 std::bind<int>(&gateway_module::proto_inner_callback_on_reconnect, this, std::placeholders::_1, std::placeholders::_2);
             proto_callbacks_.close_fn =
                 std::bind<int>(&gateway_module::proto_inner_callback_on_close, this, std::placeholders::_1, std::placeholders::_2);
-
+            proto_callbacks_.on_handshake_done_fn =
+                std::bind<int>(&gateway_module::proto_inner_callback_on_handshake_done, this, std::placeholders::_1, std::placeholders::_2);
             proto_callbacks_.on_error_fn =
                 std::bind<int>(&gateway_module::proto_inner_callback_on_error, this, std::placeholders::_1, std::placeholders::_2,
                                std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
@@ -424,6 +425,24 @@ private:
         return 0;
     }
 
+    int proto_inner_callback_on_handshake_done(::atframe::gateway::proto_base * proto, int status) {
+        WLOGINFO("\n%s", proto->get_info().c_str());
+        if (0 == status) {
+            ::atframe::gateway::session *sess = reinterpret_cast< ::atframe::gateway::session *>(proto->get_private_data());
+            if (NULL == sess) {
+                WLOGERROR("handshake done from proto object %p length, but has no session", proto);
+                return -1;
+            }
+
+            int res = gw_mgr_.active_session(sess->shared_from_this());
+            if (0 != res) {
+                WLOGERROR("session %llx send new session to router server failed, res: %d", res);
+                return -1;
+            }
+        }
+        return 0;
+    }
+
     int proto_inner_callback_on_error(::atframe::gateway::proto_base *, const char *filename, int line, int errcode, const char *errmsg) {
         if (::util::log::log_wrapper::check(WDTLOGGETCAT(::util::log::log_wrapper::categorize_t::DEFAULT),
                                             ::util::log::log_wrapper::level_t::LOG_LW_ERROR)) {
@@ -445,12 +464,11 @@ struct app_handle_on_recv {
     std::reference_wrapper<gateway_module> mod_;
     app_handle_on_recv(gateway_module &mod) : mod_(mod) {}
 
-    int operator()(::atapp::app &app, const ::atapp::app::msg_head_t *header, const void *buffer, size_t len) {
-        if (NULL == buffer || 0 == len) {
+    int operator()(::atapp::app &app, const ::atapp::app::msg_t& recv_msg, const void *buffer, size_t len) {
+        if (NULL == buffer || 0 == len || NULL == recv_msg.body.forward) {
             return 0;
         }
         ::atframe::gw::ss_msg msg;
-        assert(header);
 
         msgpack::unpacked result;
         msgpack::unpack(result, reinterpret_cast<const char *>(buffer), len);
@@ -463,19 +481,19 @@ struct app_handle_on_recv {
         switch (msg.head.cmd) {
         case ATFRAME_GW_CMD_POST: {
             if (NULL == msg.body.post) {
-                WLOGERROR("from server 0x%llx: recv bad post body", header->src_bus_id);
+                WLOGERROR("from server 0x%llx: recv bad post body", recv_msg.body.forward->from);
                 break;
             }
 
             // post to single client
             if (0 != msg.head.session_id && msg.body.post->session_ids.empty()) {
-                WLOGDEBUG("from server 0x%llx: session 0x%llx send %llu bytes data to client", header->src_bus_id, msg.head.session_id,
+                WLOGDEBUG("from server 0x%llx: session 0x%llx send %llu bytes data to client", recv_msg.body.forward->from, msg.head.session_id,
                           static_cast<unsigned long long>(msg.body.post->content.size));
 
                 int res = mod_.get().get_session_manager().push_data(msg.head.session_id, msg.body.post->content.ptr,
                                                                      msg.body.post->content.size);
                 if (0 != res) {
-                    WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", header->src_bus_id, msg.head.session_id,
+                    WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", recv_msg.body.forward->from, msg.head.session_id,
                               res);
 
                     // session not found, maybe gateway has restarted or server cache expired without remove
@@ -483,50 +501,50 @@ struct app_handle_on_recv {
                     if (::atframe::gateway::error_code_t::EN_ECT_SESSION_NOT_FOUND == res) {
                         ::atframe::gw::ss_msg rsp;
                         rsp.init(ATFRAME_GW_CMD_SESSION_REMOVE, msg.head.session_id);
-                        res = mod_.get().get_session_manager().post_data(header->src_bus_id, rsp);
+                        res = mod_.get().get_session_manager().post_data(recv_msg.body.forward->from, rsp);
                         if (0 != res) {
-                            WLOGERROR("send remove notify to server 0x%llx failed, res: %d", header->src_bus_id, res);
+                            WLOGERROR("send remove notify to server 0x%llx failed, res: %d", recv_msg.body.forward->from, res);
                         }
                     }
                 }
             } else if (msg.body.post->session_ids.empty()) { // broadcast to all actived session
                 int res = mod_.get().get_session_manager().broadcast_data(msg.body.post->content.ptr, msg.body.post->content.size);
                 if (0 != res) {
-                    WLOGERROR("from server 0x%llx: broadcast data failed, res: %d ", header->src_bus_id, res);
+                    WLOGERROR("from server 0x%llx: broadcast data failed, res: %d ", recv_msg.body.forward->from, res);
                 }
             } else { // multicast to more than one client
                 for (std::vector<uint64_t>::iterator iter = msg.body.post->session_ids.begin(); iter != msg.body.post->session_ids.end();
                      ++iter) {
                     int res = mod_.get().get_session_manager().push_data(*iter, msg.body.post->content.ptr, msg.body.post->content.size);
                     if (0 != res) {
-                        WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", header->src_bus_id, *iter, res);
+                        WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", recv_msg.body.forward->from, *iter, res);
                     }
                 }
             }
             break;
         }
         case ATFRAME_GW_CMD_SESSION_KICKOFF: {
-            WLOGINFO("from server 0x%llx: session 0x%llx kickoff by server", header->src_bus_id, msg.head.session_id);
+            WLOGINFO("from server 0x%llx: session 0x%llx kickoff by server", recv_msg.body.forward->from, msg.head.session_id);
             mod_.get().get_session_manager().close(msg.head.session_id, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
             break;
         }
         case ATFRAME_GW_CMD_SET_ROUTER_REQ: {
             int res = mod_.get().get_session_manager().set_session_router(msg.head.session_id, msg.body.router);
-            WLOGINFO("from server 0x%llx: session 0x%llx set router to 0x%llx by server, res: %d", header->src_bus_id, msg.head.session_id,
+            WLOGINFO("from server 0x%llx: session 0x%llx set router to 0x%llx by server, res: %d", recv_msg.body.forward->from, msg.head.session_id,
                      msg.body.router, res);
 
             ::atframe::gw::ss_msg rsp;
             rsp.init(ATFRAME_GW_CMD_SET_ROUTER_RSP, msg.head.session_id);
             rsp.head.error_code = res;
 
-            res = mod_.get().get_session_manager().post_data(header->src_bus_id, rsp);
+            res = mod_.get().get_session_manager().post_data(recv_msg.body.forward->from, rsp);
             if (0 != res) {
-                WLOGERROR("send set router response to server 0x%llx failed, res: %d", header->src_bus_id, res);
+                WLOGERROR("send set router response to server 0x%llx failed, res: %d", recv_msg.body.forward->from, res);
             }
             break;
         }
         default: {
-            WLOGERROR("from server 0x%llx: session 0x%llx recv invalid cmd %d", header->src_bus_id, msg.head.session_id,
+            WLOGERROR("from server 0x%llx: session 0x%llx recv invalid cmd %d", recv_msg.body.forward->from, msg.head.session_id,
                       static_cast<int>(msg.head.cmd));
             break;
         }

@@ -72,88 +72,108 @@ namespace atframe {
             // make_address
             ::atbus::channel::channel_address_t addr;
             ::atbus::channel::make_address(address, addr);
+            int ret = 0;
 
             listen_handle_ptr_t res;
-            // libuv listen and setup callbacks
-            if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv4", addr.scheme.c_str(), 4) ||
-                0 == UTIL_STRFUNC_STRNCASE_CMP("ipv6", addr.scheme.c_str(), 4)) {
-                uv_tcp_t *tcp_handle = ::atframe::gateway::detail::session_manager_make_stream_ptr<uv_tcp_t>(res);
-                if (res) {
-                    uv_stream_set_blocking(res.get(), 0);
-                    uv_tcp_nodelay(tcp_handle, 1);
-                } else {
-                    WLOGERROR("create uv_tcp_t failed.");
-                    return error_code_t::EN_ECT_NETWORK;
-                }
-
-                if (0 != uv_tcp_init(evloop_, tcp_handle)) {
-                    WLOGERROR("init listen to %s failed", address);
-                    return error_code_t::EN_ECT_NETWORK;
-                }
-
-                if ('4' == addr.scheme[3]) {
-                    sockaddr_in sock_addr;
-                    uv_ip4_addr(addr.host.c_str(), addr.port, &sock_addr);
-                    if (0 != uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0)) {
-                        WLOGERROR("bind sock to %s failed", address);
-                        return error_code_t::EN_ECT_NETWORK;
+            do {
+                // libuv listen and setup callbacks
+                if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv4", addr.scheme.c_str(), 4) ||
+                    0 == UTIL_STRFUNC_STRNCASE_CMP("ipv6", addr.scheme.c_str(), 4)) {
+                    uv_tcp_t *tcp_handle = ::atframe::gateway::detail::session_manager_make_stream_ptr<uv_tcp_t>(res);
+                    if (res) {
+                        uv_stream_set_blocking(res.get(), 0);
+                        uv_tcp_nodelay(tcp_handle, 1);
+                    } else {
+                        WLOGERROR("create uv_tcp_t failed.");
+                        ret = error_code_t::EN_ECT_NETWORK;
+                        break;
                     }
 
-                    if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp)) {
+                    if (0 != uv_tcp_init(evloop_, tcp_handle)) {
+                        WLOGERROR("init listen to %s failed", address);
+                        ret = error_code_t::EN_ECT_NETWORK;
+                        break;
+                    }
+
+                    if ('4' == addr.scheme[3]) {
+                        sockaddr_in sock_addr;
+                        uv_ip4_addr(addr.host.c_str(), addr.port, &sock_addr);
+                        if (0 != uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0)) {
+                            WLOGERROR("bind sock to %s failed", address);
+                            ret = error_code_t::EN_ECT_NETWORK;
+                            break;
+                        }
+
+                        if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp)) {
+                            WLOGERROR("listen to %s failed", address);
+                            ret = error_code_t::EN_ECT_NETWORK;
+                            break;
+                        }
+
+                        tcp_handle->data = this;
+                    } else {
+                        sockaddr_in6 sock_addr;
+                        uv_ip6_addr(addr.host.c_str(), addr.port, &sock_addr);
+                        if (0 != uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0)) {
+                            WLOGERROR("bind sock to %s failed", address);
+                            ret = error_code_t::EN_ECT_NETWORK;
+                            break;
+                        }
+
+                        if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp)) {
+                            WLOGERROR("listen to %s failed", address);
+                            ret = error_code_t::EN_ECT_NETWORK;
+                            break;
+                        }
+
+                        tcp_handle->data = this;
+                    }
+
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("unix", addr.scheme.c_str(), 4)) {
+                    uv_pipe_t *pipe_handle = ::atframe::gateway::detail::session_manager_make_stream_ptr<uv_pipe_t>(res);
+                    if (res) {
+                        uv_stream_set_blocking(res.get(), 0);
+                    } else {
+                        WLOGERROR("create uv_pipe_t failed.");
+                        ret = error_code_t::EN_ECT_NETWORK;
+                        break;
+                    }
+
+                    if (0 != uv_pipe_init(evloop_, pipe_handle, 1)) {
+                        WLOGERROR("init listen to %s failed", address);
+                        ret = error_code_t::EN_ECT_NETWORK;
+                        break;
+                    }
+
+                    if (0 != uv_pipe_bind(pipe_handle, addr.host.c_str())) {
+                        WLOGERROR("bind pipe to %s failed", address);
+                        ret = error_code_t::EN_ECT_NETWORK;
+                        break;
+                    }
+
+                    if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_pipe)) {
                         WLOGERROR("listen to %s failed", address);
-                        return error_code_t::EN_ECT_NETWORK;
+                        ret = error_code_t::EN_ECT_NETWORK;
+                        break;
                     }
 
-                    tcp_handle->data = this;
+                    pipe_handle->data = this;
                 } else {
-                    sockaddr_in6 sock_addr;
-                    uv_ip6_addr(addr.host.c_str(), addr.port, &sock_addr);
-                    if (0 != uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0)) {
-                        WLOGERROR("bind sock to %s failed", address);
-                        return error_code_t::EN_ECT_NETWORK;
-                    }
-
-                    if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp)) {
-                        WLOGERROR("listen to %s failed", address);
-                        return error_code_t::EN_ECT_NETWORK;
-                    }
-
-                    tcp_handle->data = this;
+                    ret = error_code_t::EN_ECT_INVALID_ADDRESS;
                 }
-
-            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("unix", addr.scheme.c_str(), 4)) {
-                uv_pipe_t *pipe_handle = ::atframe::gateway::detail::session_manager_make_stream_ptr<uv_pipe_t>(res);
-                if (res) {
-                    uv_stream_set_blocking(res.get(), 0);
-                } else {
-                    WLOGERROR("create uv_pipe_t failed.");
-                    return error_code_t::EN_ECT_NETWORK;
-                }
-
-                if (0 != uv_pipe_init(evloop_, pipe_handle, 1)) {
-                    WLOGERROR("init listen to %s failed", address);
-                    return error_code_t::EN_ECT_NETWORK;
-                }
-
-                if (0 != uv_pipe_bind(pipe_handle, addr.host.c_str())) {
-                    WLOGERROR("bind pipe to %s failed", address);
-                    return error_code_t::EN_ECT_NETWORK;
-                }
-
-                if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_pipe)) {
-                    WLOGERROR("listen to %s failed", address);
-                    return error_code_t::EN_ECT_NETWORK;
-                }
-
-                pipe_handle->data = this;
-            } else {
-                return error_code_t::EN_ECT_INVALID_ADDRESS;
-            }
+            } while (false);
 
             if (res) {
-                listen_handles_.push_back(res);
+                if (0 == ret) {
+                    listen_handles_.push_back(res);
+                } else {
+                    // ref count + 1
+                    res->data = new listen_handle_ptr_t(res);
+                    uv_close(reinterpret_cast<uv_handle_t *>(res.get()), on_evt_listen_closed);
+                }
             }
-            return 0;
+
+            return ret;
         }
 
         int session_manager::reset() {
@@ -210,7 +230,7 @@ namespace atframe {
                 if (reconnect_timeout_.front().s) {
                     session::ptr_t s = reconnect_timeout_.front().s;
                     reconnect_cache_.erase(s->get_id());
-                    s->close(close_reason_t::EN_CRT_LOGOUT);
+                    s->close_with_manager(close_reason_t::EN_CRT_LOGOUT, this);
                 }
                 reconnect_timeout_.pop_front();
             }
@@ -357,6 +377,25 @@ namespace atframe {
             // init with reconnect
             int ret = new_sess.init_reconnect(*iter->second);
             return ret;
+        }
+
+        int session_manager::active_session(session::ptr_t sess) {
+            if (!sess) {
+                return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+            }
+            
+            session_map_t::iterator iter = actived_sessions_.find(sess->get_id());
+            if (iter != actived_sessions_.end()) {
+                close(sess->get_id(), close_reason_t::EN_CRT_KICKOFF);
+            }
+
+            int ret = sess->send_new_session();
+            if (ret < 0) {
+                return ret;
+            }
+
+            actived_sessions_[sess->get_id()] = sess;
+            return 0;
         }
 
         void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {

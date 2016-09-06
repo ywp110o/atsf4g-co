@@ -184,12 +184,19 @@ namespace atframe {
             int ret = send_to_server(msg);
             if (0 == ret) {
                 set_flag(flag_t::EN_FT_REGISTERED, true);
+                WLOGINFO("session 0x%llx send register notify to 0x%llx success", id_, router_);
+            } else {
+                WLOGERROR("session 0x%llx send register notify to 0x%llx failed, res: %d", id_, router_, ret);
             }
 
             return ret;
         }
 
         int session::send_remove_session() {
+            return send_remove_session(owner_);
+        }
+
+        int session::send_remove_session(session_manager * mgr) {
             if (!check_flag(flag_t::EN_FT_REGISTERED)) {
                 return 0;
             }
@@ -198,9 +205,12 @@ namespace atframe {
             ::atframe::gw::ss_msg msg;
             msg.init(ATFRAME_GW_CMD_SESSION_REMOVE, id_);
 
-            int ret = send_to_server(msg);
+            int ret = send_to_server(msg, mgr);
             if (0 == ret) {
                 set_flag(flag_t::EN_FT_REGISTERED, false);
+                WLOGINFO("session 0x%llx send remove notify to 0x%llx success", id_, router_);
+            } else {
+                WLOGERROR("session 0x%llx send remove notify to 0x%llx failed, res: %d", id_, router_, ret);
             }
 
             return ret;
@@ -246,6 +256,10 @@ namespace atframe {
         }
 
         int session::close(int reason) {
+            return close_with_manager(reason, owner_);
+        }
+
+        int session::close_with_manager(int reason, session_manager * mgr) {
             if (check_flag(flag_t::EN_FT_CLOSING)) {
                 return 0;
             }
@@ -253,7 +267,7 @@ namespace atframe {
             set_flag(flag_t::EN_FT_CLOSING, true);
 
             if (check_flag(flag_t::EN_FT_REGISTERED) && !check_flag(flag_t::EN_FT_RECONNECTED)) {
-                send_remove_session();
+                send_remove_session(mgr);
             }
 
             return close_fd(reason);
@@ -281,6 +295,8 @@ namespace atframe {
                 if (!proto_ || proto_->check_flag(proto_base::flag_t::EN_PFT_CLOSED)) {
                     uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
                 }
+
+                WLOGINFO("session 0x%llx lost fd", id_);
             }
 
             return 0;
@@ -316,13 +332,21 @@ namespace atframe {
         }
 
         int session::send_to_server(::atframe::gw::ss_msg &msg) {
+            return send_to_server(msg, owner_);
+        }
+
+        int session::send_to_server(::atframe::gw::ss_msg &msg, session_manager * mgr) {
             // send to router_
             if (0 == router_) {
                 WLOGERROR("sesseion %llx has not configure router", id_);
                 return error_code_t::EN_ECT_INVALID_ROUTER;
             }
 
-            if (NULL == owner_) {
+            if (NULL == mgr) {
+                mgr = owner_;
+            }
+
+            if (NULL == mgr) {
                 WLOGERROR("sesseion %llx has lost manager and can not send ss message any more", id_);
                 return error_code_t::EN_ECT_LOST_MANAGER;
             }
@@ -339,7 +363,7 @@ namespace atframe {
             limit_.minute_recv_bytes += len;
             limit_.total_recv_bytes += len;
 
-            int ret = owner_->post_data(router_, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(), len);
+            int ret = mgr->post_data(router_, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(), len);
 
             check_hour_limit(true, false);
             check_minute_limit(true, false);

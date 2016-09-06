@@ -175,6 +175,8 @@ namespace atframe {
 
             virtual int handshake_update();
 
+            virtual std::string get_info() const;
+
             int start_session();
             int reconnect_session(uint64_t sess_id, int type, const std::vector<unsigned char> &secret, uint32_t keybits);
 
@@ -188,6 +190,11 @@ namespace atframe {
 
             const ping_data_t &get_last_ping() const { return ping_; }
 
+            const crypt_session_ptr_t& get_crypt_read() const;
+            const crypt_session_ptr_t& get_crypt_write() const;
+            const crypt_session_ptr_t& get_crypt_handshake() const;
+
+            inline uint64_t get_session_id() const { return session_id_; }
         private:
             int encode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
             int decode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
