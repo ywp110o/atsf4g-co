@@ -184,9 +184,9 @@ namespace atframe {
             int ret = send_to_server(msg);
             if (0 == ret) {
                 set_flag(flag_t::EN_FT_REGISTERED, true);
-                WLOGINFO("session 0x%llx send register notify to 0x%llx success", id_, router_);
+                WLOGINFO("session 0x%llx send register notify to 0x%llx success", static_cast<unsigned long long>(id_), static_cast<unsigned long long>(router_));
             } else {
-                WLOGERROR("session 0x%llx send register notify to 0x%llx failed, res: %d", id_, router_, ret);
+                WLOGERROR("session 0x%llx send register notify to 0x%llx failed, res: %d", static_cast<unsigned long long>(id_), static_cast<unsigned long long>(router_), ret);
             }
 
             return ret;
@@ -208,9 +208,9 @@ namespace atframe {
             int ret = send_to_server(msg, mgr);
             if (0 == ret) {
                 set_flag(flag_t::EN_FT_REGISTERED, false);
-                WLOGINFO("session 0x%llx send remove notify to 0x%llx success", id_, router_);
+                WLOGINFO("session 0x%llx send remove notify to 0x%llx success", static_cast<unsigned long long>(id_), static_cast<unsigned long long>(router_));
             } else {
-                WLOGERROR("session 0x%llx send remove notify to 0x%llx failed, res: %d", id_, router_, ret);
+                WLOGERROR("session 0x%llx send remove notify to 0x%llx failed, res: %d", static_cast<unsigned long long>(id_), static_cast<unsigned long long>(router_), ret);
             }
 
             return ret;
@@ -296,7 +296,7 @@ namespace atframe {
                     uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
                 }
 
-                WLOGINFO("session 0x%llx lost fd", id_);
+                WLOGINFO("session 0x%llx lost fd", static_cast<unsigned long long>(id_));
             }
 
             return 0;
@@ -313,7 +313,7 @@ namespace atframe {
             }
 
             if (!proto_) {
-                WLOGERROR("sesseion %llx lost protocol handle when send to client", id_);
+                WLOGERROR("sesseion %llx lost protocol handle when send to client", static_cast<unsigned long long>(id_));
                 return error_code_t::EN_ECT_BAD_PROTOCOL;
             }
 
@@ -338,7 +338,7 @@ namespace atframe {
         int session::send_to_server(::atframe::gw::ss_msg &msg, session_manager * mgr) {
             // send to router_
             if (0 == router_) {
-                WLOGERROR("sesseion %llx has not configure router", id_);
+                WLOGERROR("sesseion %llx has not configure router", static_cast<unsigned long long>(id_));
                 return error_code_t::EN_ECT_INVALID_ROUTER;
             }
 
@@ -347,7 +347,7 @@ namespace atframe {
             }
 
             if (NULL == mgr) {
-                WLOGERROR("sesseion %llx has lost manager and can not send ss message any more", id_);
+                WLOGERROR("sesseion %llx has lost manager and can not send ss message any more", static_cast<unsigned long long>(id_));
                 return error_code_t::EN_ECT_LOST_MANAGER;
             }
 

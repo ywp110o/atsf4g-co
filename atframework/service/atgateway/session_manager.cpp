@@ -229,7 +229,7 @@ namespace atframe {
 
                 if (reconnect_timeout_.front().s) {
                     session::ptr_t s = reconnect_timeout_.front().s;
-                    WLOGINFO("session 0x%llx reconnect timeout, cleanup", s->get_id());
+                    WLOGINFO("session 0x%llx reconnect timeout, cleanup", static_cast<unsigned long long>(s->get_id()));
                     reconnect_cache_.erase(s->get_id());
                     s->close_with_manager(close_reason_t::EN_CRT_LOGOUT, this);
                 }
@@ -326,7 +326,7 @@ namespace atframe {
                 if (iter->second->check_flag(session::flag_t::EN_FT_REGISTERED)) {
                     int res = iter->second->send_to_client(buffer, s);
                     if (0 != res) {
-                        WLOGERROR("broadcast data to session 0x%llx failed, res: %d", iter->first, res);
+                        WLOGERROR("broadcast data to session 0x%llx failed, res: %d", static_cast<unsigned long long>(iter->first), res);
                     }
 
                     if (0 != ret) {
@@ -363,7 +363,7 @@ namespace atframe {
             // check if old session not reconnected
             if (iter->second->check_flag(session::flag_t::EN_FT_RECONNECTED)) {
                 WLOGERROR("session %s:%d try to reconnect %llx, but old session already reconnected", new_sess.get_peer_host().c_str(),
-                          new_sess.get_peer_port(), old_sess_id);
+                          new_sess.get_peer_port(), static_cast<unsigned long long>(old_sess_id));
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
 

@@ -18,7 +18,7 @@
 
 static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd,
                                    const atbus::protocol::msg &m) {
-    WLOGERROR("send data from 0x%llx to 0x%llx failed", src_pd, dst_pd);
+    WLOGERROR("send data from 0x%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
     return 0;
 }
 
@@ -27,7 +27,7 @@ struct app_handle_on_connected {
     app_handle_on_connected(atframe::proxy::etcd_v2_module &mod) : etcd_v2_module(mod) {}
 
     int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
-        WLOGINFO("node 0x%llx connected, status: %d", ep.get_id(), status);
+        WLOGINFO("node 0x%llx connected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
 
         etcd_v2_module.get().get_proxy_manager().on_connected(app, ep.get_id());
         return 0;
@@ -39,7 +39,7 @@ struct app_handle_on_disconnected {
     app_handle_on_disconnected(atframe::proxy::etcd_v2_module &mod) : etcd_v2_module(mod) {}
 
     int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
-        WLOGINFO("node 0x%llx disconnected, status: %d", ep.get_id(), status);
+        WLOGINFO("node 0x%llx disconnected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
 
         etcd_v2_module.get().get_proxy_manager().on_disconnected(app, ep.get_id());
         return 0;

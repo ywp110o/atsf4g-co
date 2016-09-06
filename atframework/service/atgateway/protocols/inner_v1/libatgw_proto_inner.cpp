@@ -1498,7 +1498,7 @@ namespace atframe {
                     if (crypt_handshake_->shared_conf->conf_.client_mode) {
                         handshake_.dh.openssl_dh_ptr_ = DH_new();
                     } else {
-                        BIO_reset(crypt_handshake_->shared_conf->openssl_dh_bio_);
+                        UNUSED(BIO_reset(crypt_handshake_->shared_conf->openssl_dh_bio_));
                         handshake_.dh.openssl_dh_ptr_ =
                             PEM_read_bio_DHparams(crypt_handshake_->shared_conf->openssl_dh_bio_, NULL, NULL, NULL);
                     }

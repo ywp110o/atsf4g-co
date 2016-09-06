@@ -23,7 +23,7 @@
 
 static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd,
                                    const atbus::protocol::msg &m) {
-    WLOGERROR("send data from 0x%llx to 0x%llx failed", src_pd, dst_pd);
+    WLOGERROR("send data from 0x%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
     return 0;
 }
 
@@ -388,7 +388,7 @@ private:
 
         // check proto reconnect access
         if (sess->check_flag(::atframe::gateway::session::flag_t::EN_FT_INITED)) {
-            WLOGERROR("try to reconnect session %llx from %llx, but already inited", sess->get_id(), sess_id);
+            WLOGERROR("try to reconnect session %llx from %llx, but already inited", static_cast<unsigned long long>(sess->get_id()), static_cast<unsigned long long>(sess_id));
             return -1;
         }
 
@@ -396,9 +396,9 @@ private:
         if (0 != res) {
             if (::atframe::gateway::error_code_t::EN_ECT_SESSION_NOT_FOUND != res &&
                 ::atframe::gateway::error_code_t::EN_ECT_REFUSE_RECONNECT != res) {
-                WLOGERROR("reconnect session %llx from %llx failed, res: %d", sess->get_id(), sess_id, res);
+                WLOGERROR("reconnect session %llx from %llx failed, res: %d", static_cast<unsigned long long>(sess->get_id()), static_cast<unsigned long long>(sess_id), res);
             } else {
-                WLOGINFO("reconnect session %llx from %llx failed, res: %d", sess->get_id(), sess_id, res);
+                WLOGINFO("reconnect session %llx from %llx failed, res: %d", static_cast<unsigned long long>(sess->get_id()), static_cast<unsigned long long>(sess_id), res);
             }
         }
         return res;
@@ -436,7 +436,7 @@ private:
 
             int res = gw_mgr_.active_session(sess->shared_from_this());
             if (0 != res) {
-                WLOGERROR("session %llx send new session to router server failed, res: %d", sess->get_id(), res);
+                WLOGERROR("session %llx send new session to router server failed, res: %d", static_cast<unsigned long long>(sess->get_id()), res);
                 return -1;
             }
         }
@@ -473,9 +473,9 @@ public:
         // do not allow reconnect
         int res = gw_mgr_.close(sess_id, reason, false);
         if (0 != res) {
-            WLOGERROR("command kickoff session 0x%llx failed, res: %d", sess_id, res);
+            WLOGERROR("command kickoff session 0x%llx failed, res: %d", static_cast<unsigned long long>(sess_id), res);
         } else {
-            WLOGINFO("command kickoff session 0x%llx success", sess_id);
+            WLOGINFO("command kickoff session 0x%llx success", static_cast<unsigned long long>(sess_id));
         }
 
         return 0;
@@ -498,9 +498,9 @@ public:
         // do not allow reconnect
         int res = gw_mgr_.close(sess_id, reason, true);
         if (0 != res) {
-            WLOGERROR("command disconnect session 0x%llx failed, res: %d", sess_id, res);
+            WLOGERROR("command disconnect session 0x%llx failed, res: %d", static_cast<unsigned long long>(sess_id), res);
         } else {
-            WLOGINFO("command disconnect session 0x%llx success", sess_id);
+            WLOGINFO("command disconnect session 0x%llx success", static_cast<unsigned long long>(sess_id));
         }
 
         return 0;
@@ -531,20 +531,20 @@ struct app_handle_on_recv {
         switch (msg.head.cmd) {
         case ATFRAME_GW_CMD_POST: {
             if (NULL == msg.body.post) {
-                WLOGERROR("from server 0x%llx: recv bad post body", recv_msg.body.forward->from);
+                WLOGERROR("from server 0x%llx: recv bad post body", static_cast<unsigned long long>(recv_msg.body.forward->from));
                 break;
             }
 
             // post to single client
             if (0 != msg.head.session_id && msg.body.post->session_ids.empty()) {
-                WLOGDEBUG("from server 0x%llx: session 0x%llx send %llu bytes data to client", recv_msg.body.forward->from, msg.head.session_id,
-                          static_cast<unsigned long long>(msg.body.post->content.size));
+                WLOGDEBUG("from server 0x%llx: session 0x%llx send %llu bytes data to client", static_cast<unsigned long long>(recv_msg.body.forward->from), 
+                        static_cast<unsigned long long>(msg.head.session_id), static_cast<unsigned long long>(msg.body.post->content.size));
 
                 int res = mod_.get().get_session_manager().push_data(msg.head.session_id, msg.body.post->content.ptr,
                                                                      msg.body.post->content.size);
                 if (0 != res) {
-                    WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", recv_msg.body.forward->from, msg.head.session_id,
-                              res);
+                    WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", static_cast<unsigned long long>(recv_msg.body.forward->from), 
+                            static_cast<unsigned long long>(msg.head.session_id), res);
 
                     // session not found, maybe gateway has restarted or server cache expired without remove
                     // notify to remove the expired session
@@ -553,35 +553,37 @@ struct app_handle_on_recv {
                         rsp.init(ATFRAME_GW_CMD_SESSION_REMOVE, msg.head.session_id);
                         res = mod_.get().get_session_manager().post_data(recv_msg.body.forward->from, rsp);
                         if (0 != res) {
-                            WLOGERROR("send remove notify to server 0x%llx failed, res: %d", recv_msg.body.forward->from, res);
+                            WLOGERROR("send remove notify to server 0x%llx failed, res: %d", static_cast<unsigned long long>(recv_msg.body.forward->from), res);
                         }
                     }
                 }
             } else if (msg.body.post->session_ids.empty()) { // broadcast to all actived session
                 int res = mod_.get().get_session_manager().broadcast_data(msg.body.post->content.ptr, msg.body.post->content.size);
                 if (0 != res) {
-                    WLOGERROR("from server 0x%llx: broadcast data failed, res: %d ", recv_msg.body.forward->from, res);
+                    WLOGERROR("from server 0x%llx: broadcast data failed, res: %d ", static_cast<unsigned long long>(recv_msg.body.forward->from), res);
                 }
             } else { // multicast to more than one client
                 for (std::vector<uint64_t>::iterator iter = msg.body.post->session_ids.begin(); iter != msg.body.post->session_ids.end();
                      ++iter) {
                     int res = mod_.get().get_session_manager().push_data(*iter, msg.body.post->content.ptr, msg.body.post->content.size);
                     if (0 != res) {
-                        WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", recv_msg.body.forward->from, *iter, res);
+                        WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", static_cast<unsigned long long>(recv_msg.body.forward->from), 
+                            static_cast<unsigned long long>(*iter), res);
                     }
                 }
             }
             break;
         }
         case ATFRAME_GW_CMD_SESSION_KICKOFF: {
-            WLOGINFO("from server 0x%llx: session 0x%llx kickoff by server", recv_msg.body.forward->from, msg.head.session_id);
+            WLOGINFO("from server 0x%llx: session 0x%llx kickoff by server", static_cast<unsigned long long>(recv_msg.body.forward->from), 
+                static_cast<unsigned long long>(msg.head.session_id));
             mod_.get().get_session_manager().close(msg.head.session_id, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
             break;
         }
         case ATFRAME_GW_CMD_SET_ROUTER_REQ: {
             int res = mod_.get().get_session_manager().set_session_router(msg.head.session_id, msg.body.router);
-            WLOGINFO("from server 0x%llx: session 0x%llx set router to 0x%llx by server, res: %d", recv_msg.body.forward->from, msg.head.session_id,
-                     msg.body.router, res);
+            WLOGINFO("from server 0x%llx: session 0x%llx set router to 0x%llx by server, res: %d", static_cast<unsigned long long>(recv_msg.body.forward->from), 
+                static_cast<unsigned long long>(msg.head.session_id), static_cast<unsigned long long>(msg.body.router), res);
 
             ::atframe::gw::ss_msg rsp;
             rsp.init(ATFRAME_GW_CMD_SET_ROUTER_RSP, msg.head.session_id);
@@ -589,13 +591,13 @@ struct app_handle_on_recv {
 
             res = mod_.get().get_session_manager().post_data(recv_msg.body.forward->from, rsp);
             if (0 != res) {
-                WLOGERROR("send set router response to server 0x%llx failed, res: %d", recv_msg.body.forward->from, res);
+                WLOGERROR("send set router response to server 0x%llx failed, res: %d", static_cast<unsigned long long>(recv_msg.body.forward->from), res);
             }
             break;
         }
         default: {
-            WLOGERROR("from server 0x%llx: session 0x%llx recv invalid cmd %d", recv_msg.body.forward->from, msg.head.session_id,
-                      static_cast<int>(msg.head.cmd));
+            WLOGERROR("from server 0x%llx: session 0x%llx recv invalid cmd %d", static_cast<unsigned long long>(recv_msg.body.forward->from), 
+                static_cast<unsigned long long>(msg.head.session_id), static_cast<int>(msg.head.cmd));
             break;
         }
         }

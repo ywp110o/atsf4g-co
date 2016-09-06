@@ -29,10 +29,10 @@ struct app_command_handler_kickoff {
         uint64_t sess_id = params[0]->to_uint64();
         session_gw_map_t::iterator iter = gw_->find(sess_id);
         if (iter == gw_->end()) {
-            WLOGWARNING("try to kickoff 0x%llx, but session not found", sess_id);
+            WLOGWARNING("try to kickoff 0x%llx, but session not found", static_cast<unsigned long long>(sess_id));
             return 0;
         } else {
-            WLOGINFO("kickoff 0x%llx", sess_id);
+            WLOGINFO("kickoff 0x%llx", static_cast<unsigned long long>(sess_id));
         }
 
         ::atframe::gw::ss_msg msg;
@@ -73,18 +73,18 @@ struct app_handle_on_msg {
                 // keep all data not changed and send back
                 int res = app.get_bus_node()->send_data(msg.body.forward->from, 0, buffer, len);
                 if (res < 0) {
-                    WLOGERROR("send back post data to 0x%llx failed, res: %d", msg.body.forward->from, res);
+                    WLOGERROR("send back post data to 0x%llx failed, res: %d", static_cast<unsigned long long>(msg.body.forward->from), res);
                 } else if (NULL != req_msg.body.post) {
                     WLOGDEBUG("receive msg %s and send back to 0x%llx done", 
-                        std::string(reinterpret_cast<const char*>(req_msg.body.post->content.ptr),
-                            req_msg.body.post->content.size).c_str(), msg.body.forward->from
+                        std::string(reinterpret_cast<const char*>(req_msg.body.post->content.ptr), req_msg.body.post->content.size).c_str(), 
+                        static_cast<unsigned long long>(msg.body.forward->from)
                     );
                 }
                 break;
             }
             case ATFRAME_GW_CMD_SESSION_ADD: {
                 WLOGINFO("create new session 0x%llx, address: %s:%d",
-                    req_msg.head.session_id,
+                    static_cast<unsigned long long>(req_msg.head.session_id),
                     req_msg.body.session->client_ip.c_str(),
                     req_msg.body.session->client_port
                 );
@@ -96,7 +96,7 @@ struct app_handle_on_msg {
             }
             case ATFRAME_GW_CMD_SESSION_REMOVE: {
                 WLOGINFO("remove session 0x%llx",
-                    req_msg.head.session_id
+                    static_cast<unsigned long long>(req_msg.head.session_id)
                 );
 
                 gw_->erase(req_msg.head.session_id);
@@ -121,17 +121,17 @@ struct app_handle_on_msg {
 
 static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd,
     const atbus::protocol::msg &m) {
-    WLOGERROR("send data from 0x%llx to 0x%llx failed", src_pd, dst_pd);
+    WLOGERROR("send data from 0x%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
     return 0;
 }
 
 static int app_handle_on_connected(atapp::app &app, atbus::endpoint &ep, int status) {
-    WLOGINFO("app 0x%llx connected, status: %d", ep.get_id(), status);
+    WLOGINFO("app 0x%llx connected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
     return 0;
 }
 
 static int app_handle_on_disconnected(atapp::app &app, atbus::endpoint &ep, int status) {
-    WLOGINFO("app 0x%llx disconnected, status: %d", ep.get_id(), status);
+    WLOGINFO("app 0x%llx disconnected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
     return 0;
 }
 

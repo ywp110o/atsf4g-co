@@ -474,7 +474,7 @@ namespace atframe {
                 rapidjson::Document doc;
                 doc.Parse(iter->value.GetString());
                 if (doc.IsObject()) {
-                    rapidjson::Value val = doc.GetObjectA();
+                    rapidjson::Value val = doc.GetObject();
                     rapidjson::Value::MemberIterator atproxy_iter;
                     if (val.MemberEnd() != (atproxy_iter = val.FindMember("id"))) {
                         out.id = atproxy_iter->value.GetUint64();
@@ -605,7 +605,7 @@ namespace atframe {
             rapidjson::Document doc;
             doc.Parse(json.c_str());
 
-            rapidjson::Value v = doc.GetObjectA();
+            rapidjson::Value v = doc.GetObject();
             unpack(out, v, NULL, true);
         }
 
@@ -617,7 +617,7 @@ namespace atframe {
             rapidjson::Document doc;
             doc.Parse(json.c_str());
 
-            rapidjson::Value v = doc.GetObjectA();
+            rapidjson::Value v = doc.GetObject();
             unpack(out, v, true);
         }
 

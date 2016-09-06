@@ -204,7 +204,7 @@ static int proto_inner_callback_on_write(::atframe::gateway::proto_base *proto, 
     uv_buf_t bufs[1] = { uv_buf_init(reinterpret_cast<char *>(buffer), static_cast<unsigned int>(sz)) };
     int ret = uv_write(&g_client.write_req, (uv_stream_t*)&g_client.tcp_sock, bufs, 1, proto_inner_callback_on_written_fn);
     if (0 != ret) {
-        fprintf(stderr, "send data to proto 0x%llx failed, msg: %s\n", g_client_sess.session_id, uv_strerror(ret));
+        fprintf(stderr, "send data to proto 0x%llx failed, msg: %s\n", static_cast<unsigned long long>(g_client_sess.session_id), uv_strerror(ret));
     }
 
     if (NULL != is_done) {
@@ -224,13 +224,13 @@ static int proto_inner_callback_on_message(::atframe::gateway::proto_base *proto
 
 // useless
 static int proto_inner_callback_on_new_session(::atframe::gateway::proto_base *proto, uint64_t &sess_id) {
-    printf("create session 0x%llx\n", sess_id);
+    printf("create session 0x%llx\n", static_cast<unsigned long long>(sess_id));
     return 0;
 }
 
 // useless
 static int proto_inner_callback_on_reconnect(::atframe::gateway::proto_base *proto, uint64_t sess_id) {
-    printf("reconnect session 0x%llx\n", sess_id);
+    printf("reconnect session 0x%llx\n", static_cast<unsigned long long>(sess_id));
     return 0;
 }
 
@@ -279,7 +279,7 @@ static void libuv_tick_timer_callback(uv_timer_t* handle) {
     }
 
     char msg[64] = {0};
-    UTIL_STRFUNC_SNPRINTF(msg, sizeof(msg), "hello 0x%llx, %lld", g_client_sess.session_id, (++g_client_sess.seq));
+    UTIL_STRFUNC_SNPRINTF(msg, sizeof(msg), "hello 0x%llx, %lld", static_cast<unsigned long long>(g_client_sess.session_id), static_cast<long long>(++g_client_sess.seq));
     int ret = g_client_sess.proto->send_post(msg, strlen(msg));
     printf("[Tick]: send %s, res: %d\n", msg, ret);
 }
