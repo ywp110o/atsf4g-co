@@ -31,6 +31,7 @@ namespace atframe {
 
                 time_t hour_timepoint;
                 time_t minute_timepoint;
+                time_t update_handshake_timepoint;
             };
 
             typedef uint64_t id_t;
@@ -41,9 +42,10 @@ namespace atframe {
                     EN_FT_HAS_FD = 0x0002,
                     EN_FT_REGISTERED = 0x0004,
                     EN_FT_RECONNECTED = 0x0008,
-                    EN_FT_CLOSING = 0x0010,
-                    EN_FT_CLOSING_FD = 0x0020,
-                    EN_FT_WRITING_FD = 0x0040,
+                    EN_FT_WAIT_RECONNECT = 0x0010,
+                    EN_FT_CLOSING = 0x0020,
+                    EN_FT_CLOSING_FD = 0x0040,
+                    EN_FT_WRITING_FD = 0x0080,
                 };
             };
 

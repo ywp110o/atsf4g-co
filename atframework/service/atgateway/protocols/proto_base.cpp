@@ -144,7 +144,8 @@ namespace atframe {
             }
 
             set_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE, true);
-            return 0;
+            
+            return handshake_done(0);
         }
 
         std::string proto_base::get_info() const {

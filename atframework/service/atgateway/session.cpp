@@ -144,6 +144,7 @@ namespace atframe {
             // alloc id
             id_ = id_alloc.allocate();
             router_ = router;
+            limit_.update_handshake_timepoint = util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
 
             set_flag(flag_t::EN_FT_INITED, true);
             return 0;
@@ -154,20 +155,15 @@ namespace atframe {
             id_ = sess.id_;
             router_ = sess.router_;
             limit_ = sess.limit_;
-            proto_.swap(sess.proto_);
-            if (proto_) {
-                proto_->set_private_data(this);
-            }
-
-            if (sess.proto_) {
-                sess.proto_->set_private_data(&sess);
-            }
+            limit_.update_handshake_timepoint = util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
 
             private_data_ = sess.private_data_;
 
             set_flag(flag_t::EN_FT_INITED, true);
             set_flag(flag_t::EN_FT_REGISTERED, sess.check_flag(flag_t::EN_FT_REGISTERED));
+
             sess.set_flag(flag_t::EN_FT_RECONNECTED, true);
+            sess.set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, false);
             return 0;
         }
 
@@ -266,7 +262,9 @@ namespace atframe {
 
             set_flag(flag_t::EN_FT_CLOSING, true);
 
-            if (check_flag(flag_t::EN_FT_REGISTERED) && !check_flag(flag_t::EN_FT_RECONNECTED)) {
+            if (check_flag(flag_t::EN_FT_REGISTERED) && 
+                !check_flag(flag_t::EN_FT_RECONNECTED) &&
+                !check_flag(flag_t::EN_FT_WAIT_RECONNECT)) {
                 send_remove_session(mgr);
             }
 
@@ -441,10 +439,18 @@ namespace atframe {
 
             if (check_recv && owner_->get_conf().limits.minute_recv_limit > 0 && limit_.minute_recv_bytes > owner_->get_conf().limits.minute_recv_limit) {
                 close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+                return;
             }
 
             if (check_send && owner_->get_conf().limits.minute_send_limit > 0 && limit_.minute_send_bytes > owner_->get_conf().limits.minute_send_limit) {
                 close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+                return;
+            }
+
+            if (NULL != owner_ && owner_->get_conf().crypt.update_interval > 0 && check_flag(flag_t::EN_FT_HAS_FD)) {
+                if (limit_.update_handshake_timepoint < ::util::time::time_utility::get_now()) {
+                    limit_.update_handshake_timepoint = ::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
+                }
             }
         }
 

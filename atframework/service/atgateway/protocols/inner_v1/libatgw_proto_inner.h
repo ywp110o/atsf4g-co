@@ -234,6 +234,7 @@ namespace atframe {
             struct handshake_t {
                 int switch_secret_type;
                 bool has_data;
+                const void *ext_data;
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 struct dh_t {
                     DH *openssl_dh_ptr_;

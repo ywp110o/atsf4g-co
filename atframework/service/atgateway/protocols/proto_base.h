@@ -38,10 +38,10 @@ namespace atframe {
                 EN_ECT_MALLOC = -1024,
                 EN_ECT_CRYPT_ALREADY_INITED = -1101,
                 EN_ECT_CRYPT_VERIFY = -1102,
-                EN_ECT_CRYPT_READ_DHPARAM_FILE = -1103,
-                EN_ECT_CRYPT_INIT_DHPARAM = -1104,
-                EN_ECT_CRYPT_READ_RSA_PUBKEY = -1105,
-                EN_ECT_CRYPT_READ_RSA_PRIKEY = -1106,
+                EN_ECT_CRYPT_READ_DHPARAM_FILE = -1211,
+                EN_ECT_CRYPT_INIT_DHPARAM = -1212,
+                EN_ECT_CRYPT_READ_RSA_PUBKEY = -1221,
+                EN_ECT_CRYPT_READ_RSA_PRIKEY = -1222,
             };
         };
 
@@ -49,14 +49,15 @@ namespace atframe {
             enum type {
                 EN_CRT_UNKNOWN = 0,
                 EN_CRT_LOGOUT = 1,
-                EN_CRT_FIRST_IDLE = 2,
-                EN_CRT_SERVER_CLOSED = 3,
-                EN_CRT_SERVER_BUSY = 4,
-                EN_CRT_KICKOFF = 5,
-                EN_CRT_TRAFIC_EXTENDED = 6,
-                EN_CRT_INVALID_DATA = 7,
-                EN_CRT_HANDSHAKE = 8,
-                EN_CRT_RESET = 9,
+                EN_CRT_TRAFIC_EXTENDED = 2,
+                EN_CRT_INVALID_DATA = 3,
+                EN_CRT_RESET = 4,
+                EN_CRT_RECONNECT_BOUND = 1000,
+                EN_CRT_FIRST_IDLE = 1001,
+                EN_CRT_SERVER_CLOSED = 1002,
+                EN_CRT_SERVER_BUSY = 1003,
+                EN_CRT_KICKOFF = 1004,
+                EN_CRT_HANDSHAKE = 1005, 
             };
         };
 

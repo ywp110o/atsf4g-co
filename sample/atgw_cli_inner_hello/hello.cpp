@@ -28,6 +28,7 @@ struct client_session_data_t {
     ::atframe::gateway::proto_base::proto_callbacks_t callbacks;
 
     bool print_recv;
+    bool allow_reconnect;
 };
 
 client_session_data_t g_client_sess;
@@ -38,6 +39,7 @@ int g_port;
 
 // ======================== 以下为网络处理及回调 ========================
 static int close_sock();
+static void libuv_close_sock_callback(uv_handle_t* handle);
 
 static void libuv_tcp_recv_alloc_fn(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
     if (!g_client_sess.proto) {
@@ -93,15 +95,29 @@ static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
     }
 
     uv_read_start(req->handle, libuv_tcp_recv_alloc_fn, libuv_tcp_recv_read_fn);
+    int ret = 0;
 
-    g_client_sess.proto.reset(new ::atframe::gateway::libatgw_proto_inner_v1());
-    g_client_sess.proto->set_recv_buffer_limit(2 * 1024 * 1024, 0);
-    g_client_sess.proto->set_send_buffer_limit(2 * 1024 * 1024, 0);
-    g_client_sess.proto->set_callbacks(&g_client_sess.callbacks);
+    if (g_client_sess.proto && g_client_sess.allow_reconnect) {
+        ::atframe::gateway::libatgw_proto_inner_v1::crypt_session_ptr_t prev_handshake = g_client_sess.proto->get_crypt_handshake();
 
-    int ret = g_client_sess.proto->start_session();
+        g_client_sess.proto.reset(new ::atframe::gateway::libatgw_proto_inner_v1());
+        g_client_sess.proto->set_recv_buffer_limit(2 * 1024 * 1024, 0);
+        g_client_sess.proto->set_send_buffer_limit(2 * 1024 * 1024, 0);
+        g_client_sess.proto->set_callbacks(&g_client_sess.callbacks);
+
+        ret = g_client_sess.proto->reconnect_session(g_client_sess.session_id, 
+            prev_handshake->type, prev_handshake->secret, prev_handshake->keybits);
+    } else {
+        g_client_sess.proto.reset(new ::atframe::gateway::libatgw_proto_inner_v1());
+        g_client_sess.proto->set_recv_buffer_limit(2 * 1024 * 1024, 0);
+        g_client_sess.proto->set_send_buffer_limit(2 * 1024 * 1024, 0);
+        g_client_sess.proto->set_callbacks(&g_client_sess.callbacks);
+
+        ret = g_client_sess.proto->start_session();
+    }
     if (0 != ret) {
         fprintf(stderr, "start session failed, res: %d\n", ret);
+        uv_close((uv_handle_t*)&g_client.tcp_sock, libuv_close_sock_callback);
         g_client_sess.proto->close(0);
     }
 }
@@ -121,6 +137,8 @@ static void libuv_dns_callback(uv_getaddrinfo_t* req, int status, struct addrinf
 
         sockaddr_storage real_addr;
         uv_tcp_init(req->loop, &g_client.tcp_sock);
+        g_client.tcp_sock.data = &g_client;
+
         if (AF_INET == res->ai_family) {
             sockaddr_in *res_c = (struct sockaddr_in *)(res->ai_addr);
             char ip[17] = { 0 };
@@ -139,11 +157,10 @@ static void libuv_dns_callback(uv_getaddrinfo_t* req, int status, struct addrinf
         int res_code = uv_tcp_connect(&g_client.tcp_req, &g_client.tcp_sock, (struct sockaddr *)&real_addr, libuv_tcp_connect_callback);
         if (0 != res_code) {
             fprintf(stderr, "uv_tcp_connect failed, msg: %s\n", uv_strerror(res_code));
+            uv_close((uv_handle_t*)&g_client.tcp_sock, libuv_close_sock_callback);
             uv_stop(req->loop);
             break;
         }
-        g_client.dns_req.data = &g_client;
-        g_client.tcp_sock.data = &g_client;
     } while (false);
 
     // free addrinfo
@@ -167,9 +184,11 @@ static int start_connect() {
     return 0;
 }
 
-static void libuv_close_sock_callback(uv_handle_t* handle) {
+void libuv_close_sock_callback(uv_handle_t* handle) {
     handle->data = NULL;
     printf("close socket finished\n");
+
+    g_client.tcp_sock.data = NULL;
 }
 
 int close_sock() {
@@ -217,7 +236,7 @@ static int proto_inner_callback_on_write(::atframe::gateway::proto_base *proto, 
 
 static int proto_inner_callback_on_message(::atframe::gateway::proto_base *proto, const void *buffer, size_t sz) {
     if (g_client_sess.print_recv && NULL != buffer && sz > 0) {
-        printf("[recv message]: %s\n", reinterpret_cast<const char*>(buffer));
+        printf("[recv message]: %s\n", std::string(reinterpret_cast<const char*>(buffer), sz).c_str());
     }
     return 0;
 }
@@ -239,8 +258,11 @@ static int proto_inner_callback_on_close(::atframe::gateway::proto_base *proto, 
         return 0;
     }
 
-    printf("close socket start\n");
+    printf("close socket start, reason: %d\n", reason);
     uv_close((uv_handle_t*)&g_client.tcp_sock, libuv_close_sock_callback);
+
+    g_client_sess.allow_reconnect = ::atframe::gateway::close_reason_t::EN_CRT_UNKNOWN == reason ||
+        ::atframe::gateway::close_reason_t::EN_CRT_RECONNECT_BOUND > reason;
     return 0;
 }
 
@@ -262,6 +284,17 @@ static int proto_inner_callback_on_error(::atframe::gateway::proto_base *, const
 }
 
 static void libuv_tick_timer_callback(uv_timer_t* handle) {
+    if (NULL == g_client.tcp_sock.data && NULL == g_client.dns_req.data) {
+        if (!g_client_sess.allow_reconnect) {
+            puts("client exit.");
+            uv_stop(handle->loop);
+        } else {
+            puts("client try to reconnect.");
+            start_connect();
+        }
+        return;
+    }
+
     if (!g_client_sess.proto) {
         return;
     }
@@ -302,6 +335,7 @@ int main(int argc, char *argv[]) {
     g_client_sess.session_id = 0;
     g_client_sess.seq = 0;
     g_client_sess.print_recv = false;
+    g_client_sess.allow_reconnect = true;
 
     g_crypt_conf.default_key = "default";
     g_crypt_conf.update_interval = 600;

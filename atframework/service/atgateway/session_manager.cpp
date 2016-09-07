@@ -231,6 +231,9 @@ namespace atframe {
                     session::ptr_t s = reconnect_timeout_.front().s;
                     WLOGINFO("session 0x%llx reconnect timeout, cleanup", static_cast<unsigned long long>(s->get_id()));
                     reconnect_cache_.erase(s->get_id());
+
+                    // timeout and unset EN_FT_WAIT_RECONNECT to send remove notify
+                    s->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, false);
                     s->close_with_manager(close_reason_t::EN_CRT_LOGOUT, this);
                 }
                 reconnect_timeout_.pop_front();
@@ -263,6 +266,8 @@ namespace atframe {
                     iter = reconnect_cache_.find(sess_id);
                     if (reconnect_cache_.end() != iter) {
                         iter->second->close(reason);
+                        iter->second->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, false);
+                        reconnect_cache_.erase(iter);
                     }
                 }
 
@@ -275,7 +280,11 @@ namespace atframe {
                 session_timeout_t &sess_timer = reconnect_timeout_.back();
                 sess_timer.s = iter->second;
                 sess_timer.timeout = util::time::time_utility::get_now() + conf_.reconnect_timeout;
+
                 reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
+
+                // maybe transfer reconnecting session, old session still keep EN_FT_WAIT_RECONNECT flag
+                sess_timer.s->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, true);
 
                 // just close fd
                 sess_timer.s->close_fd(reason);
@@ -351,13 +360,13 @@ namespace atframe {
         int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
             // find old session
             session_map_t::iterator iter = reconnect_cache_.find(old_sess_id);
-            if (iter == reconnect_cache_.end()) {
+            if (iter == reconnect_cache_.end() || !iter->second) {
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
 
             // check if old session closed
-            if (iter->second->check_flag(session::flag_t::EN_FT_CLOSING)) {
-                return error_code_t::EN_ECT_CLOSING;
+            if (iter->second->check_flag(session::flag_t::EN_FT_HAS_FD)) {
+                return error_code_t::EN_ECT_ALREADY_HAS_FD;
             }
 
             // check if old session not reconnected
@@ -376,8 +385,13 @@ namespace atframe {
             }
 
             // init with reconnect
-            int ret = new_sess.init_reconnect(*iter->second);
-            return ret;
+            new_sess.init_reconnect(*iter->second);
+            // close old session
+            iter->second->close(0);
+
+            // erase reconnect cache, this session id may reconnect again
+            reconnect_cache_.erase(iter);
+            return 0;
         }
 
         int session_manager::active_session(session::ptr_t sess) {
