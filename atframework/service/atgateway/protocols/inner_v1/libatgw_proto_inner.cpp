@@ -247,12 +247,11 @@ namespace atframe {
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 BIO *openssl_dh_bio_;
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                // move mbedtls_ctr_drbg_context and mbedtls_entropy_context here
                 std::string mbedtls_dh_param_;
                 mbedtls_ctr_drbg_context mbedtls_ctr_drbg_;
                 mbedtls_entropy_context mbedtls_entropy_;
 #endif
-
-                // TODO move mbedtls_ctr_drbg_context and mbedtls_entropy_context here
                 static ptr_t &current() {
                     static ptr_t ret;
                     return ret;
@@ -863,7 +862,11 @@ namespace atframe {
                 // change key immediately, in case of Man-in-the-Middle Attack
                 crypt_read_ = crypt_handshake_;
                 crypt_write_ = crypt_handshake_;
-                ret = send_key_syn();
+
+                // if encrypt/decrypt is enabled, update the key
+                if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE != crypt_handshake_->type) {
+                    ret = handshake_update();
+                }
             }
 
             return ret;
@@ -995,8 +998,45 @@ namespace atframe {
             const void *outbuf = NULL;
             size_t outsz = 0;
             if (0 == ret) {
-                ret = encrypt_data(*crypt_handshake_, crypt_handshake_->shared_conf->conf_.default_key.data(),
-                                   crypt_handshake_->shared_conf->conf_.default_key.size(), outbuf, outsz);
+                // generate a verify prefix
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                BIGNUM *rnd_vfy = BN_new();
+                if (NULL != rnd_vfy) {
+                    if (1 == BN_rand(rnd_vfy, static_cast<int>(crypt_handshake_->shared_conf->conf_.keybits), 0, 0)) {
+                        char * verify_text = BN_bn2hex(rnd_vfy);
+                        if (NULL != verify_text) {
+                            ret = encrypt_data(*crypt_handshake_, verify_text, strlen(verify_text), outbuf, outsz);
+                            OPENSSL_free(verify_text);
+                        }
+                    } else {
+                        ATFRAME_GATEWAY_ON_ERROR(static_cast<int>(ERR_get_error()), "openssl/libressl generate verify text failed");
+                    }
+                    BN_free(rnd_vfy);
+                }
+                
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                {
+                    size_t secret_len = crypt_handshake_->shared_conf->conf_.keybits / 8;
+                    // 3 * secret_len, 1 for binary data, 2 for hex data
+                    char* verify_text = (char*)malloc((secret_len << 1) + secret_len);
+                    if (NULL != verify_text) {
+                        int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_,
+                            verify_text, secret_len);
+                        if (0 == res) {
+                            util::string::dumphex(verify_text, secret_len, verify_text + secret_len);
+                            ret = encrypt_data(*crypt_handshake_, verify_text + secret_len, secret_len << 1, outbuf, outsz);
+                        } else {
+                            ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls generate verify text failed");
+                        }
+                        free(verify_text);
+                    }
+                }
+#endif
+
+                if (NULL == outbuf || 0 == outsz) {
+                    ret = encrypt_data(*crypt_handshake_, crypt_handshake_->shared_conf->conf_.default_key.data(),
+                        crypt_handshake_->shared_conf->conf_.default_key.size(), outbuf, outsz);
+                }
             }
 
             if (0 == ret) {
@@ -1037,11 +1077,44 @@ namespace atframe {
                 // add something and encrypt it again. and send verify message
                 std::string verify_data;
                 if (crypt_handshake_->shared_conf) {
-                    verify_data.reserve(outsz + crypt_handshake_->shared_conf->conf_.default_key.size());
+                    verify_data.reserve(outsz + outsz);
                     verify_data.assign(reinterpret_cast<const char *>(outbuf), outsz);
-                    verify_data.append(crypt_handshake_->shared_conf->conf_.default_key.c_str(),
-                                       crypt_handshake_->shared_conf->conf_.default_key.size());
 
+                    // append something, verify encrypt/decript
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                    BIGNUM *rnd_vfy = BN_new();
+                    if (NULL != rnd_vfy) {
+                        // hex size = outsz, binary size = outsz / 2, bits = outsz / 2 * 8 = outsz * 4
+                        if (1 == BN_rand(rnd_vfy, static_cast<int>(outsz<< 2), 0, 0)) {
+                            char * verify_text = BN_bn2hex(rnd_vfy);
+                            if (NULL != verify_text) {
+                                verify_data += verify_text;
+                                OPENSSL_free(verify_text);
+                            }
+                        } else {
+                            ATFRAME_GATEWAY_ON_ERROR(static_cast<int>(ERR_get_error()), "openssl/libressl generate verify text failed");
+                        }
+                        BN_free(rnd_vfy);
+                    }
+
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                    {
+                        size_t secret_len = outsz >> 1;
+                        verify_data.resize(outsz + outsz);
+                        // 3 * secret_len, 1 for binary data, 2 for hex data
+                        char* verify_text = (char*)malloc(secret_len);
+                        if (NULL != verify_text) {
+                            int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_,
+                                verify_text, secret_len);
+                            if (0 == res) {
+                                util::string::dumphex(verify_text, secret_len, &verify_data[outsz]);
+                            } else {
+                                ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls generate verify text failed");
+                            }
+                            free(verify_text);
+                        }
+                    }
+#endif
                     ret = send_verify(verify_data.data(), verify_data.size());
                 } else {
                     ret = send_verify(outbuf, outsz);
@@ -1118,9 +1191,33 @@ namespace atframe {
             crypt_handshake_->param.clear();
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
-                // TODO generate a secret key
-                crypt_handshake_->secret.resize(crypt_handshake_->shared_conf->conf_.default_key.size());
-                memcpy(crypt_handshake_->secret.data(), crypt_handshake_->shared_conf->conf_.default_key.data(), crypt_handshake_->shared_conf->conf_.default_key.size());
+                // generate a secret key
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+                BIGNUM *rnd_sec = BN_new();
+                if (NULL != rnd_sec) {
+                    if (1 == BN_rand(rnd_sec, static_cast<int>(crypt_handshake_->shared_conf->conf_.keybits), 0, 0)) {
+                        crypt_handshake_->secret.resize(BN_num_bytes(rnd_sec));
+                        BN_bn2bin(rnd_sec, &crypt_handshake_->secret[0]);
+                    } else {
+                        ATFRAME_GATEWAY_ON_ERROR(static_cast<int>(ERR_get_error()), "openssl/libressl generate bignumber failed");
+                    }
+                    BN_free(rnd_sec);
+                }
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                {
+                    size_t secret_len = crypt_handshake_->shared_conf->conf_.keybits / 8;
+                    crypt_handshake_->secret.resize(secret_len);
+                    int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_, 
+                        &crypt_handshake_->secret[0], secret_len);
+                    if (0 != res) {
+                        ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls generate bignumber failed");
+                    }
+                }
+#endif
+                if (crypt_handshake_->secret.empty()) {
+                    crypt_handshake_->secret.resize(crypt_handshake_->shared_conf->conf_.default_key.size());
+                    memcpy(crypt_handshake_->secret.data(), crypt_handshake_->shared_conf->conf_.default_key.data(), crypt_handshake_->shared_conf->conf_.default_key.size());
+                }
 
                 crypt_handshake_->setup(crypt_handshake_->shared_conf->conf_.type, crypt_handshake_->shared_conf->conf_.keybits);
                 crypt_write_ = crypt_handshake_;
