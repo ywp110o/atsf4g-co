@@ -24,6 +24,7 @@ list(APPEND SAMPLE_SRC_LIST ${ATFRAMEWORK_ATBUS_SRC_DIR}/detail/buffer.cpp)
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/std/thread.h
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/std/smart_ptr.h
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/std/functional.h
+# ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/common/string_oprs.h
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/design_pattern/noncopyable.h
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/lock/atomic_int_type.h
 # ${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/lock/lock_holder.h

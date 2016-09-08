@@ -1034,7 +1034,7 @@ namespace atframe {
                 {
                     size_t secret_len = crypt_handshake_->shared_conf->conf_.keybits / 8;
                     // 3 * secret_len, 1 for binary data, 2 for hex data
-                    char* verify_text = (char*)malloc((secret_len << 1) + secret_len);
+                    unsigned char* verify_text = (unsigned char*)malloc((secret_len << 1) + secret_len);
                     if (NULL != verify_text) {
                         int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_,
                             verify_text, secret_len);
@@ -1116,7 +1116,7 @@ namespace atframe {
                         size_t secret_len = outsz >> 1;
                         verify_data.resize(outsz + outsz);
                         // 3 * secret_len, 1 for binary data, 2 for hex data
-                        char* verify_text = (char*)malloc(secret_len);
+                        unsigned char* verify_text = (unsigned char*)malloc(secret_len);
                         if (NULL != verify_text) {
                             int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_,
                                 verify_text, secret_len);
@@ -1652,7 +1652,7 @@ namespace atframe {
                     mbedtls_dhm_init(&handshake_.dh.mbedtls_dh_ctx_);
 
                     // client mode, just init , do not read PEM file
-                    if (false == handshake_.client_mode) {
+                    if (false == crypt_handshake_->shared_conf->conf_.client_mode) {
                         int res = mbedtls_dhm_parse_dhm(
                             &handshake_.dh.mbedtls_dh_ctx_,
                             reinterpret_cast<const unsigned char *>(crypt_handshake_->shared_conf->mbedtls_dh_param_.data()),
