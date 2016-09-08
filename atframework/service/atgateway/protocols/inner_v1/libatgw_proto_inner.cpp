@@ -296,7 +296,7 @@ namespace atframe {
                     return res;
                 }
 
-                res = AES_set_encrypt_key(reinterpret_cast<const unsigned char *>(secret.data()), kb, &aes_key.openssl_decrypt_key);
+                res = AES_set_decrypt_key(reinterpret_cast<const unsigned char *>(secret.data()), kb, &aes_key.openssl_decrypt_key);
                 if (res < 0) {
                     return res;
                 }
@@ -310,7 +310,7 @@ namespace atframe {
                     return res;
                 }
 
-                res = mbedtls_aes_setkey_enc(&aes_key.mbedtls_aes_decrypt_ctx, reinterpret_cast<const unsigned char *>(secret.data()), kb);
+                res = mbedtls_aes_setkey_dec(&aes_key.mbedtls_aes_decrypt_ctx, reinterpret_cast<const unsigned char *>(secret.data()), kb);
                 if (res < 0) {
                     return res;
                 }
@@ -1059,7 +1059,7 @@ namespace atframe {
             if (0 == ret) {
                 pubkey_rsp_body = Createcs_body_handshake(builder, session_id_, handshake_step_t_EN_HST_DH_PUBKEY_RSP,
                     peer_body.switch_type(), peer_body.crypt_type(), peer_body.crypt_bits(),
-                    builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), outsz)
+                    builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), NULL == outbuf? 0: outsz)
                 );
             } else {
                 pubkey_rsp_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_DH_PUBKEY_RSP,
@@ -1149,6 +1149,11 @@ namespace atframe {
         }
 
         int libatgw_proto_inner_v1::dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
+            // if switch type is direct, read handle should be set here
+            if (::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT == body_handshake.switch_type()) {
+                crypt_read_ = crypt_handshake_;
+            }
+
             // check crypt info
             int ret = 0;
             if (handshake_.switch_secret_type != body_handshake.switch_type() || !crypt_read_ ||
@@ -1160,7 +1165,7 @@ namespace atframe {
             }
 
             // check hello message prefix
-            if (NULL != body_handshake.crypt_param() && crypt_read_->param.size() <= body_handshake.crypt_param()->size()) {
+            if (NULL != body_handshake.crypt_param() && !crypt_read_->param.empty() && crypt_read_->param.size() <= body_handshake.crypt_param()->size()) {
                 const void* outbuf = NULL;
                 size_t outsz = 0;
                 ret = decrypt_data(*crypt_read_, body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size(),
@@ -1976,7 +1981,7 @@ namespace atframe {
             if (check_flag(flag_t::EN_PFT_CLOSING) && !check_flag(flag_t::EN_PFT_WRITING)) {
                 set_flag(flag_t::EN_PFT_CLOSED, true);
 
-                if (NULL != callbacks_ || callbacks_->close_fn) {
+                if (NULL != callbacks_ && callbacks_->close_fn) {
                     return callbacks_->close_fn(this, close_reason_);
                 }
             }
@@ -2004,7 +2009,7 @@ namespace atframe {
             if (!check_flag(flag_t::EN_PFT_WRITING)) {
                 set_flag(flag_t::EN_PFT_CLOSED, true);
 
-                if (NULL != callbacks_ || callbacks_->close_fn) {
+                if (NULL != callbacks_ && callbacks_->close_fn) {
                     return callbacks_->close_fn(this, close_reason_);
                 }
             }
@@ -2506,7 +2511,7 @@ namespace atframe {
 
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 AES_cbc_encrypt(reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer), outsz,
-                                &crypt_info.aes_key.openssl_decrypt_key, iv, AES_ENCRYPT);
+                                &crypt_info.aes_key.openssl_encrypt_key, iv, AES_ENCRYPT);
 
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 ret = mbedtls_aes_crypt_cbc(&crypt_info.aes_key.mbedtls_aes_encrypt_ctx, MBEDTLS_AES_ENCRYPT, outsz, iv,
@@ -2516,6 +2521,7 @@ namespace atframe {
                     return ret;
                 }
 #endif
+                out = buffer;
                 break;
             }
             default: {
@@ -2588,6 +2594,7 @@ namespace atframe {
                     return ret;
                 }
 #endif
+                out = buffer;
                 break;
             }
             default: {

@@ -422,7 +422,7 @@ namespace atframe {
 
         void session::check_minute_limit(bool check_recv, bool check_send) {
             time_t now_mi = ::util::time::time_utility::get_now() / ::util::time::time_utility::MINITE_SECONDS;
-            if (now_mi != limit_.hour_timepoint) {
+            if (now_mi != limit_.minute_timepoint) {
                 limit_.minute_timepoint = now_mi;
                 limit_.minute_recv_bytes = 0;
                 limit_.minute_send_bytes = 0;
@@ -450,6 +450,10 @@ namespace atframe {
             if (NULL != owner_ && owner_->get_conf().crypt.update_interval > 0 && check_flag(flag_t::EN_FT_HAS_FD)) {
                 if (limit_.update_handshake_timepoint < ::util::time::time_utility::get_now()) {
                     limit_.update_handshake_timepoint = ::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
+                    proto_base * proto = get_protocol_handle();
+                    if (NULL != proto) {
+                        proto->handshake_update();
+                    }
                 }
             }
         }

@@ -24,7 +24,7 @@ client_libuv_data_t g_client;
 struct client_session_data_t {
     uint64_t session_id;
     long long seq;
-    std::unique_ptr< ::atframe::gateway::libatgw_proto_inner_v1> proto;
+    std::shared_ptr< ::atframe::gateway::libatgw_proto_inner_v1> proto;
     ::atframe::gateway::proto_base::proto_callbacks_t callbacks;
 
     bool print_recv;
@@ -77,8 +77,10 @@ static void libuv_tcp_recv_read_fn(uv_stream_t *stream, ssize_t nread, const uv_
     }
 
     if (g_client_sess.proto) {
+        // add reference in case of destroyed in read callback
+        std::shared_ptr< ::atframe::gateway::libatgw_proto_inner_v1> sess_proto = g_client_sess.proto;
         int errcode = 0;
-        g_client_sess.proto->read(static_cast<int>(nread), buf->base, static_cast<size_t>(nread), errcode);
+        sess_proto->read(static_cast<int>(nread), buf->base, static_cast<size_t>(nread), errcode);
         if (0 != errcode) {
             fprintf(stderr, "[Read]: failed, res: %d\n", errcode);
             close_sock();
@@ -97,28 +99,26 @@ static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
     uv_read_start(req->handle, libuv_tcp_recv_alloc_fn, libuv_tcp_recv_read_fn);
     int ret = 0;
 
+    std::shared_ptr< ::atframe::gateway::libatgw_proto_inner_v1> sess_proto = std::make_shared<atframe::gateway::libatgw_proto_inner_v1>();
+    sess_proto->set_recv_buffer_limit(2 * 1024 * 1024, 0);
+    sess_proto->set_send_buffer_limit(2 * 1024 * 1024, 0);
+    sess_proto->set_callbacks(&g_client_sess.callbacks);
+
     if (g_client_sess.proto && g_client_sess.allow_reconnect) {
         ::atframe::gateway::libatgw_proto_inner_v1::crypt_session_ptr_t prev_handshake = g_client_sess.proto->get_crypt_handshake();
+        g_client_sess.proto = sess_proto;
 
-        g_client_sess.proto.reset(new ::atframe::gateway::libatgw_proto_inner_v1());
-        g_client_sess.proto->set_recv_buffer_limit(2 * 1024 * 1024, 0);
-        g_client_sess.proto->set_send_buffer_limit(2 * 1024 * 1024, 0);
-        g_client_sess.proto->set_callbacks(&g_client_sess.callbacks);
-
-        ret = g_client_sess.proto->reconnect_session(g_client_sess.session_id, 
+        ret = sess_proto->reconnect_session(g_client_sess.session_id,
             prev_handshake->type, prev_handshake->secret, prev_handshake->keybits);
     } else {
-        g_client_sess.proto.reset(new ::atframe::gateway::libatgw_proto_inner_v1());
-        g_client_sess.proto->set_recv_buffer_limit(2 * 1024 * 1024, 0);
-        g_client_sess.proto->set_send_buffer_limit(2 * 1024 * 1024, 0);
-        g_client_sess.proto->set_callbacks(&g_client_sess.callbacks);
+        g_client_sess.proto = sess_proto;
 
-        ret = g_client_sess.proto->start_session();
+        ret = sess_proto->start_session();
     }
     if (0 != ret) {
         fprintf(stderr, "start session failed, res: %d\n", ret);
         uv_close((uv_handle_t*)&g_client.tcp_sock, libuv_close_sock_callback);
-        g_client_sess.proto->close(0);
+        sess_proto->close(0);
     }
 }
 

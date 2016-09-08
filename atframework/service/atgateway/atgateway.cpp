@@ -270,7 +270,9 @@ private:
         }
 
         if (NULL != buf) {
-            sess->on_read(static_cast<int>(nread), buf->base, static_cast<size_t>(nread));
+            // in case of deallocator session in read callback.
+            ::atframe::gateway::session::ptr_t sess_holder = sess->shared_from_this();
+            sess_holder->on_read(static_cast<int>(nread), buf->base, static_cast<size_t>(nread));
         }
     }
 
@@ -352,17 +354,18 @@ private:
             WLOGERROR("recv message from proto object %p length, but has no session", proto);
             return -1;
         }
+        ::atframe::gateway::session::ptr_t sess_holder = sess->shared_from_this();
 
         ::atframe::gw::ss_msg post_msg;
-        post_msg.init(ATFRAME_GW_CMD_POST, sess->get_id());
+        post_msg.init(ATFRAME_GW_CMD_POST, sess_holder->get_id());
         post_msg.head.error_code = 0;
         post_msg.body.make_post(buffer, sz);
 
         // send to router
-        WLOGDEBUG("session 0x%llx send %llu bytes data to server 0x%llx", static_cast<unsigned long long>(sess->get_id()),
-            static_cast<unsigned long long>(sz), static_cast<unsigned long long>(sess->get_router()));
+        WLOGDEBUG("session 0x%llx send %llu bytes data to server 0x%llx", static_cast<unsigned long long>(sess_holder->get_id()),
+            static_cast<unsigned long long>(sz), static_cast<unsigned long long>(sess_holder->get_router()));
 
-        return gw_mgr_.post_data(sess->get_router(), post_msg);
+        return gw_mgr_.post_data(sess_holder->get_router(), post_msg);
     }
 
     int proto_inner_callback_on_new_session(::atframe::gateway::proto_base *proto, uint64_t &sess_id) {
@@ -371,9 +374,10 @@ private:
             WLOGERROR("recv new session message from proto object %p length, but has no session", proto);
             return -1;
         }
+        ::atframe::gateway::session::ptr_t sess_holder = sess->shared_from_this();
 
-        int ret = sess->init_new_session(gw_mgr_.get_conf().default_router);
-        sess_id = sess->get_id();
+        int ret = sess_holder->init_new_session(gw_mgr_.get_conf().default_router);
+        sess_id = sess_holder->get_id();
         if (0 != ret) {
             WLOGERROR("create new session failed, ret: %d", ret);
         }
@@ -392,28 +396,29 @@ private:
             WLOGERROR("close session from proto object %p length, but has no session", proto);
             return -1;
         }
+        ::atframe::gateway::session::ptr_t sess_holder = sess->shared_from_this();
 
         // check proto reconnect access
-        if (sess->check_flag(::atframe::gateway::session::flag_t::EN_FT_INITED)) {
+        if (sess_holder->check_flag(::atframe::gateway::session::flag_t::EN_FT_INITED)) {
             WLOGERROR("try to reconnect session 0x%llx(%p) from 0x%llx, but already inited", 
-                static_cast<unsigned long long>(sess->get_id()), sess, static_cast<unsigned long long>(sess_id));
+                static_cast<unsigned long long>(sess_holder->get_id()), sess, static_cast<unsigned long long>(sess_id));
             return -1;
         }
 
-        int res = gw_mgr_.reconnect(*sess, sess_id);
+        int res = gw_mgr_.reconnect(*sess_holder, sess_id);
         if (0 != res) {
             if (::atframe::gateway::error_code_t::EN_ECT_SESSION_NOT_FOUND != res &&
                 ::atframe::gateway::error_code_t::EN_ECT_REFUSE_RECONNECT != res) {
                 WLOGERROR("reconnect session 0x%llx(%p) from 0x%llx failed, res: %d", 
-                    static_cast<unsigned long long>(sess->get_id()), sess,
+                    static_cast<unsigned long long>(sess_holder->get_id()), sess,
                     static_cast<unsigned long long>(sess_id), res);
             } else {
                 WLOGINFO("reconnect session 0x%llx(%p) from 0x%llx failed, res: %d", 
-                    static_cast<unsigned long long>(sess->get_id()), sess,
+                    static_cast<unsigned long long>(sess_holder->get_id()), sess,
                     static_cast<unsigned long long>(sess_id), res);
             }
         } else {
-            WLOGINFO("reconnect session 0x%llx(%p) success", static_cast<unsigned long long>(sess->get_id()), sess);
+            WLOGINFO("reconnect session 0x%llx(%p) success", static_cast<unsigned long long>(sess_holder->get_id()), sess);
         }
         return res;
     }
@@ -429,17 +434,18 @@ private:
             WLOGERROR("close session from proto object %p length, but has no session", proto);
             return -1;
         }
+        ::atframe::gateway::session::ptr_t sess_holder = sess->shared_from_this();
 
-        if (!sess->check_flag(::atframe::gateway::session::flag_t::EN_FT_CLOSING)) {
+        if (!sess_holder->check_flag(::atframe::gateway::session::flag_t::EN_FT_CLOSING)) {
             // if network EOF or network error, do not close session, but wait for reconnect
             if (::atframe::gateway::close_reason_t::EN_CRT_RECONNECT_BOUND < reason) {
-                sess->close(reason);
-                WLOGINFO("session 0x%llx(%p) closed disable reconnect", static_cast<unsigned long long>(sess->get_id()), sess);
+                sess_holder->close(reason);
+                WLOGINFO("session 0x%llx(%p) closed disable reconnect", static_cast<unsigned long long>(sess_holder->get_id()), sess);
             } else {
-                WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess->get_id()), sess);
+                WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess_holder->get_id()), sess);
             }
         } else {
-            WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess->get_id()), sess);
+            WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess_holder->get_id()), sess);
         }
         return 0;
     }
@@ -451,10 +457,11 @@ private:
                 WLOGERROR("handshake done from proto object %p length, but has no session", proto);
                 return -1;
             }
+            ::atframe::gateway::session::ptr_t sess_holder = sess->shared_from_this();
 
             WLOGINFO("session 0x%llx(%p) handshake done\n%s", static_cast<unsigned long long>(sess->get_id()), sess, proto->get_info().c_str());
 
-            int res = gw_mgr_.active_session(sess->shared_from_this());
+            int res = gw_mgr_.active_session(sess_holder);
             if (0 != res) {
                 WLOGERROR("session 0x%llx send new session to router server failed, res: %d", static_cast<unsigned long long>(sess->get_id()), res);
                 return -1;
