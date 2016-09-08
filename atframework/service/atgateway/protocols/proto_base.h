@@ -190,6 +190,7 @@ namespace atframe {
                 on_init_reconnect_fn_t reconnect_fn;
                 on_close_fn_t close_fn;
                 on_handshake_done_fn_t on_handshake_done_fn;
+                on_handshake_done_fn_t on_handshake_update_fn;
                 on_error_fn_t on_error_fn;
             };
 

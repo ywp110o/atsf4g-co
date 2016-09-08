@@ -272,6 +272,22 @@ static int proto_inner_callback_on_handshake(::atframe::gateway::proto_base * pr
         g_client_sess.session_id = g_client_sess.proto->get_session_id();
     } else {
         fprintf(stderr, "[Error]: handshake failed, status=%d\n", status);
+        // handshake failed, do not reconnect any more
+        g_client_sess.proto.reset();
+        return -1;
+    }
+
+    return 0;
+}
+
+static int proto_inner_callback_on_handshake_update(::atframe::gateway::proto_base * proto, int status) {
+    if (0 == status) {
+        printf("[Info]: handshake update done\n%s\n", proto->get_info().c_str());
+        g_client_sess.session_id = g_client_sess.proto->get_session_id();
+    } else {
+        fprintf(stderr, "[Error]: handshake update failed, status=%d\n", status);
+        // handshake failed, do not reconnect any more
+        g_client_sess.proto.reset();
         return -1;
     }
 
@@ -330,6 +346,7 @@ int main(int argc, char *argv[]) {
     g_client_sess.callbacks.reconnect_fn = proto_inner_callback_on_reconnect;
     g_client_sess.callbacks.close_fn = proto_inner_callback_on_close;
     g_client_sess.callbacks.on_handshake_done_fn = proto_inner_callback_on_handshake;
+    g_client_sess.callbacks.on_handshake_update_fn = proto_inner_callback_on_handshake_update;
     g_client_sess.callbacks.on_error_fn = proto_inner_callback_on_error;
 
     g_client_sess.session_id = 0;

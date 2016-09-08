@@ -229,7 +229,7 @@ namespace atframe {
 
                 if (reconnect_timeout_.front().s) {
                     session::ptr_t s = reconnect_timeout_.front().s;
-                    WLOGINFO("session 0x%llx reconnect timeout, cleanup", static_cast<unsigned long long>(s->get_id()));
+                    WLOGINFO("session 0x%llx(%p) reconnect timeout, cleanup", static_cast<unsigned long long>(s->get_id()), s.get());
                     reconnect_cache_.erase(s->get_id());
 
                     // timeout and unset EN_FT_WAIT_RECONNECT to send remove notify

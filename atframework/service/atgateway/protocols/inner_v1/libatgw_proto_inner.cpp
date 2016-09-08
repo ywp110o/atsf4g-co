@@ -355,6 +355,7 @@ namespace atframe {
             ping_.last_ping = ping_data_t::clk_t::from_time_t(0);
             ping_.last_delta = 0;
 
+            handshake_.switch_secret_type = 0;
             handshake_.has_data = false;
             handshake_.ext_data = NULL;
         }
@@ -560,7 +561,6 @@ namespace atframe {
 
                 break;
             }
-            case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE:
             case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_SYN:
             case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_POST_KEY_ACK: {
                 if (::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake != msg->body_type()) {
@@ -569,6 +569,23 @@ namespace atframe {
                 }
                 const ::atframe::gw::inner::v1::cs_body_handshake *msg_body =
                     static_cast<const ::atframe::gw::inner::v1::cs_body_handshake *>(msg->body());
+
+                // start to update handshake
+                if (!check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE)) {
+                    set_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE, true);
+                }
+
+                dispatch_handshake(*msg_body);
+                break;
+            }
+            case atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_HANDSHAKE: {
+                if (::atframe::gw::inner::v1::cs_msg_body_cs_body_handshake != msg->body_type()) {
+                    close(close_reason_t::EN_CRT_INVALID_DATA, false);
+                    break;
+                }
+                const ::atframe::gw::inner::v1::cs_body_handshake *msg_body =
+                    static_cast<const ::atframe::gw::inner::v1::cs_body_handshake *>(msg->body());
+
                 dispatch_handshake(*msg_body);
                 break;
             }
@@ -695,11 +712,16 @@ namespace atframe {
             flatbuffers::Offset<cs_body_handshake> handshake_body;
             ret = pack_handshake_start_rsp(builder, session_id_, handshake_body);
             if (ret < 0) {
+                handshake_done(ret);
                 return ret;
             }
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
-            return write_msg(builder);
+            ret = write_msg(builder);
+            if (ret < 0) {
+                handshake_done(ret);
+            }
+            return ret;
         }
 
         int libatgw_proto_inner_v1::dispatch_handshake_start_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
@@ -869,7 +891,7 @@ namespace atframe {
                 ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_REFUSE_RECONNECT, "update handshake failed.");
 
                 // force to trigger handshake done
-                handshake_update();
+                setup_handshake(crypt_handshake_->shared_conf);
                 close_handshake(error_code_t::EN_ECT_REFUSE_RECONNECT);
                 return error_code_t::EN_ECT_HANDSHAKE;
             }
@@ -995,8 +1017,11 @@ namespace atframe {
                 if (NULL != rnd_vfy) {
                     if (1 == BN_rand(rnd_vfy, static_cast<int>(crypt_handshake_->shared_conf->conf_.keybits), 0, 0)) {
                         char * verify_text = BN_bn2hex(rnd_vfy);
+                        size_t verify_text_len = strlen(verify_text);
                         if (NULL != verify_text) {
-                            ret = encrypt_data(*crypt_handshake_, verify_text, strlen(verify_text), outbuf, outsz);
+                            ret = encrypt_data(*crypt_handshake_, verify_text, verify_text_len, outbuf, outsz);
+                            crypt_handshake_->param.assign(verify_text, verify_text + verify_text_len);
+
                             OPENSSL_free(verify_text);
                         }
                     } else {
@@ -1019,6 +1044,7 @@ namespace atframe {
                         } else {
                             ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls generate verify text failed");
                         }
+                        crypt_handshake_->param.assign(verify_text, verify_text + (secret_len<< 1));
                         free(verify_text);
                     }
                 }
@@ -1031,9 +1057,6 @@ namespace atframe {
             }
 
             if (0 == ret) {
-                crypt_handshake_->param.resize(outsz);
-                memcpy(crypt_handshake_->param.data(), outbuf, outsz);
-
                 pubkey_rsp_body = Createcs_body_handshake(builder, session_id_, handshake_step_t_EN_HST_DH_PUBKEY_RSP,
                     peer_body.switch_type(), peer_body.crypt_type(), peer_body.crypt_bits(),
                     builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), outsz)
@@ -1128,21 +1151,29 @@ namespace atframe {
         int libatgw_proto_inner_v1::dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
             // check crypt info
             int ret = 0;
-            if (handshake_.switch_secret_type != body_handshake.switch_type() || !crypt_handshake_ ||
-                crypt_handshake_->type != body_handshake.crypt_type() ||
-                crypt_handshake_->keybits != body_handshake.crypt_bits()) {
+            if (handshake_.switch_secret_type != body_handshake.switch_type() || !crypt_read_ ||
+                crypt_read_->type != body_handshake.crypt_type() ||
+                crypt_read_->keybits != body_handshake.crypt_bits()) {
                 ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "crypt information between client and server not matched.");
                 close(error_code_t::EN_ECT_HANDSHAKE, true);
                 return error_code_t::EN_ECT_HANDSHAKE;
             }
 
             // check hello message prefix
-            if (NULL == body_handshake.crypt_param() || crypt_handshake_->param.size() > body_handshake.crypt_param()->size()) {
-                const char *checked_ch = reinterpret_cast<const char *>(body_handshake.crypt_param()->data());
-                for (size_t i = 0; checked_ch && *checked_ch && i < crypt_handshake_->param.size(); ++i, ++checked_ch) {
-                    if (*checked_ch != crypt_handshake_->param[i]) {
-                        ret = error_code_t::EN_ECT_HANDSHAKE;
-                        break;
+            if (NULL != body_handshake.crypt_param() && crypt_read_->param.size() <= body_handshake.crypt_param()->size()) {
+                const void* outbuf = NULL;
+                size_t outsz = 0;
+                ret = decrypt_data(*crypt_read_, body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size(),
+                    outbuf, outsz);
+                if (0 != ret) {
+                    ATFRAME_GATEWAY_ON_ERROR(ret, "verify crypt information but decode failed.");
+                } else {
+                    const unsigned char *checked_ch = reinterpret_cast<const unsigned char *>(outbuf);
+                    for (size_t i = 0; checked_ch && *checked_ch && i < crypt_read_->param.size(); ++i, ++checked_ch) {
+                        if (*checked_ch != crypt_read_->param[i]) {
+                            ret = error_code_t::EN_ECT_HANDSHAKE;
+                            break;
+                        }
                     }
                 }
             }
@@ -1652,6 +1683,10 @@ namespace atframe {
             }
 
             handshake_.has_data = 0 == ret;
+            if (handshake_.has_data) {
+                // ready to update handshake
+                set_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE, true);
+            }
             return ret;
         }
 
@@ -2282,6 +2317,10 @@ namespace atframe {
                 return ret;
             }
 
+            if (!global_cfg || global_cfg->conf_.client_mode) {
+                return ret;
+            }
+
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
@@ -2291,11 +2330,16 @@ namespace atframe {
             flatbuffers::Offset<cs_body_handshake> handshake_body;
             ret = pack_handshake_start_rsp(builder, session_id_, handshake_body);
             if (ret < 0) {
+                handshake_done(ret);
                 return ret;
             }
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
-            return write_msg(builder);
+            ret = write_msg(builder);
+            if (ret < 0) {
+                handshake_done(ret);
+            }
+            return ret;
         }
 
         int libatgw_proto_inner_v1::send_kickoff(int reason) {

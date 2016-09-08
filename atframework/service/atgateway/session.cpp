@@ -294,7 +294,7 @@ namespace atframe {
                     uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
                 }
 
-                WLOGINFO("session 0x%llx lost fd", static_cast<unsigned long long>(id_));
+                WLOGINFO("session 0x%llx(%p) lost fd", static_cast<unsigned long long>(id_), this);
             }
 
             return 0;

@@ -133,6 +133,8 @@ namespace atframe {
             // on_handshake_done_fn only active when handshake done
             if (!has_handshake_done && NULL != callbacks_ && callbacks_->on_handshake_done_fn) {
                 callbacks_->on_handshake_done_fn(this, status);
+            } else if (NULL != callbacks_ && callbacks_->on_handshake_update_fn) {
+                callbacks_->on_handshake_update_fn(this, status);
             }
 
             return 0;
@@ -145,7 +147,7 @@ namespace atframe {
 
             set_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE, true);
             
-            return handshake_done(0);
+            return 0;
         }
 
         std::string proto_base::get_info() const {

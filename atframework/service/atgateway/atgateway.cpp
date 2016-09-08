@@ -57,6 +57,10 @@ public:
                 std::bind<int>(&gateway_module::proto_inner_callback_on_close, this, std::placeholders::_1, std::placeholders::_2);
             proto_callbacks_.on_handshake_done_fn =
                 std::bind<int>(&gateway_module::proto_inner_callback_on_handshake_done, this, std::placeholders::_1, std::placeholders::_2);
+
+            proto_callbacks_.on_handshake_update_fn =
+                std::bind<int>(&gateway_module::proto_inner_callback_on_update_done, this, std::placeholders::_1, std::placeholders::_2);
+            
             proto_callbacks_.on_error_fn =
                 std::bind<int>(&gateway_module::proto_inner_callback_on_error, this, std::placeholders::_1, std::placeholders::_2,
                                std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
@@ -355,6 +359,9 @@ private:
         post_msg.body.make_post(buffer, sz);
 
         // send to router
+        WLOGDEBUG("session 0x%llx send %llu bytes data to server 0x%llx", static_cast<unsigned long long>(sess->get_id()),
+            static_cast<unsigned long long>(sz), static_cast<unsigned long long>(sess->get_router()));
+
         return gw_mgr_.post_data(sess->get_router(), post_msg);
     }
 
@@ -388,7 +395,8 @@ private:
 
         // check proto reconnect access
         if (sess->check_flag(::atframe::gateway::session::flag_t::EN_FT_INITED)) {
-            WLOGERROR("try to reconnect session %llx from %llx, but already inited", static_cast<unsigned long long>(sess->get_id()), static_cast<unsigned long long>(sess_id));
+            WLOGERROR("try to reconnect session 0x%llx(%p) from 0x%llx, but already inited", 
+                static_cast<unsigned long long>(sess->get_id()), sess, static_cast<unsigned long long>(sess_id));
             return -1;
         }
 
@@ -396,10 +404,16 @@ private:
         if (0 != res) {
             if (::atframe::gateway::error_code_t::EN_ECT_SESSION_NOT_FOUND != res &&
                 ::atframe::gateway::error_code_t::EN_ECT_REFUSE_RECONNECT != res) {
-                WLOGERROR("reconnect session %llx from %llx failed, res: %d", static_cast<unsigned long long>(sess->get_id()), static_cast<unsigned long long>(sess_id), res);
+                WLOGERROR("reconnect session 0x%llx(%p) from 0x%llx failed, res: %d", 
+                    static_cast<unsigned long long>(sess->get_id()), sess,
+                    static_cast<unsigned long long>(sess_id), res);
             } else {
-                WLOGINFO("reconnect session %llx from %llx failed, res: %d", static_cast<unsigned long long>(sess->get_id()), static_cast<unsigned long long>(sess_id), res);
+                WLOGINFO("reconnect session 0x%llx(%p) from 0x%llx failed, res: %d", 
+                    static_cast<unsigned long long>(sess->get_id()), sess,
+                    static_cast<unsigned long long>(sess_id), res);
             }
+        } else {
+            WLOGINFO("reconnect session 0x%llx(%p) success", static_cast<unsigned long long>(sess->get_id()), sess);
         }
         return res;
     }
@@ -418,15 +432,19 @@ private:
 
         if (!sess->check_flag(::atframe::gateway::session::flag_t::EN_FT_CLOSING)) {
             // if network EOF or network error, do not close session, but wait for reconnect
-            if (::atframe::gateway::close_reason_t::EN_CRT_LOGOUT != reason) {
+            if (::atframe::gateway::close_reason_t::EN_CRT_RECONNECT_BOUND < reason) {
                 sess->close(reason);
+                WLOGINFO("session 0x%llx(%p) closed disable reconnect", static_cast<unsigned long long>(sess->get_id()), sess);
+            } else {
+                WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess->get_id()), sess);
             }
+        } else {
+            WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess->get_id()), sess);
         }
         return 0;
     }
 
     int proto_inner_callback_on_handshake_done(::atframe::gateway::proto_base * proto, int status) {
-        WLOGINFO("\n%s", proto->get_info().c_str());
         if (0 == status) {
             ::atframe::gateway::session *sess = reinterpret_cast< ::atframe::gateway::session *>(proto->get_private_data());
             if (NULL == sess) {
@@ -434,10 +452,37 @@ private:
                 return -1;
             }
 
+            WLOGINFO("session 0x%llx(%p) handshake done\n%s", static_cast<unsigned long long>(sess->get_id()), sess, proto->get_info().c_str());
+
             int res = gw_mgr_.active_session(sess->shared_from_this());
             if (0 != res) {
-                WLOGERROR("session %llx send new session to router server failed, res: %d", static_cast<unsigned long long>(sess->get_id()), res);
+                WLOGERROR("session 0x%llx send new session to router server failed, res: %d", static_cast<unsigned long long>(sess->get_id()), res);
                 return -1;
+            }
+        } else {
+            ::atframe::gateway::session *sess = reinterpret_cast< ::atframe::gateway::session *>(proto->get_private_data());
+            if (NULL == sess) {
+                WLOGERROR("session NONE handshake failed,res: %d\n%s", status, proto->get_info().c_str());
+            } else {
+                WLOGERROR("session 0x%llx(%p) handshake failed,res: %d\n%s", static_cast<unsigned long long>(sess->get_id()), sess, status, proto->get_info().c_str());
+            }
+        }
+        return 0;
+    }
+
+    int proto_inner_callback_on_update_done(::atframe::gateway::proto_base * proto, int status) {
+        ::atframe::gateway::session *sess = reinterpret_cast< ::atframe::gateway::session *>(proto->get_private_data());
+        if (0 == status) {
+            if (NULL == sess) {
+                WLOGDEBUG("session NONE handshake update success\n%s", proto->get_info().c_str());
+            } else {
+                WLOGDEBUG("session 0x%llx(%p) handshake update success\n%s", static_cast<unsigned long long>(sess->get_id()), sess, proto->get_info().c_str());
+            }
+        } else {
+            if (NULL == sess) {
+                WLOGERROR("session NONE handshake update failed,res: %d\n%s", status, proto->get_info().c_str());
+            } else {
+                WLOGERROR("session 0x%llx(%p) handshake update failed,res: %d\n%s", static_cast<unsigned long long>(sess->get_id()), sess, status, proto->get_info().c_str());
             }
         }
         return 0;
