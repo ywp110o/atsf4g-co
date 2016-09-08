@@ -7,10 +7,10 @@ TODO
 1. ~~[测试] atgateway: openssl+DH密钥交换流程~~
 2. ~~[测试] atgateway: openssl+直接发送密钥流程~~
 3. ~~[测试] atgateway: 无加密传输流程~~
-4. [测试] atgateway: mbedtls+DH密钥交换流程
-5. [测试] atgateway: mbedtls+直接发送密钥流程
-6. [测试] atgateway: openssl服务器+mbedtls客户端+DH密钥交换流程
-7. [测试] atgateway: mbedtls服务器+openssl客户端+DH密钥交换流程
+4. ~~[测试] atgateway: mbedtls+DH密钥交换流程~~
+5. ~~[测试] atgateway: mbedtls+直接发送密钥流程~~
+6. ~~[测试] atgateway: openssl服务器+mbedtls客户端+DH密钥交换流程~~
+7. ~~[测试] atgateway: mbedtls服务器+openssl客户端+DH密钥交换流程~~
 8. ~~[测试] atgateway: 逻辑服务器主动踢下线~~
 9. ~~[测试] atgateway: 断线重连+无加密~~
 10. ~~[测试] atgateway: 断线重连+DH密钥交换~~
@@ -29,4 +29,4 @@ TODO
 23. ~~[测试] atgateway: 直接发送密钥，定期更换密钥~~
 24. ~~[测试] atgateway: XXTEA加密算法~~
 25. ~~[测试] atgateway: openssl+AES256加密算法~~
-26. [测试] atgateway: mbedtls+AES256加密算法
+26. ~~[测试] atgateway: mbedtls+AES256加密算法~~

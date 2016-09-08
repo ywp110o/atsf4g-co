@@ -29,6 +29,10 @@ namespace atframe {
             template <typename T>
             static T *session_manager_make_stream_ptr(std::shared_ptr<uv_stream_t> &res) {
                 T *real_conn = new (std::nothrow) T();
+                if (NULL == real_conn) {
+                    return real_conn;
+                }
+
                 uv_stream_t *stream_conn = reinterpret_cast<uv_stream_t *>(real_conn);
                 res = std::shared_ptr<uv_stream_t>(stream_conn, session_manager_delete_stream_fn<T>);
                 stream_conn->data = NULL;

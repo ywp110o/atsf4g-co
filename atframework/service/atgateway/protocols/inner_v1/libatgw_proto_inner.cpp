@@ -1044,7 +1044,7 @@ namespace atframe {
                         } else {
                             ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls generate verify text failed");
                         }
-                        crypt_handshake_->param.assign(verify_text, verify_text + (secret_len<< 1));
+                        crypt_handshake_->param.assign(verify_text + secret_len, verify_text + (secret_len<< 1) + secret_len);
                         free(verify_text);
                     }
                 }
@@ -1320,7 +1320,8 @@ namespace atframe {
                     size_t gsz = mbedtls_mpi_size(&handshake_.dh.mbedtls_dh_ctx_.G);
                     size_t olen = 0;
                     // @see mbedtls_dhm_make_params, output P,G,GX. GX is smaller than P
-                    crypt_handshake_->param.resize(psz + psz + gsz, 0);
+                    // each big number has 2 byte length
+                    crypt_handshake_->param.resize(psz + psz + gsz + 6, 0);
                     int res = mbedtls_dhm_make_params(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz),
                                                       reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), &olen,
                                                       mbedtls_ctr_drbg_random,
@@ -1332,7 +1333,7 @@ namespace atframe {
                     }
 
                     // resize if P,G,GX is small than crypt_handshake_->param
-                    assert(olen <= psz);
+                    assert(olen <= psz + psz + gsz + 6);
                     if (olen < crypt_handshake_->param.size()) {
                         crypt_handshake_->param.resize(olen);
                     }
@@ -1809,7 +1810,7 @@ namespace atframe {
                 ::atbus::detail::buffer_block *preview_bb = NULL;
                 while (!write_buffers_.empty() && available_bytes > 0) {
                     ::atbus::detail::buffer_block *bb = write_buffers_.front();
-                    if (bb->raw_size() > available_bytes) {
+                    if (NULL == bb || bb->raw_size() > available_bytes) {
                         break;
                     }
 
@@ -2074,8 +2075,9 @@ namespace atframe {
                 }
 
                 // compare secret and encrypted secret
-                if (NULL == outbuf || outsz != other_crypt_handshake->secret.size() ||
-                    0 != memcmp(outbuf, other_crypt_handshake->secret.data(), outsz)) {
+                // decrypt will padding data, so outsz should always equal or greater than secret.size()
+                if (NULL == outbuf || outsz < other_crypt_handshake->secret.size() ||
+                    0 != memcmp(outbuf, other_crypt_handshake->secret.data(), other_crypt_handshake->secret.size())) {
                     ret = false;
                 }
             } while (false);
