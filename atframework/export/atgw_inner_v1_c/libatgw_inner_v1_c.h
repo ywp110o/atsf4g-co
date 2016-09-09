@@ -10,6 +10,16 @@
 
 #elif defined(__GNUC__)
 
+#ifndef __cdecl
+// see https://gcc.gnu.org/onlinedocs/gcc-4.0.0/gcc/Function-Attributes.html
+// Intel x86 architecture specific calling conventions
+#ifdef _M_IX86
+#define __cdecl __attribute__((__cdecl__))
+#else
+#define __cdecl
+#endif
+#endif
+
 #if defined(__clang__)
 
 #if !defined(_WIN32) && !defined(__WIN32__) && !defined(WIN32)
