@@ -8,7 +8,9 @@ set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/sample")
 
 # special setting for sample
 add_compiler_define(ATBUS_MACRO_MSG_LIMIT=65536)
-include_directories("${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols" ${ATFRAMEWORK_SERVICE_COMPONENT_DIR})
+include_directories("${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols" 
+    ${ATFRAMEWORK_SERVICE_COMPONENT_DIR} 
+    "${ATFRAMEWORK_BASE_DIR}/export/atgw_inner_v1_c")
 
 list(APPEND SAMPLE_SRC_LIST ${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols/proto_base.cpp)
 list(APPEND SAMPLE_SRC_LIST ${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols/inner_v1/libatgw_proto_inner.cpp)
@@ -56,6 +58,7 @@ endif()
 
 add_executable(${SAMPLE_SRC_BIN_NAME} ${SAMPLE_SRC_LIST})
 target_link_libraries(${SAMPLE_SRC_BIN_NAME}
+    libatgw_inner_v1_c
     ${3RD_PARTY_LIBUV_LINK_NAME}
     ${3RD_PARTY_CRYPT_LINK_NAME}
     ${EXTENTION_LINK_LIB}
