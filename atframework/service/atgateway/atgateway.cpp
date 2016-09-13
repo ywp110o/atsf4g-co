@@ -333,6 +333,7 @@ private:
             uv_buf_t bufs[1] = {
                 uv_buf_init(reinterpret_cast<char *>(real_buffer), static_cast<unsigned int>(sz))};
             sess->set_flag(::atframe::gateway::session::flag_t::EN_FT_WRITING_FD, true);
+
             ret = uv_write(req, sess->get_uv_stream(), bufs, 1, proto_inner_callback_on_written_fn);
             if (0 != ret) {
                 sess->set_flag(::atframe::gateway::session::flag_t::EN_FT_WRITING_FD, false);

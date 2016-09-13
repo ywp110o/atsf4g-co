@@ -92,6 +92,15 @@ ATFRAME_SYMBOL_EXPORT uint32_t __cdecl libatgw_inner_v1_c_get_crypt_keybits(liba
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read_alloc(libatgw_inner_v1_c_context context, uint64_t suggested_size, char **out_buf,
                                                                  uint64_t *out_len);
+
+/**
+ * @brief mark how much data already copied into read buffer.
+ * @param ssz context protocol context
+ * @param ssz nread, error code or data length. useless
+ * @param buff start address of read data. useless
+ * @param len lengtn of read data. read buffer manager will cost len bytes and try to dispatch message
+ * @param errcode where to receive error code
+ */
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read(libatgw_inner_v1_c_context context, int32_t ssz, const char *buff, uint64_t len, int32_t *errcode);
 
 ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_write_done(libatgw_inner_v1_c_context context, int32_t status);

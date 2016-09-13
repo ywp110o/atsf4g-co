@@ -59,7 +59,7 @@ namespace atframe {
 namespace atframe {
     namespace gateway {
         proto_base::flag_guard_t::flag_guard_t(int &f, int v) : flags_(&f), v_(0) {
-            if (0 == (f & v)) {
+            if (f == (f | v)) {
                 flags_ = NULL;
             } else {
                 v_ = (f | v) ^ f;

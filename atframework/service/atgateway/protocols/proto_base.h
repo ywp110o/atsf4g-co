@@ -47,17 +47,19 @@ namespace atframe {
 
         struct close_reason_t {
             enum type {
-                EN_CRT_UNKNOWN = 0,
-                EN_CRT_LOGOUT = 1,
-                EN_CRT_TRAFIC_EXTENDED = 2,
-                EN_CRT_INVALID_DATA = 3,
-                EN_CRT_RESET = 4,
-                EN_CRT_RECONNECT_BOUND = 1000,
-                EN_CRT_FIRST_IDLE = 1001,
-                EN_CRT_SERVER_CLOSED = 1002,
-                EN_CRT_SERVER_BUSY = 1003,
-                EN_CRT_KICKOFF = 1004,
-                EN_CRT_HANDSHAKE = 1005, 
+                EN_CRT_UNKNOWN = 0x0000,
+                EN_CRT_LOGOUT = 0x0001,
+                EN_CRT_TRAFIC_EXTENDED = 0x0002,
+                EN_CRT_INVALID_DATA = 0x0003,
+                EN_CRT_RESET = 0x0004,
+                EN_CRT_RECONNECT_INNER_BOUND = 0x0100,
+                EN_CRT_RECONNECT_BOUND = 0x10000,
+                EN_CRT_FIRST_IDLE = 0x10001,
+                EN_CRT_SERVER_CLOSED = 0x10002,
+                EN_CRT_SERVER_BUSY = 0x10003,
+                EN_CRT_KICKOFF = 0x10004,
+                EN_CRT_HANDSHAKE = 0x10005,
+                EN_CRT_NO_RECONNECT_INNER_BOUND = 0x10100,
             };
         };
 

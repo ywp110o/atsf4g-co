@@ -1864,7 +1864,7 @@ namespace atframe {
             last_write_ptr_ = writing_block->raw_data();
             ret = callbacks_->write_fn(this, writing_block->raw_data(), writing_block->raw_size(), &is_done);
             if (is_done) {
-                set_flag(flag_t::EN_PFT_WRITING, false);
+                return write_done(ret);
             }
 
             return ret;
