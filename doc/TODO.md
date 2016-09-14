@@ -30,3 +30,4 @@ TODO
 24. ~~[测试] atgateway: XXTEA加密算法~~
 25. ~~[测试] atgateway: openssl+AES256加密算法~~
 26. ~~[测试] atgateway: mbedtls+AES256加密算法~~
+27. ~~[测试] clang-analyzer无warning无error~~

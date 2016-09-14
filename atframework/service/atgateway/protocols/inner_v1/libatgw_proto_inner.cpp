@@ -1,10 +1,11 @@
 ﻿#include <sstream>
 
-#include "common/string_oprs.h"
 #include "algorithm/murmur_hash.h"
+#include "common/string_oprs.h"
 #include "lock/lock_holder.h"
 #include "lock/seq_alloc.h"
 #include "lock/spin_lock.h"
+
 
 #include "libatgw_proto_inner.h"
 
@@ -33,14 +34,12 @@
 
 // copy from ssl_locl.h
 #ifndef n2s
-# define n2s(c,s)        ((s=(((unsigned int)(c[0]))<< 8)| \
-                            (((unsigned int)(c[1]))    )),c+=2)
+#define n2s(c, s) ((s = (((unsigned int)(c[0])) << 8) | (((unsigned int)(c[1])))), c += 2)
 #endif
 
 // copy from ssl_locl.h
 #ifndef s2n
-# define s2n(s,c)        ((c[0]=(unsigned char)(((s)>> 8)&0xff), \
-                          c[1]=(unsigned char)(((s)    )&0xff)),c+=2)
+#define s2n(s, c) ((c[0] = (unsigned char)(((s) >> 8) & 0xff), c[1] = (unsigned char)(((s)) & 0xff)), c += 2)
 #endif
 
 #endif
@@ -114,8 +113,8 @@ namespace atframe {
                             fread(pem_buf, sizeof(unsigned char), pem_sz, pem);
                             openssl_dh_bio_ = BIO_new_mem_buf(pem_buf, static_cast<int>(pem_sz));
 
-                            // check 
-                            DH* test_dh_ctx = PEM_read_bio_DHparams(openssl_dh_bio_, NULL, NULL, NULL);
+                            // check
+                            DH *test_dh_ctx = PEM_read_bio_DHparams(openssl_dh_bio_, NULL, NULL, NULL);
                             if (NULL == test_dh_ctx) {
                                 ret = error_code_t::EN_ECT_CRYPT_READ_DHPARAM_FILE;
                             } else {
@@ -145,8 +144,7 @@ namespace atframe {
                         // test
                         mbedtls_dhm_context test_dh_ctx;
                         mbedtls_dhm_init(&test_dh_ctx);
-                        if (0 != mbedtls_dhm_parse_dhm(&test_dh_ctx, reinterpret_cast<const unsigned char *>(mbedtls_dh_param_.data()),
-                                                       pem_sz)) {
+                        if (0 != mbedtls_dhm_parse_dhm(&test_dh_ctx, reinterpret_cast<const unsigned char *>(mbedtls_dh_param_.data()), pem_sz)) {
                             ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         } else {
                             mbedtls_dhm_free(&test_dh_ctx);
@@ -231,7 +229,7 @@ namespace atframe {
 #endif
                 }
 
-                static void default_crypt_configure(libatgw_proto_inner_v1::crypt_conf_t& dconf) {
+                static void default_crypt_configure(libatgw_proto_inner_v1::crypt_conf_t &dconf) {
                     dconf.default_key = "atgw-key";
                     dconf.dh_param.clear();
                     dconf.keybits = 128;
@@ -304,8 +302,7 @@ namespace atframe {
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 mbedtls_aes_init(&aes_key.mbedtls_aes_encrypt_ctx);
                 mbedtls_aes_init(&aes_key.mbedtls_aes_decrypt_ctx);
-                int res =
-                    mbedtls_aes_setkey_enc(&aes_key.mbedtls_aes_encrypt_ctx, reinterpret_cast<const unsigned char *>(secret.data()), kb);
+                int res = mbedtls_aes_setkey_enc(&aes_key.mbedtls_aes_encrypt_ctx, reinterpret_cast<const unsigned char *>(secret.data()), kb);
                 if (res < 0) {
                     return res;
                 }
@@ -484,8 +481,8 @@ namespace atframe {
                 data = reinterpret_cast<char *>(data) - sread;
 
                 // 32bits hash code
-                uint32_t check_hash = util::hash::murmur_hash3_x86_32(reinterpret_cast<char *>(data) + msg_header_len,
-                                                                      static_cast<int>(sread - msg_header_len), 0);
+                uint32_t check_hash =
+                    util::hash::murmur_hash3_x86_32(reinterpret_cast<char *>(data) + msg_header_len, static_cast<int>(sread - msg_header_len), 0);
                 uint32_t expect_hash;
                 memcpy(&expect_hash, data, sizeof(uint32_t));
                 size_t msg_len = sread - msg_header_len;
@@ -544,8 +541,7 @@ namespace atframe {
                     break;
                 }
 
-                const ::atframe::gw::inner::v1::cs_body_post *msg_body =
-                    static_cast<const ::atframe::gw::inner::v1::cs_body_post *>(msg->body());
+                const ::atframe::gw::inner::v1::cs_body_post *msg_body = static_cast<const ::atframe::gw::inner::v1::cs_body_post *>(msg->body());
 
                 const void *out;
                 size_t outsz = static_cast<size_t>(msg_body->length());
@@ -567,8 +563,7 @@ namespace atframe {
                     close(close_reason_t::EN_CRT_INVALID_DATA, false);
                     break;
                 }
-                const ::atframe::gw::inner::v1::cs_body_handshake *msg_body =
-                    static_cast<const ::atframe::gw::inner::v1::cs_body_handshake *>(msg->body());
+                const ::atframe::gw::inner::v1::cs_body_handshake *msg_body = static_cast<const ::atframe::gw::inner::v1::cs_body_handshake *>(msg->body());
 
                 // start to update handshake
                 if (!check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE)) {
@@ -583,8 +578,7 @@ namespace atframe {
                     close(close_reason_t::EN_CRT_INVALID_DATA, false);
                     break;
                 }
-                const ::atframe::gw::inner::v1::cs_body_handshake *msg_body =
-                    static_cast<const ::atframe::gw::inner::v1::cs_body_handshake *>(msg->body());
+                const ::atframe::gw::inner::v1::cs_body_handshake *msg_body = static_cast<const ::atframe::gw::inner::v1::cs_body_handshake *>(msg->body());
 
                 dispatch_handshake(*msg_body);
                 break;
@@ -595,8 +589,7 @@ namespace atframe {
                     break;
                 }
 
-                const ::atframe::gw::inner::v1::cs_body_ping *msg_body =
-                    static_cast<const ::atframe::gw::inner::v1::cs_body_ping *>(msg->body());
+                const ::atframe::gw::inner::v1::cs_body_ping *msg_body = static_cast<const ::atframe::gw::inner::v1::cs_body_ping *>(msg->body());
 
                 // response pong
                 send_pong(msg_body->timepoint());
@@ -610,7 +603,8 @@ namespace atframe {
 
                 // update ping/pong duration
                 if (0 != ping_data_t::clk_t::to_time_t(ping_.last_ping)) {
-                    ping_.last_delta = static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(ping_data_t::clk_t::now() - ping_.last_ping).count());
+                    ping_.last_delta =
+                        static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(ping_data_t::clk_t::now() - ping_.last_ping).count());
                 }
                 break;
             }
@@ -620,8 +614,7 @@ namespace atframe {
                     break;
                 }
 
-                const ::atframe::gw::inner::v1::cs_body_kickoff *msg_body =
-                    static_cast<const ::atframe::gw::inner::v1::cs_body_kickoff *>(msg->body());
+                const ::atframe::gw::inner::v1::cs_body_kickoff *msg_body = static_cast<const ::atframe::gw::inner::v1::cs_body_kickoff *>(msg->body());
                 close(msg_body->reason(), false);
                 break;
             }
@@ -707,8 +700,7 @@ namespace atframe {
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
-                                                                     ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE, ::atframe::gateway::detail::alloc_seq());
             flatbuffers::Offset<cs_body_handshake> handshake_body;
             ret = pack_handshake_start_rsp(builder, session_id_, handshake_body);
             if (ret < 0) {
@@ -746,8 +738,7 @@ namespace atframe {
                 std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
                 // check if global configure changed
                 if (!global_cfg || global_cfg->conf_.type != body_handshake.crypt_type() ||
-                    global_cfg->conf_.switch_secret_type != body_handshake.switch_type() ||
-                    global_cfg->conf_.keybits != body_handshake.crypt_bits()) {
+                    global_cfg->conf_.switch_secret_type != body_handshake.switch_type() || global_cfg->conf_.keybits != body_handshake.crypt_bits()) {
                     crypt_conf_t global_crypt_cfg;
                     detail::crypt_global_configure_t::default_crypt_configure(global_crypt_cfg);
                     global_crypt_cfg.type = body_handshake.crypt_type();
@@ -800,8 +791,8 @@ namespace atframe {
                 using namespace ::atframe::gw::inner::v1;
 
                 flatbuffers::FlatBufferBuilder builder;
-                flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
-                    ::atframe::gateway::detail::alloc_seq());
+                flatbuffers::Offset<cs_msg_head> header_data =
+                    Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE, ::atframe::gateway::detail::alloc_seq());
                 flatbuffers::Offset<cs_body_handshake> handshake_body;
 
                 ret = pack_handshake_dh_pubkey_req(builder, body_handshake, handshake_body);
@@ -845,8 +836,7 @@ namespace atframe {
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
-                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE, ::atframe::gateway::detail::alloc_seq());
             flatbuffers::Offset<cs_body_handshake> reconn_body;
 
             uint64_t sess_id = 0;
@@ -854,12 +844,9 @@ namespace atframe {
                 sess_id = session_id_;
             }
 
-            reconn_body = Createcs_body_handshake(builder,
-                sess_id, handshake_step_t_EN_HST_RECONNECT_RSP,
-                static_cast<::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
-                static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->type),
-                crypt_handshake_->keybits
-            );
+            reconn_body = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_RECONNECT_RSP,
+                                                  static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
+                                                  static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->type), crypt_handshake_->keybits);
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, reconn_body.Union()), cs_msgIdentifier());
 
@@ -871,7 +858,7 @@ namespace atframe {
                 close_handshake(ret);
                 close(ret, true);
             } else {
-                
+
                 ret = write_msg(builder);
                 close_handshake(ret);
 
@@ -898,8 +885,7 @@ namespace atframe {
 
             std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
             // check if global configure changed
-            if (!global_cfg || global_cfg->conf_.type != body_handshake.crypt_type() ||
-                global_cfg->conf_.switch_secret_type != body_handshake.switch_type() ||
+            if (!global_cfg || global_cfg->conf_.type != body_handshake.crypt_type() || global_cfg->conf_.switch_secret_type != body_handshake.switch_type() ||
                 global_cfg->conf_.keybits != body_handshake.crypt_bits()) {
                 crypt_conf_t global_crypt_cfg;
                 detail::crypt_global_configure_t::default_crypt_configure(global_crypt_cfg);
@@ -927,8 +913,7 @@ namespace atframe {
             // check
             int ret = 0;
             if (handshake_.switch_secret_type != peer_body.switch_type() || !crypt_handshake_->shared_conf ||
-                crypt_handshake_->shared_conf->conf_.type != peer_body.crypt_type() ||
-                crypt_handshake_->shared_conf->conf_.keybits != peer_body.crypt_bits()) {
+                crypt_handshake_->shared_conf->conf_.type != peer_body.crypt_type() || crypt_handshake_->shared_conf->conf_.keybits != peer_body.crypt_bits()) {
                 ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "crypt information between client and server not matched.");
                 close(error_code_t::EN_ECT_HANDSHAKE, true);
                 return error_code_t::EN_ECT_HANDSHAKE;
@@ -936,8 +921,7 @@ namespace atframe {
 
             using namespace ::atframe::gw::inner::v1;
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
-                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE, ::atframe::gateway::detail::alloc_seq());
             flatbuffers::Offset<cs_body_handshake> pubkey_rsp_body;
 
 
@@ -953,16 +937,14 @@ namespace atframe {
 
                 // ===============================================
                 // generate next_secret
-                BIGNUM *pubkey = BN_bin2bn(reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()),
-                                           peer_body.crypt_param()->size(), NULL);
+                BIGNUM *pubkey = BN_bin2bn(reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()), peer_body.crypt_param()->size(), NULL);
                 if (NULL == pubkey) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                     ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl DH decode public key failed");
                     break;
                 };
                 crypt_handshake_->secret.resize(static_cast<size_t>(sizeof(unsigned char) * (DH_size(handshake_.dh.openssl_dh_ptr_))), 0);
-                int secret_len =
-                    DH_compute_key(reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]), pubkey, handshake_.dh.openssl_dh_ptr_);
+                int secret_len = DH_compute_key(reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]), pubkey, handshake_.dh.openssl_dh_ptr_);
                 BN_free(pubkey);
                 if (secret_len < 0) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -980,8 +962,7 @@ namespace atframe {
                     break;
                 }
 
-                int res = mbedtls_dhm_read_public(&handshake_.dh.mbedtls_dh_ctx_,
-                                                  reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()),
+                int res = mbedtls_dhm_read_public(&handshake_.dh.mbedtls_dh_ctx_, reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()),
                                                   peer_body.crypt_param()->size());
 
                 if (0 != res) {
@@ -993,8 +974,8 @@ namespace atframe {
                 size_t psz = handshake_.dh.mbedtls_dh_ctx_.len;
                 // generate next_secret
                 crypt_handshake_->secret.resize(psz, 0);
-                res = mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_,
-                                              reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]), psz, &psz, NULL, NULL);
+                res = mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]), psz, &psz, NULL,
+                                              NULL);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH compute key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1011,12 +992,12 @@ namespace atframe {
             const void *outbuf = NULL;
             size_t outsz = 0;
             if (0 == ret) {
-                // generate a verify prefix
+// generate a verify prefix
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 BIGNUM *rnd_vfy = BN_new();
                 if (NULL != rnd_vfy) {
                     if (1 == BN_rand(rnd_vfy, static_cast<int>(crypt_handshake_->shared_conf->conf_.keybits), 0, 0)) {
-                        char * verify_text = BN_bn2hex(rnd_vfy);
+                        char *verify_text = BN_bn2hex(rnd_vfy);
                         size_t verify_text_len = strlen(verify_text);
                         if (NULL != verify_text) {
                             ret = encrypt_data(*crypt_handshake_, verify_text, verify_text_len, outbuf, outsz);
@@ -1029,22 +1010,21 @@ namespace atframe {
                     }
                     BN_free(rnd_vfy);
                 }
-                
+
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 {
                     size_t secret_len = crypt_handshake_->shared_conf->conf_.keybits / 8;
                     // 3 * secret_len, 1 for binary data, 2 for hex data
-                    unsigned char* verify_text = (unsigned char*)malloc((secret_len << 1) + secret_len);
+                    unsigned char *verify_text = (unsigned char *)malloc((secret_len << 1) + secret_len);
                     if (NULL != verify_text) {
-                        int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_,
-                            verify_text, secret_len);
+                        int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_, verify_text, secret_len);
                         if (0 == res) {
                             util::string::dumphex(verify_text, secret_len, verify_text + secret_len);
                             ret = encrypt_data(*crypt_handshake_, verify_text + secret_len, secret_len << 1, outbuf, outsz);
                         } else {
                             ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls generate verify text failed");
                         }
-                        crypt_handshake_->param.assign(verify_text + secret_len, verify_text + (secret_len<< 1) + secret_len);
+                        crypt_handshake_->param.assign(verify_text + secret_len, verify_text + (secret_len << 1) + secret_len);
                         free(verify_text);
                     }
                 }
@@ -1052,20 +1032,17 @@ namespace atframe {
 
                 if (NULL == outbuf || 0 == outsz) {
                     ret = encrypt_data(*crypt_handshake_, crypt_handshake_->shared_conf->conf_.default_key.data(),
-                        crypt_handshake_->shared_conf->conf_.default_key.size(), outbuf, outsz);
+                                       crypt_handshake_->shared_conf->conf_.default_key.size(), outbuf, outsz);
                 }
             }
 
             if (0 == ret) {
-                pubkey_rsp_body = Createcs_body_handshake(builder, session_id_, handshake_step_t_EN_HST_DH_PUBKEY_RSP,
-                    peer_body.switch_type(), peer_body.crypt_type(), peer_body.crypt_bits(),
-                    builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), NULL == outbuf? 0: outsz)
-                );
+                pubkey_rsp_body =
+                    Createcs_body_handshake(builder, session_id_, handshake_step_t_EN_HST_DH_PUBKEY_RSP, peer_body.switch_type(), peer_body.crypt_type(),
+                                            peer_body.crypt_bits(), builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), NULL == outbuf ? 0 : outsz));
             } else {
-                pubkey_rsp_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_DH_PUBKEY_RSP,
-                    peer_body.switch_type(), peer_body.crypt_type(), peer_body.crypt_bits(),
-                    builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0)
-                );
+                pubkey_rsp_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_DH_PUBKEY_RSP, peer_body.switch_type(), peer_body.crypt_type(),
+                                                          peer_body.crypt_bits(), builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
             }
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, pubkey_rsp_body.Union()), cs_msgIdentifier());
@@ -1082,8 +1059,7 @@ namespace atframe {
             const void *outbuf = NULL;
             size_t outsz = 0;
             // decrypt default key
-            int ret =
-                decrypt_data(*crypt_handshake_, body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size(), outbuf, outsz);
+            int ret = decrypt_data(*crypt_handshake_, body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size(), outbuf, outsz);
             if (0 == ret) {
                 // secret already setuped when pack pubkey req
                 crypt_read_ = crypt_handshake_;
@@ -1094,13 +1070,13 @@ namespace atframe {
                     verify_data.reserve(outsz + outsz);
                     verify_data.assign(reinterpret_cast<const char *>(outbuf), outsz);
 
-                    // append something, verify encrypt/decript
+// append something, verify encrypt/decript
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                     BIGNUM *rnd_vfy = BN_new();
                     if (NULL != rnd_vfy) {
                         // hex size = outsz, binary size = outsz / 2, bits = outsz / 2 * 8 = outsz * 4
-                        if (1 == BN_rand(rnd_vfy, static_cast<int>(outsz<< 2), 0, 0)) {
-                            char * verify_text = BN_bn2hex(rnd_vfy);
+                        if (1 == BN_rand(rnd_vfy, static_cast<int>(outsz << 2), 0, 0)) {
+                            char *verify_text = BN_bn2hex(rnd_vfy);
                             if (NULL != verify_text) {
                                 verify_data += verify_text;
                                 OPENSSL_free(verify_text);
@@ -1116,10 +1092,9 @@ namespace atframe {
                         size_t secret_len = outsz >> 1;
                         verify_data.resize(outsz + outsz);
                         // 3 * secret_len, 1 for binary data, 2 for hex data
-                        unsigned char* verify_text = (unsigned char*)malloc(secret_len);
+                        unsigned char *verify_text = (unsigned char *)malloc(secret_len);
                         if (NULL != verify_text) {
-                            int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_,
-                                verify_text, secret_len);
+                            int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_, verify_text, secret_len);
                             if (0 == res) {
                                 util::string::dumphex(verify_text, secret_len, &verify_data[outsz]);
                             } else {
@@ -1140,13 +1115,9 @@ namespace atframe {
             return ret;
         }
 
-        int libatgw_proto_inner_v1::dispatch_handshake_rsa_secret_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
-            return 0;
-        }
+        int libatgw_proto_inner_v1::dispatch_handshake_rsa_secret_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) { return 0; }
 
-        int libatgw_proto_inner_v1::dispatch_handshake_rsa_secret_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
-            return 0;
-        }
+        int libatgw_proto_inner_v1::dispatch_handshake_rsa_secret_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) { return 0; }
 
         int libatgw_proto_inner_v1::dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
             // if switch type is direct, read handle should be set here
@@ -1156,8 +1127,7 @@ namespace atframe {
 
             // check crypt info
             int ret = 0;
-            if (handshake_.switch_secret_type != body_handshake.switch_type() || !crypt_read_ ||
-                crypt_read_->type != body_handshake.crypt_type() ||
+            if (handshake_.switch_secret_type != body_handshake.switch_type() || !crypt_read_ || crypt_read_->type != body_handshake.crypt_type() ||
                 crypt_read_->keybits != body_handshake.crypt_bits()) {
                 ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "crypt information between client and server not matched.");
                 close(error_code_t::EN_ECT_HANDSHAKE, true);
@@ -1166,10 +1136,9 @@ namespace atframe {
 
             // check hello message prefix
             if (NULL != body_handshake.crypt_param() && !crypt_read_->param.empty() && crypt_read_->param.size() <= body_handshake.crypt_param()->size()) {
-                const void* outbuf = NULL;
+                const void *outbuf = NULL;
                 size_t outsz = 0;
-                ret = decrypt_data(*crypt_read_, body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size(),
-                    outbuf, outsz);
+                ret = decrypt_data(*crypt_read_, body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size(), outbuf, outsz);
                 if (0 != ret) {
                     ATFRAME_GATEWAY_ON_ERROR(ret, "verify crypt information but decode failed.");
                 } else {
@@ -1195,7 +1164,7 @@ namespace atframe {
         }
 
         int libatgw_proto_inner_v1::pack_handshake_start_rsp(flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id,
-            flatbuffers::Offset<::atframe::gw::inner::v1::cs_body_handshake> &handshake_data) {
+                                                             flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_data) {
             using namespace ::atframe::gw::inner::v1;
 
             int ret = 0;
@@ -1203,10 +1172,8 @@ namespace atframe {
             if (0 == sess_id || !crypt_handshake_->shared_conf ||
                 ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == crypt_handshake_->shared_conf->conf_.type) {
                 // empty data
-                handshake_data = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_START_RSP,
-                    switch_secret_t_EN_SST_DIRECT, crypt_type_t_EN_ET_NONE, 0,
-                    builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0)
-                );
+                handshake_data = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_START_RSP, switch_secret_t_EN_SST_DIRECT,
+                                                         crypt_type_t_EN_ET_NONE, 0, builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
 
                 crypt_handshake_->setup(::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE, 0);
                 crypt_read_ = crypt_handshake_;
@@ -1218,7 +1185,7 @@ namespace atframe {
             crypt_handshake_->param.clear();
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
-                // generate a secret key
+// generate a secret key
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 BIGNUM *rnd_sec = BN_new();
                 if (NULL != rnd_sec) {
@@ -1234,8 +1201,7 @@ namespace atframe {
                 {
                     size_t secret_len = crypt_handshake_->shared_conf->conf_.keybits / 8;
                     crypt_handshake_->secret.resize(secret_len);
-                    int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_, 
-                        &crypt_handshake_->secret[0], secret_len);
+                    int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_, &crypt_handshake_->secret[0], secret_len);
                     if (0 != res) {
                         ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls generate bignumber failed");
                     }
@@ -1243,18 +1209,17 @@ namespace atframe {
 #endif
                 if (crypt_handshake_->secret.empty()) {
                     crypt_handshake_->secret.resize(crypt_handshake_->shared_conf->conf_.default_key.size());
-                    memcpy(crypt_handshake_->secret.data(), crypt_handshake_->shared_conf->conf_.default_key.data(), crypt_handshake_->shared_conf->conf_.default_key.size());
+                    memcpy(crypt_handshake_->secret.data(), crypt_handshake_->shared_conf->conf_.default_key.data(),
+                           crypt_handshake_->shared_conf->conf_.default_key.size());
                 }
 
                 crypt_handshake_->setup(crypt_handshake_->shared_conf->conf_.type, crypt_handshake_->shared_conf->conf_.keybits);
                 crypt_write_ = crypt_handshake_;
 
-                handshake_data = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_START_RSP,
-                    static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type), 
-                    static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->type), 
-                    crypt_handshake_->keybits,
-                    builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->secret.data()), crypt_handshake_->secret.size())
-                );
+                handshake_data = Createcs_body_handshake(
+                    builder, sess_id, handshake_step_t_EN_HST_START_RSP, static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
+                    static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->type), crypt_handshake_->keybits,
+                    builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->secret.data()), crypt_handshake_->secret.size()));
 
                 break;
             }
@@ -1288,8 +1253,7 @@ namespace atframe {
                     // dump P,G,GX
                     // @see int ssl3_send_server_key_exchange(SSL *s) in s3_srvr.c
                     {
-                        BIGNUM *r[4] = {handshake_.dh.openssl_dh_ptr_->p, handshake_.dh.openssl_dh_ptr_->g,
-                                        handshake_.dh.openssl_dh_ptr_->pub_key, NULL};
+                        BIGNUM *r[4] = {handshake_.dh.openssl_dh_ptr_->p, handshake_.dh.openssl_dh_ptr_->g, handshake_.dh.openssl_dh_ptr_->pub_key, NULL};
 
                         size_t olen = 0;
                         unsigned int nr[4] = {0};
@@ -1323,8 +1287,7 @@ namespace atframe {
                     // each big number has 2 byte length
                     crypt_handshake_->param.resize(psz + psz + gsz + 6, 0);
                     int res = mbedtls_dhm_make_params(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz),
-                                                      reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), &olen,
-                                                      mbedtls_ctr_drbg_random,
+                                                      reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), &olen, mbedtls_ctr_drbg_random,
                                                       &crypt_handshake_->shared_conf->mbedtls_ctr_drbg_);
                     if (0 != res) {
                         ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH generate check public key failed");
@@ -1341,12 +1304,11 @@ namespace atframe {
 
                 } while (false);
                 // send send first parameter
-                handshake_data = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_START_RSP,
-                    static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
+                handshake_data = Createcs_body_handshake(
+                    builder, sess_id, handshake_step_t_EN_HST_START_RSP, static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
                     static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->shared_conf->conf_.type),
                     crypt_handshake_->shared_conf->conf_.keybits,
-                    builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size())
-                );
+                    builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size()));
 
                 break;
             }
@@ -1374,16 +1336,14 @@ namespace atframe {
 
         int libatgw_proto_inner_v1::pack_handshake_dh_pubkey_req(flatbuffers::FlatBufferBuilder &builder,
                                                                  const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
-            flatbuffers::Offset<::atframe::gw::inner::v1::cs_body_handshake> &handshake_data) {
+                                                                 flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_data) {
             using namespace ::atframe::gw::inner::v1;
 
             int ret = 0;
             if (0 == peer_body.session_id() || NULL == peer_body.crypt_param() || !crypt_handshake_->shared_conf) {
                 // empty data
-                handshake_data = Createcs_body_handshake(builder, peer_body.session_id(), handshake_step_t_EN_HST_DH_PUBKEY_REQ,
-                    switch_secret_t_EN_SST_DIRECT, crypt_type_t_EN_ET_NONE, 0,
-                    builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0)
-                );
+                handshake_data = Createcs_body_handshake(builder, peer_body.session_id(), handshake_step_t_EN_HST_DH_PUBKEY_REQ, switch_secret_t_EN_SST_DIRECT,
+                                                         crypt_type_t_EN_ET_NONE, 0, builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
 
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
@@ -1481,13 +1441,13 @@ namespace atframe {
                         break;
                     }
 
-                    param_len += i;
+                    // param_len += i; // do not use **param_len** any more, it will cause static analysis to report a warning
                     if (!(pubkey = BN_bin2bn(p, i, NULL))) {
                         ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: GY ERR_R_BN_LIB");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
-                    p += i;
+                    // p += i; // do not use **p** any more, it will cause static analysis to report a warning
 
                     if (BN_is_zero(pubkey)) {
                         ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: GY SSL_R_BAD_DH_PUB_KEY_VALUE");
@@ -1518,8 +1478,7 @@ namespace atframe {
 
                 // generate next_secret
                 crypt_handshake_->secret.resize(static_cast<size_t>(sizeof(unsigned char) * (DH_size(handshake_.dh.openssl_dh_ptr_))), 0);
-                errcode =
-                    DH_compute_key(reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]), pubkey, handshake_.dh.openssl_dh_ptr_);
+                errcode = DH_compute_key(reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]), pubkey, handshake_.dh.openssl_dh_ptr_);
                 if (errcode < 0) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                     ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl DH compute key failed");
@@ -1535,10 +1494,8 @@ namespace atframe {
                     break;
                 }
 
-                unsigned char *dh_params_beg =
-                    const_cast<unsigned char *>(reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()));
-                int res = mbedtls_dhm_read_params(&handshake_.dh.mbedtls_dh_ctx_, &dh_params_beg,
-                                                  dh_params_beg + peer_body.crypt_param()->size());
+                unsigned char *dh_params_beg = const_cast<unsigned char *>(reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()));
+                int res = mbedtls_dhm_read_params(&handshake_.dh.mbedtls_dh_ctx_, &dh_params_beg, dh_params_beg + peer_body.crypt_param()->size());
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH read param failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1548,8 +1505,7 @@ namespace atframe {
                 size_t psz = handshake_.dh.mbedtls_dh_ctx_.len;
                 crypt_handshake_->param.resize(psz, 0);
                 res = mbedtls_dhm_make_public(&handshake_.dh.mbedtls_dh_ctx_, static_cast<int>(psz),
-                                              reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), psz,
-                                              mbedtls_ctr_drbg_random,
+                                              reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]), psz, mbedtls_ctr_drbg_random,
                                               &crypt_handshake_->shared_conf->mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH make public key failed");
@@ -1559,10 +1515,8 @@ namespace atframe {
 
                 // generate secret
                 crypt_handshake_->secret.resize(psz, 0);
-                res =
-                    mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]),
-                                            psz, &psz, mbedtls_ctr_drbg_random,
-                                            &crypt_handshake_->shared_conf->mbedtls_ctr_drbg_);
+                res = mbedtls_dhm_calc_secret(&handshake_.dh.mbedtls_dh_ctx_, reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]), psz, &psz,
+                                              mbedtls_ctr_drbg_random, &crypt_handshake_->shared_conf->mbedtls_ctr_drbg_);
                 if (0 != res) {
                     ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH compute key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1581,11 +1535,10 @@ namespace atframe {
             }
 #endif
             // send send first parameter
-            handshake_data = Createcs_body_handshake(builder, peer_body.session_id(), handshake_step_t_EN_HST_DH_PUBKEY_REQ,
-                static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type), 
-                peer_body.crypt_type(), peer_body.crypt_bits(),
-                builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size())
-            );
+            handshake_data = Createcs_body_handshake(
+                builder, peer_body.session_id(), handshake_step_t_EN_HST_DH_PUBKEY_REQ,
+                static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type), peer_body.crypt_type(), peer_body.crypt_bits(),
+                builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size()));
 
             // TODO if switch type is RSA
             // ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
@@ -1607,8 +1560,7 @@ namespace atframe {
             }
 
             int ret = 0;
-            if (!crypt_handshake_->shared_conf ||
-                ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == crypt_handshake_->shared_conf->conf_.type) {
+            if (!crypt_handshake_->shared_conf || ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == crypt_handshake_->shared_conf->conf_.type) {
                 return ret;
             }
 
@@ -1624,8 +1576,7 @@ namespace atframe {
                         handshake_.dh.openssl_dh_ptr_ = DH_new();
                     } else {
                         UNUSED(BIO_reset(crypt_handshake_->shared_conf->openssl_dh_bio_));
-                        handshake_.dh.openssl_dh_ptr_ =
-                            PEM_read_bio_DHparams(crypt_handshake_->shared_conf->openssl_dh_bio_, NULL, NULL, NULL);
+                        handshake_.dh.openssl_dh_ptr_ = PEM_read_bio_DHparams(crypt_handshake_->shared_conf->openssl_dh_bio_, NULL, NULL, NULL);
                     }
                     if (!handshake_.dh.openssl_dh_ptr_) {
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
@@ -1654,10 +1605,9 @@ namespace atframe {
 
                     // client mode, just init , do not read PEM file
                     if (false == crypt_handshake_->shared_conf->conf_.client_mode) {
-                        int res = mbedtls_dhm_parse_dhm(
-                            &handshake_.dh.mbedtls_dh_ctx_,
-                            reinterpret_cast<const unsigned char *>(crypt_handshake_->shared_conf->mbedtls_dh_param_.data()),
-                            crypt_handshake_->shared_conf->mbedtls_dh_param_.size());
+                        int res = mbedtls_dhm_parse_dhm(&handshake_.dh.mbedtls_dh_ctx_,
+                                                        reinterpret_cast<const unsigned char *>(crypt_handshake_->shared_conf->mbedtls_dh_param_.data()),
+                                                        crypt_handshake_->shared_conf->mbedtls_dh_param_.size());
                         if (0 != res) {
                             ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls parse dhm failed");
                             ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
@@ -1837,8 +1787,7 @@ namespace atframe {
                 assert(data);
                 // at least merge one block
                 assert(free_buffer > buffer_start);
-                assert(static_cast<size_t>(free_buffer - buffer_start) <=
-                       (get_tls_length(tls_buffer_t::EN_TBT_MERGE) - write_header_offset_));
+                assert(static_cast<size_t>(free_buffer - buffer_start) <= (get_tls_length(tls_buffer_t::EN_TBT_MERGE) - write_header_offset_));
 
                 data = ::atbus::detail::fn::buffer_next(data, write_header_offset_);
                 // copy back merged data
@@ -2041,7 +1990,8 @@ namespace atframe {
                     ret = false;
                     break;
                 } else {
-                    const ::atframe::gw::inner::v1::cs_body_handshake* body_handshake = reinterpret_cast<const ::atframe::gw::inner::v1::cs_body_handshake*>(handshake_.ext_data);
+                    const ::atframe::gw::inner::v1::cs_body_handshake *body_handshake =
+                        reinterpret_cast<const ::atframe::gw::inner::v1::cs_body_handshake *>(handshake_.ext_data);
                     const flatbuffers::Vector<int8_t> *secret = body_handshake->crypt_param();
                     if (NULL != secret) {
                         handshake_secret.resize(secret->size());
@@ -2067,9 +2017,7 @@ namespace atframe {
                 // decrypt secret
                 const void *outbuf = NULL;
                 size_t outsz = 0;
-                if (0 !=
-                    decrypt_data(*other_crypt_handshake, handshake_secret.data(),
-                        handshake_secret.size(), outbuf, outsz)) {
+                if (0 != decrypt_data(*other_crypt_handshake, handshake_secret.data(), handshake_secret.size(), outbuf, outsz)) {
                     ret = false;
                     break;
                 }
@@ -2094,13 +2042,9 @@ namespace atframe {
             return ret;
         }
 
-        void libatgw_proto_inner_v1::set_recv_buffer_limit(size_t max_size, size_t max_number) {
-            read_buffers_.set_mode(max_size, max_number);
-        }
+        void libatgw_proto_inner_v1::set_recv_buffer_limit(size_t max_size, size_t max_number) { read_buffers_.set_mode(max_size, max_number); }
 
-        void libatgw_proto_inner_v1::set_send_buffer_limit(size_t max_size, size_t max_number) {
-            write_buffers_.set_mode(max_size, max_number);
-        }
+        void libatgw_proto_inner_v1::set_send_buffer_limit(size_t max_size, size_t max_number) { write_buffers_.set_mode(max_size, max_number); }
 
         int libatgw_proto_inner_v1::handshake_update() { return send_key_syn(); }
 
@@ -2109,12 +2053,10 @@ namespace atframe {
             size_t limit_sz = 0;
             ss << "atgateway inner protocol: session id=" << session_id_ << std::endl;
             ss << "    last ping delta=" << ping_.last_delta << std::endl;
-            ss << "    handshake=" << (handshake_.has_data? "running": "not running")<< ", switch type="<< handshake_.switch_secret_type << std::endl;
-            ss << "    status: writing="<< check_flag(flag_t::EN_PFT_WRITING)<<
-                ",closing="<< check_flag(flag_t::EN_PFT_CLOSING) <<
-                ",closed="<< check_flag(flag_t::EN_PFT_CLOSED) <<
-                ",handshake done="<< check_flag(flag_t::EN_PFT_HANDSHAKE_DONE) <<
-                ",handshake update="<< check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE) << std::endl;
+            ss << "    handshake=" << (handshake_.has_data ? "running" : "not running") << ", switch type=" << handshake_.switch_secret_type << std::endl;
+            ss << "    status: writing=" << check_flag(flag_t::EN_PFT_WRITING) << ",closing=" << check_flag(flag_t::EN_PFT_CLOSING)
+               << ",closed=" << check_flag(flag_t::EN_PFT_CLOSED) << ",handshake done=" << check_flag(flag_t::EN_PFT_HANDSHAKE_DONE)
+               << ",handshake update=" << check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE) << std::endl;
 
             if (read_buffers_.limit().limit_size_ > 0) {
                 limit_sz = read_buffers_.limit().limit_size_ + sizeof(read_head_.buffer) - read_head_.len - read_buffers_.limit().cost_size_;
@@ -2130,18 +2072,18 @@ namespace atframe {
                 ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=unlimited" << std::endl;
             }
 
-#define DUMP_INFO(name, h) \
-            if (h) { \
-                if (&h != &crypt_handshake_ && h == crypt_handshake_) {\
-                    ss << "    "<< name<< " handle: == handshake handle" << std::endl; \
-                } else {\
-                    ss << "    " << name << " handle: crypt type=" << h->type << ", crypt keybits=" << h->keybits << ", crypt secret="; \
-                    util::string::dumphex(h->secret.data(), h->secret.size(), ss); \
-                    ss << std::endl; \
-                }\
-            } else { \
-                ss << "    "<< name<< " handle: unset" << std::endl; \
-            }
+#define DUMP_INFO(name, h)                                                                                                      \
+    if (h) {                                                                                                                    \
+        if (&h != &crypt_handshake_ && h == crypt_handshake_) {                                                                 \
+            ss << "    " << name << " handle: == handshake handle" << std::endl;                                                \
+        } else {                                                                                                                \
+            ss << "    " << name << " handle: crypt type=" << h->type << ", crypt keybits=" << h->keybits << ", crypt secret="; \
+            util::string::dumphex(h->secret.data(), h->secret.size(), ss);                                                      \
+            ss << std::endl;                                                                                                    \
+        }                                                                                                                       \
+    } else {                                                                                                                    \
+        ss << "    " << name << " handle: unset" << std::endl;                                                                  \
+    }
 
             DUMP_INFO("read", crypt_read_);
             DUMP_INFO("write", crypt_write_);
@@ -2168,14 +2110,11 @@ namespace atframe {
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
-                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE, ::atframe::gateway::detail::alloc_seq());
             flatbuffers::Offset<cs_body_handshake> handshake_body;
 
-            handshake_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_START_REQ,
-                switch_secret_t_EN_SST_DIRECT, crypt_type_t_EN_ET_NONE, 0, 
-                builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0)
-            );
+            handshake_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_START_REQ, switch_secret_t_EN_SST_DIRECT, crypt_type_t_EN_ET_NONE, 0,
+                                                     builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
@@ -2201,15 +2140,13 @@ namespace atframe {
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
-                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE, ::atframe::gateway::detail::alloc_seq());
             flatbuffers::Offset<cs_body_handshake> handshake_body;
 
-            handshake_body = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_RECONNECT_REQ,
-                static_cast<switch_secret_t>(handshake_.switch_secret_type), 
-                static_cast< ::atframe::gw::inner::v1::crypt_type_t>(type), keybits,
-                builder.CreateVector(reinterpret_cast<const int8_t *>(secret_buffer), secret_length)
-            );
+            handshake_body =
+                Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_RECONNECT_REQ, static_cast<switch_secret_t>(handshake_.switch_secret_type),
+                                        static_cast< ::atframe::gw::inner::v1::crypt_type_t>(type), keybits,
+                                        builder.CreateVector(reinterpret_cast<const int8_t *>(secret_buffer), secret_length));
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
@@ -2235,12 +2172,10 @@ namespace atframe {
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, msg_type,
-                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, msg_type, ::atframe::gateway::detail::alloc_seq());
 
-            flatbuffers::Offset<cs_body_post> post_body = Createcs_body_post(builder, static_cast<uint64_t>(ori_len),
-                builder.CreateVector(reinterpret_cast<const int8_t *>(buffer), len)
-            );
+            flatbuffers::Offset<cs_body_post> post_body =
+                Createcs_body_post(builder, static_cast<uint64_t>(ori_len), builder.CreateVector(reinterpret_cast<const int8_t *>(buffer), len));
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_post, post_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
@@ -2264,12 +2199,9 @@ namespace atframe {
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_PING,
-                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_PING, ::atframe::gateway::detail::alloc_seq());
 
-            flatbuffers::Offset<cs_body_ping> ping_body = Createcs_body_ping(builder, 
-                static_cast<int64_t>(ping_.last_ping.time_since_epoch().count())
-            );
+            flatbuffers::Offset<cs_body_ping> ping_body = Createcs_body_ping(builder, static_cast<int64_t>(ping_.last_ping.time_since_epoch().count()));
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_ping, ping_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
@@ -2287,8 +2219,7 @@ namespace atframe {
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_PONG,
-                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_PONG, ::atframe::gateway::detail::alloc_seq());
 
             flatbuffers::Offset<cs_body_ping> ping_body = Createcs_body_ping(builder, tp);
 
@@ -2331,8 +2262,8 @@ namespace atframe {
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_POST_KEY_SYN,
-                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data =
+                Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_POST_KEY_SYN, ::atframe::gateway::detail::alloc_seq());
 
             flatbuffers::Offset<cs_body_handshake> handshake_body;
             ret = pack_handshake_start_rsp(builder, session_id_, handshake_body);
@@ -2361,8 +2292,7 @@ namespace atframe {
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_KICKOFF,
-                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_KICKOFF, ::atframe::gateway::detail::alloc_seq());
 
             flatbuffers::Offset<cs_body_kickoff> kickoff_body = Createcs_body_kickoff(builder, reason);
 
@@ -2398,31 +2328,22 @@ namespace atframe {
             using namespace ::atframe::gw::inner::v1;
 
             flatbuffers::FlatBufferBuilder builder;
-            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE,
-                ::atframe::gateway::detail::alloc_seq());
+            flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE, ::atframe::gateway::detail::alloc_seq());
 
-            flatbuffers::Offset<cs_body_handshake> verify_body = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_VERIFY,
-                static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
-                static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_write_->type),
-                crypt_write_->keybits,
-                builder.CreateVector<int8_t>(reinterpret_cast<const int8_t*>(outbuf), outsz)
-            );
+            flatbuffers::Offset<cs_body_handshake> verify_body = Createcs_body_handshake(
+                builder, sess_id, handshake_step_t_EN_HST_VERIFY, static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
+                static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_write_->type), crypt_write_->keybits,
+                builder.CreateVector<int8_t>(reinterpret_cast<const int8_t *>(outbuf), outsz));
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, verify_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
         }
 
-        const libatgw_proto_inner_v1::crypt_session_ptr_t& libatgw_proto_inner_v1::get_crypt_read() const {
-            return crypt_read_;
-        }
+        const libatgw_proto_inner_v1::crypt_session_ptr_t &libatgw_proto_inner_v1::get_crypt_read() const { return crypt_read_; }
 
-        const libatgw_proto_inner_v1::crypt_session_ptr_t& libatgw_proto_inner_v1::get_crypt_write() const {
-            return crypt_write_;
-        }
+        const libatgw_proto_inner_v1::crypt_session_ptr_t &libatgw_proto_inner_v1::get_crypt_write() const { return crypt_write_; }
 
-        const libatgw_proto_inner_v1::crypt_session_ptr_t& libatgw_proto_inner_v1::get_crypt_handshake() const {
-            return crypt_handshake_;
-        }
+        const libatgw_proto_inner_v1::crypt_session_ptr_t &libatgw_proto_inner_v1::get_crypt_handshake() const { return crypt_handshake_; }
 
         int libatgw_proto_inner_v1::encode_post(const void *in, size_t insz, const void *&out, size_t &outsz) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
@@ -2463,8 +2384,7 @@ namespace atframe {
             return decrypt_data(*crypt_read_, in, insz, out, outsz);
         }
 
-        int libatgw_proto_inner_v1::encrypt_data(crypt_session_t &crypt_info, const void *in, size_t insz, const void *&out,
-                                                 size_t &outsz) {
+        int libatgw_proto_inner_v1::encrypt_data(crypt_session_t &crypt_info, const void *in, size_t insz, const void *&out, size_t &outsz) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
             }
@@ -2536,8 +2456,7 @@ namespace atframe {
             return ret;
         }
 
-        int libatgw_proto_inner_v1::decrypt_data(crypt_session_t &crypt_info, const void *in, size_t insz, const void *&out,
-                                                 size_t &outsz) {
+        int libatgw_proto_inner_v1::decrypt_data(crypt_session_t &crypt_info, const void *in, size_t insz, const void *&out, size_t &outsz) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
             }
