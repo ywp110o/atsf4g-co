@@ -26,6 +26,7 @@ if __name__ == '__main__':
     # TODO set all custom configures
     set_cmd_opts(opts)
     # TODO parse all services
-    set_server_inst(None, 'atproxy', 1)
-    # TODO use all template
-    # http://www.makotemplates.org/
+    for generator in glob.glob(os.path.join(script_dir, 'helper', 'generator', '*')):
+        set_server_inst(None, 'atproxy', 1)
+        # TODO use all template
+        # http://www.makotemplates.org/
