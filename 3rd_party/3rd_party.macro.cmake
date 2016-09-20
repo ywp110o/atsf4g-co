@@ -42,3 +42,6 @@ if (MINGW)
     EchoWithColor(COLOR GREEN "-- MinGW: custom add lib gdi32")
     list(APPEND 3RD_PARTY_CRYPT_LINK_NAME gdi32)
 endif()
+
+# =========== 3rd_party - libcopp ===========
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/libcopp/libcopp.cmake")
