@@ -1,5 +1,5 @@
 ﻿
-set (ATSF4G_APP_NAME libatservice_component)
+set (ATSF4G_APP_NAME atservice_component)
 EchoWithColor(COLOR GREEN "-- Configure ${ATSF4G_APP_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
 if (OPENSSL_FOUND)
