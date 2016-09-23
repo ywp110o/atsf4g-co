@@ -26,13 +26,27 @@ include("${PROJECT_CMAKE_MODULE_DIR}/CompilerOption.cmake")
 include("${PROJECT_CMAKE_MODULE_DIR}/TargetOption.cmake")
 EchoWithColor(COLOR GREEN "-- Build Type: ${CMAKE_BUILD_TYPE}")
 
+# 导入工程工具
+include("${CMAKE_CURRENT_LIST_DIR}/project/cmake/ProjectTools.cmake")
+
+# installer directory
 set (PROJECT_INSTALL_BAS_DIR "${PROJECT_BINARY_DIR}/${PROJECT_BUILD_NAME}")
 if(NOT EXISTS ${PROJECT_INSTALL_BAS_DIR})
     file(MAKE_DIRECTORY ${PROJECT_INSTALL_BAS_DIR})
     message(STATUS "create ${PROJECT_INSTALL_BAS_DIR} for build target.")
 endif()
+set (LIBRARY_OUTPUT_PATH "${PROJECT_INSTALL_BAS_DIR}/lib")
+set (PROJECT_INSTALL_RES_DIR "${PROJECT_INSTALL_BAS_DIR}/resource")
+set (PROJECT_INSTALL_TOOLS_DIR  "${PROJECT_INSTALL_BAS_DIR}/tools")
+set (PROJECT_INSTALL_SHARED_DIR "${PROJECT_INSTALL_TOOLS_DIR}/shared")
+set (PROJECT_INSTALL_RES_PBD_DIR "${PROJECT_INSTALL_RES_DIR}/pbdesc")
+
+file(MAKE_DIRECTORY ${PROJECT_INSTALL_SHARED_DIR})
+file(MAKE_DIRECTORY ${PROJECT_INSTALL_RES_PBD_DIR})
 
 ########################################################################
+string(TOLOWER "${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}" PLATFORM_BUILD_PLATFORM_NAME)
+
 # 导入项目配置
 ## 导入所有 macro 定义
 include_macro_recurse(${PROJECT_3RD_PARTY_ROOT_DIR})

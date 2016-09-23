@@ -160,6 +160,7 @@ namespace atframe {
                     EN_TBT_MERGE = 0,
                     EN_TBT_CRYPT,
                     EN_TBT_ZIP,
+                    EN_TBT_CUSTOM,
                     EN_TBT_MAX,
                 };
             };

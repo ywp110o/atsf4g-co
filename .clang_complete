@@ -4,3 +4,5 @@
 -Iatframework/libatapp/repo/include
 -Iatframework/libatbus/repo/include
 -Iatframework/libatframe_utils/repo/include
+-Iatframework/service/component/include
+-Isrc/server_frame

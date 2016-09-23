@@ -630,7 +630,14 @@ struct app_handle_on_recv {
         case ATFRAME_GW_CMD_SESSION_KICKOFF: {
             WLOGINFO("from server 0x%llx: session 0x%llx kickoff by server", static_cast<unsigned long long>(recv_msg.body.forward->from), 
                 static_cast<unsigned long long>(msg.head.session_id));
-            mod_.get().get_session_manager().close(msg.head.session_id, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+            if (0 == msg.head.error_code) {
+                mod_.get().get_session_manager().close(msg.head.session_id,
+                                                       ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+            } else {
+                mod_.get().get_session_manager().close(msg.head.session_id, msg.head.error_code,
+                                                       msg.head.error_code > 0 && msg.head.error_code < ::atframe::gateway::close_reason_t::EN_CRT_RECONNECT_BOUND
+                );
+            }
             break;
         }
         case ATFRAME_GW_CMD_SET_ROUTER_REQ: {
