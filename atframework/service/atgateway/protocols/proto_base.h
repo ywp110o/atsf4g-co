@@ -62,6 +62,7 @@ namespace atframe {
                 EN_CRT_LOGOUT = 0x10006,
                 EN_CRT_ADMINISTRATOR = 0x10007, // kickoff by administrator
                 EN_CRT_MAINTENANCE = 0x10008, // closed to maintenance
+                EN_CRT_EOF = 0x10009, // EOF means everything is finished and no more need this connection
                 EN_CRT_NO_RECONNECT_INNER_BOUND = 0x10100,
             };
         };
