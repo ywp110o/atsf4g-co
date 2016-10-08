@@ -48,7 +48,7 @@ namespace atframe {
         struct close_reason_t {
             enum type {
                 EN_CRT_UNKNOWN = 0x0000,
-                EN_CRT_LOGOUT = 0x0001,
+                EN_CRT_EAGAIN = 0x0001, // resource temporary unavailable
                 EN_CRT_TRAFIC_EXTENDED = 0x0002,
                 EN_CRT_INVALID_DATA = 0x0003,
                 EN_CRT_RESET = 0x0004,
@@ -59,6 +59,9 @@ namespace atframe {
                 EN_CRT_SERVER_BUSY = 0x10003,
                 EN_CRT_KICKOFF = 0x10004,
                 EN_CRT_HANDSHAKE = 0x10005,
+                EN_CRT_LOGOUT = 0x10006,
+                EN_CRT_ADMINISTRATOR = 0x10007, // kickoff by administrator
+                EN_CRT_MAINTENANCE = 0x10008, // closed to maintenance
                 EN_CRT_NO_RECONNECT_INNER_BOUND = 0x10100,
             };
         };
