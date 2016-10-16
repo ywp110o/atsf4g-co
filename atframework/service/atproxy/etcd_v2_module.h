@@ -90,7 +90,6 @@ namespace atframe {
 
         private:
             util::network::http_request::curl_m_bind_ptr_t curl_multi_;
-            CURLM *curl_handle_;
             conf_t conf_;
             util::network::http_request::ptr_t rpc_keepalive_;
             util::network::http_request::ptr_t rpc_watch_;

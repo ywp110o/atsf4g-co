@@ -12,12 +12,6 @@ include_directories("${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols"
     ${ATFRAMEWORK_SERVICE_COMPONENT_DIR} 
     "${ATFRAMEWORK_BASE_DIR}/export/atgw_inner_v1_c")
 
-list(APPEND SAMPLE_SRC_LIST ${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols/proto_base.cpp)
-list(APPEND SAMPLE_SRC_LIST ${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols/inner_v1/libatgw_proto_inner.cpp)
-list(APPEND SAMPLE_SRC_LIST ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/xxtea.cpp)
-list(APPEND SAMPLE_SRC_LIST ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/murmur_hash.cpp)
-list(APPEND SAMPLE_SRC_LIST ${ATFRAMEWORK_ATBUS_SRC_DIR}/detail/buffer.cpp)
-
 # ===== For inner protocol, some macro may has effect on code:
 # ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE: used for merge small package(default: 3072)
 # ATBUS_MACRO_MSG_LIMIT: max message length, can not be greater than it in atgateway(default: 65536,64K)

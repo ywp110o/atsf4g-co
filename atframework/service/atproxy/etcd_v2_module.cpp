@@ -27,7 +27,7 @@
 namespace atframe {
     namespace proxy {
         etcd_v2_module::etcd_v2_module()
-            : curl_handle_(NULL), rpc_watch_index_(0), next_keepalive_refresh(false), next_tick_update_etcd_mebers(0) {
+            : rpc_watch_index_(0), next_keepalive_refresh(false), next_tick_update_etcd_mebers(0) {
             conf_.path = "/";
             conf_.http_renew_ttl_timeout = 5000;
             conf_.http_watch_timeout = 3600000;

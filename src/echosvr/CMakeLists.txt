@@ -19,10 +19,6 @@ file(GLOB_RECURSE SERVER_INST_SRC_LIST
 )
 source_group_by_dir(SERVER_INST_SRC_LIST)
 
-if (MINGW)
-    list(APPEND EXTENTION_LINK_LIB stdc++)
-endif()
-
 # these service will use atgateway protocol
 include_directories(${ATFRAMEWORK_SERVICE_GATEWAY_PROTOCOL_DIR})
 
@@ -34,5 +30,5 @@ target_link_libraries(${SERVER_INST_SRC_BIN_NAME}
     ${ATFRAMEWORK_ATBUS_LINK_NAME}
     ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}
     ${3RD_PARTY_LIBUV_LINK_NAME}
-    ${EXTENTION_LINK_LIB}
+    ${COMPILER_OPTION_EXTERN_CXX_LIBS}
 )

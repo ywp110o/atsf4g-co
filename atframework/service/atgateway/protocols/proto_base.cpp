@@ -151,7 +151,7 @@ namespace atframe {
         }
 
         std::string proto_base::get_info() const {
-            return "";
+            return std::string("");
         }
     }
 }

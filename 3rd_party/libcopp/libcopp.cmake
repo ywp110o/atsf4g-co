@@ -18,7 +18,7 @@ if (Libcopp_FOUND)
     EchoWithColor(COLOR GREEN "-- Dependency: libcopp prebuilt found.(inc=${Libcopp_INCLUDE_DIRS})")
 elseif(EXISTS "${3RD_PARTY_LIBCOPP_REPO_DIR}/CMakeLists.txt")
     set (3RD_PARTY_LIBCOPP_INC_DIR "${3RD_PARTY_LIBCOPP_REPO_DIR}/include")
-    set (3RD_PARTY_LIBCOPP_LINK_NAME libcopp libcotask)
+    set (3RD_PARTY_LIBCOPP_LINK_NAME copp cotask)
     add_subdirectory(${3RD_PARTY_LIBCOPP_REPO_DIR})
 
     include_directories(${3RD_PARTY_LIBCOPP_INC_DIR})

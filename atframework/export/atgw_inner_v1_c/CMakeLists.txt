@@ -50,12 +50,8 @@ elseif(MBEDTLS_FOUND)
     add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS=1)
 endif()
 
-if (MINGW)
-    list(APPEND EXTENTION_LINK_LIB stdc++)
-endif()
-
 add_library(${EXPORT_SRC_BIN_NAME} SHARED ${EXPORT_SRC_LIST})
 target_link_libraries(${EXPORT_SRC_BIN_NAME}
     ${3RD_PARTY_CRYPT_LINK_NAME}
-    ${EXTENTION_LINK_LIB}
+    ${COMPILER_OPTION_EXTERN_CXX_LIBS}
 )

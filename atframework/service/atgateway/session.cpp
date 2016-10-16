@@ -217,7 +217,7 @@ namespace atframe {
                 proto_->alloc_recv_buffer(suggested_size, out_buf, out_len);
 
                 if (NULL == out_buf && 0 == out_len) {
-                    uv_read_stop(&stream_handle_);
+                    close_fd(::atframe::gateway::close_reason_t::EN_CRT_INVALID_DATA);
                 }
             }
         }

@@ -265,7 +265,7 @@ private:
         // if network error or reset by peer, move session into reconnect queue
         if (nread < 0) {
             // notify to close fd
-            mgr->close(sess->get_id(), ::atframe::gateway::close_reason_t::EN_CRT_LOGOUT, true);
+            mgr->close(sess->get_id(), ::atframe::gateway::close_reason_t::EN_CRT_RESET, true);
             return;
         }
 

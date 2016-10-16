@@ -4,6 +4,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 
 #if defined(_MSC_VER)
 #define ATFRAME_SYMBOL_EXPORT __declspec(dllexport)
@@ -48,7 +49,11 @@
 extern "C" {
 #endif
 
-typedef void *libatgw_inner_v1_c_context;
+typedef union {
+    void* pa;
+    uintptr_t pu;
+    intptr_t pi;
+} libatgw_inner_v1_c_context;
 
 typedef int32_t(*libatgw_inner_v1_c_on_write_start_fn_t)(libatgw_inner_v1_c_context, void *, uint64_t, int32_t *);
 typedef int32_t(*libatgw_inner_v1_c_on_message_fn_t)(libatgw_inner_v1_c_context, const void *, uint64_t);
