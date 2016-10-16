@@ -15,3 +15,6 @@ set(PROJECT_BUILD_NAME "hello_project" CACHE STRING "Project name")
 
 # just like ATBUS_MACRO_DATA_SMALL_SIZE
 set(ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE 3072 CACHE STRING "small message buffer for atgateway connection(used to reduce memory copy when there are many small messages)")
+
+# libatbus
+set(ATBUS_MACRO_MSG_LIMIT 65536 CACHE STRING "message size limit of libatbus")

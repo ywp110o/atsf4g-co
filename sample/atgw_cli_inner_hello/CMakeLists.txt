@@ -37,7 +37,7 @@ include_directories("${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols"
 # ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/murmur_hash.cpp
 # ${ATFRAMEWORK_ATBUS_SRC_DIR}/detail/buffer.cpp
 
-# protocol hack
+# crypt library check
 if (OPENSSL_FOUND)
     add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL=1)
 elseif(LIBRESSL_FOUND)

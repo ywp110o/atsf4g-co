@@ -9,10 +9,13 @@
 
 
 #include "common/string_oprs.h"
+#include "common/compiler_message.h"
 
-#include <config/atframe_services_build_feature.h>
+# if !defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) && !defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL) && !defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+    COMPILER_MSG_ERROR(at least one of LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS must be defined)
+#endif
+
 #include <inner_v1/libatgw_proto_inner.h>
-
 
 #define ATGW_CONTEXT(x) ((::atframe::gateway::libatgw_proto_inner_v1 *)(x).pa)
 #define ATGW_CONTEXT_IS_NULL(x) (NULL == (x).pa)
