@@ -385,6 +385,11 @@ namespace atframe {
         }
 
         void session::on_evt_closed(uv_handle_t *handle) {
+            assert(handle && handle->data);
+            if (NULL == handle || NULL == handle->data) {
+                return;
+            }
+            
             session *self = reinterpret_cast<session *>(handle->data);
             assert(self);
 

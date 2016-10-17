@@ -426,6 +426,10 @@ namespace atframe {
             // server's data is session_manager
             session_manager *mgr = reinterpret_cast<session_manager *>(server->data);
             assert(mgr);
+            if (NULL == mgr) {
+                WLOGERROR("session_manager not found");
+                return;
+            }
 
             session::ptr_t sess;
 
@@ -499,6 +503,11 @@ namespace atframe {
             // server's data is session_manager
             session_manager *mgr = reinterpret_cast<session_manager *>(server->data);
             assert(mgr);
+            if (NULL == mgr) {
+                WLOGERROR("session_manager not found");
+                return;
+            }
+
             std::unique_ptr< ::atframe::gateway::proto_base> proto;
             if (mgr->create_proto_fn_) {
                 mgr->create_proto_fn_().swap(proto);

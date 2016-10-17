@@ -232,6 +232,14 @@ private:
         ::atframe::gateway::session *sess = reinterpret_cast< ::atframe::gateway::session *>(handle->data);
         assert(sess);
 
+        if (NULL == sess) {
+            if (NULL != buf) {
+                buf->base = NULL;
+                buf->len = 0;
+            }
+            return;
+        }
+
 #if _MSC_VER
         size_t len = 0;
         sess->on_alloc_read(suggested_size, buf->base, len);
@@ -244,8 +252,15 @@ private:
     }
 
     static void proto_inner_callback_on_read_data(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+        if (NULL == stream) {
+            return;
+        }
+
         ::atframe::gateway::session *sess = reinterpret_cast< ::atframe::gateway::session *>(stream->data);
         assert(sess);
+        if (NULL == sess) {
+            return;
+        }
 
         // 如果正处于关闭阶段，忽略所有数据
         if (sess->check_flag(::atframe::gateway::session::flag_t::EN_FT_CLOSING)) {

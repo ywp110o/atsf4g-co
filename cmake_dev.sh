@@ -7,9 +7,49 @@ CXX=g++;
 
 CMAKE_OPTIONS="";
 CMAKE_CLANG_TIDY="";
+CMAKE_CLANG_ANALYZER=0;
+CMAKE_CLANG_ANALYZER_PATH="";
+BUILD_DIR=$(echo "build_$SYS_NAME" | tr '[:upper:]' '[:lower:]');
 
-while getopts "c:hm:o:tus-" OPTION; do
+CHECK_MSYS=$(echo ${MSYSTEM:0:5} | tr '[:upper:]' '[:lower:]');
+
+while getopts "ac:hm:o:tus-" OPTION; do
     case $OPTION in
+        a)
+            echo "Ready to check ccc-analyzer and c++-analyzer, please do not use -c to change the compiler when using clang-analyzer.";
+            CC=$(which ccc-analyzer);
+            CXX=$(which c++-analyzer);
+            if [ 0 -ne $? ]; then
+                # check mingw path
+                if [ "mingw" == "$CHECK_MSYS" ]; then
+                    if [ ! -z "$MINGW_MOUNT_POINT" ] && [ -e "$MINGW_MOUNT_POINT/libexec/ccc-analyzer.bat" ] && [ -e "$MINGW_MOUNT_POINT/libexec/ccc-analyzer.bat" ]; then
+                        echo "clang-analyzer found in $MINGW_MOUNT_POINT";
+                        export PATH=$PATH:$MINGW_MOUNT_POINT/libexec ;
+                        CC="$MINGW_MOUNT_POINT/libexec/ccc-analyzer.bat";
+                        CXX="$MINGW_MOUNT_POINT/libexec/ccc-analyzer.bat";
+                        CMAKE_CLANG_ANALYZER_PATH="$MINGW_MOUNT_POINT/libexec";
+                    elif [ ! -z "$MINGW_PREFIX" ] && [ -e "$MINGW_PREFIX/libexec/ccc-analyzer.bat" ] && [ -e "$MINGW_PREFIX/libexec/c++-analyzer.bat" ]; then
+                        echo "clang-analyzer found in $MINGW_PREFIX";
+                        export PATH=$PATH:$MINGW_PREFIX/libexec ;
+                        CC="$MINGW_PREFIX/libexec/ccc-analyzer.bat";
+                        CXX="$MINGW_PREFIX/libexec/ccc-analyzer.bat";
+                        CMAKE_CLANG_ANALYZER_PATH="$MINGW_PREFIX/libexec";
+                    fi
+                fi
+            fi
+
+            if [ -z "$CC" ] || [ -z "$CXX" ]; then
+                echo "ccc-analyzer=$CC";
+                echo "c++-analyzer=$CXX";
+                echo "clang-analyzer not found, failed.";
+                exit 1;
+            fi
+            echo "ccc-analyzer=$CC";
+            echo "c++-analyzer=$CXX";
+            echo "clang-analyzer setup completed.";
+            CMAKE_CLANG_ANALYZER=1;
+            BUILD_DIR="${BUILD_DIR}_analyzer";
+        ;;
         c)
             CC="$OPTARG";
             CXX="${CC/clang/clang++}";
@@ -18,13 +58,14 @@ while getopts "c:hm:o:tus-" OPTION; do
         h)
             echo "usage: $0 [options] [-- [cmake options...] ]";
             echo "options:";
-            echo "-c <compiler>               compiler toolchains(gcc, clang or others).";
-            echo "-h                          help message.";
-            echo "-m [mbedtls root]           set root of mbedtls.";
-            echo "-o [openssl root]           set root of openssl.";
-            echo "-t                          enable clang-tidy.";
-            echo "-u                          enable unit test.";
-            echo "-s                          enable sample.";
+            echo "-a                            using clang-analyzer.";
+            echo "-c <compiler>                 compiler toolchains(gcc, clang or others).";
+            echo "-h                            help message.";
+            echo "-m [mbedtls root]             set root of mbedtls.";
+            echo "-o [openssl root]             set root of openssl.";
+            echo "-t                            enable clang-tidy.";
+            echo "-u                            enable unit test.";
+            echo "-s                            enable sample.";
             exit 0;
         ;;
         m)
@@ -53,7 +94,7 @@ while getopts "c:hm:o:tus-" OPTION; do
         -)
             break;
         ;;
-        ?)  #当有不认识的选项的时候arg为?
+        ?)
             echo "unkonw argument detected";
             exit 1;
         ;;
@@ -61,17 +102,26 @@ while getopts "c:hm:o:tus-" OPTION; do
 done
 
 shift $(($OPTIND - 1));
-
-BUILD_DIR=$(echo "build_$SYS_NAME" | tr '[:upper:]' '[:lower:]');
 SCRIPT_DIR="$(dirname $0)";
 mkdir -p "$SCRIPT_DIR/$BUILD_DIR";
 cd "$SCRIPT_DIR/$BUILD_DIR";
 
 CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX";
 
-CHECK_MSYS=$(echo ${MSYSTEM:0:5} | tr '[:upper:]' '[:lower:]');
 if [ "mingw" == "$CHECK_MSYS" ]; then
     cmake .. -G "MSYS Makefiles" -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
 else
     cmake .. -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
+fi
+
+
+if [ 1 -eq $CMAKE_CLANG_ANALYZER ]; then
+    echo "=========================================================================================================";
+    if [ -z "$CMAKE_CLANG_ANALYZER_PATH" ]; then
+        echo "cd '$SCRIPT_DIR/$BUILD_DIR' && scan-build -o report --html-title='atsf4g-co static analysis' make -j4";
+    else
+        echo "cd '$SCRIPT_DIR/$BUILD_DIR' && env PATH=\"\$PATH:$CMAKE_CLANG_ANALYZER_PATH\" scan-build -o report --html-title='atsf4g-co static analysis' make -j4";
+    fi
+    echo "Now, you can run those code above to get a static analysis report";
+    echo "You can get help and binary of clang-analyzer and scan-build at http://clang-analyzer.llvm.org/scan-build.html"
 fi
