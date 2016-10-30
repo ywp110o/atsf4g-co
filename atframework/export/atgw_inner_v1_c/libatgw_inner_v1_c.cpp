@@ -20,6 +20,9 @@
 #define ATGW_CONTEXT(x) ((::atframe::gateway::libatgw_proto_inner_v1 *)(x).pa)
 #define ATGW_CONTEXT_IS_NULL(x) (NULL == (x).pa)
 
+#define ATGW_CONTEXT(x) ((::atframe::gateway::libatgw_proto_inner_v1 *)(x).pa)
+#define ATGW_CONTEXT_IS_NULL(x) (NULL == (x).pa)
+
 struct g_libatgw_inner_v1_c_callbacks_t {
     ::atframe::gateway::proto_base::proto_callbacks_t callbacks;
     libatgw_inner_v1_c_on_write_start_fn_t write_start_fn;

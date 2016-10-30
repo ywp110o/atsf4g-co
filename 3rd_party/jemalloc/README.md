@@ -1,20 +1,20 @@
-±àÒëÑ¡Ïî
+ç¼–è¯‘é€‰é¡¹
 ======
 
 ```
 ./configure --enable-code-coverage --enable-prof --enable-valgrind --enable-lazy-lock --enable-xmalloc --enable-mremap --enable-utrace --enable-munmap
 ```
 
-ÒÀÀµÏî
+ä¾èµ–é¡¹
 ======
 valgrind-devel
 
 
-Í¼ĞÎ»¯
+å›¾å½¢åŒ–
 ======
 
-¹«¹² dot graphviz graphviz-*
+å…¬å…± dot graphviz graphviz-*
 
---gv ÒÀÀµ Xaw3d Xaw3d-devel gv
---pdf ÒÀÀµ ghostscript ghostscript-*
+--gv ä¾èµ– Xaw3d Xaw3d-devel gv
+--pdf ä¾èµ– ghostscript ghostscript-*
 

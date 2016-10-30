@@ -211,7 +211,7 @@ function WaitProcessStarted() {
 		return 1;
 	fi
 
-	WAIT_TIME=20000;
+	WAIT_TIME=20;
 	PROC_NAME="$1"
 
 	if [ $# -gt 1 ]; then
@@ -220,8 +220,8 @@ function WaitProcessStarted() {
 
 	while [ ! -f "$PROC_NAME" ]; do
 		if [ $WAIT_TIME -gt 0 ]; then
-			usleep 100000;
-			let WAIT_TIME=$WAIT_TIME-100;
+			sleep 1;
+			let WAIT_TIME=$WAIT_TIME-1;
 		else
 			return 2;
 		fi
@@ -230,8 +230,8 @@ function WaitProcessStarted() {
 	PROC_PID=$(cat "$PROC_NAME");
 	while [ -z "$(cat /proc/$PROC_PID/status 2>&1 | grep State | grep sleeping)" ]; do
 		if [ $WAIT_TIME -gt 0 ]; then
-			usleep 100000;
-			let WAIT_TIME=$WAIT_TIME-100;
+			sleep 1;
+			let WAIT_TIME=$WAIT_TIME-1;
 			PROC_PID=$(cat "$PROC_NAME");
 		else
 			return 2;
@@ -241,27 +241,42 @@ function WaitProcessStarted() {
 	return 0;
 }
 
+function CheckProcessRunning() {
+	if [ $# -lt 1 ]; then
+		return 0;
+	fi
+	PROC_NAME="$1" ;
+	if [ -f "$PROC_NAME" ]; then
+		PROC_PID=$(cat "$PROC_NAME");
+		if [ -d "/proc/$PROC_PID" ]; then
+			return 1;
+		fi
+	fi
+	
+	return 0;
+}
+
 function WaitProcessStoped() {
 	if [ $# -lt 1 ]; then
 		return 1;
 	fi
 
-	WAIT_TIME=20000;
+	WAIT_TIME=20;
 	PROC_NAME="$1"
 
 	if [ $# -gt 1 ]; then
 		WAIT_TIME=$2;
 	fi
 
-	while [ -f "$PROC_NAME" ]; do
-		PROC_PID=$(cat "$PROC_NAME");
-		if [ ! -d "/proc/$PROC_PID" ]; then
+	while [ 1 -eq 1 ]; do
+		CheckProcessRunning "$PROC_NAME";
+		if [ 0 -eq $? ]; then
 			return 0;
 		fi
 		
 		if [ $WAIT_TIME -gt 0 ]; then
-			usleep 100000;
-			let WAIT_TIME=$WAIT_TIME-100;
+			sleep 1;
+			let WAIT_TIME=$WAIT_TIME-1;
 		else
 			return 2;
 		fi
@@ -269,4 +284,3 @@ function WaitProcessStoped() {
 	
 	return 0;
 }
-

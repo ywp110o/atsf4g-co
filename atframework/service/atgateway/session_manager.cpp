@@ -475,6 +475,8 @@ namespace atframe {
             // check session number limit
             if (mgr->conf_.limits.max_client_number > 0 &&
                 mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.limits.max_client_number) {
+
+                WLOGWARNING("accept tcp socket failed, gateway have too many sessions now");
                 sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
                 return;
             }
@@ -492,6 +494,11 @@ namespace atframe {
             } else {
                 sess_timeout.timeout = util::time::time_utility::get_now() + 1;
             }
+            WLOGINFO("accept a tcp socket(%s:%d), create sesson 0x%p and to wait for handshake now, expired time is %lld(+%lld)", 
+                sess->get_peer_host().c_str(), sess->get_peer_port(), sess.get(),
+                static_cast<long long>(sess_timeout.timeout), 
+                static_cast<long long>(sess_timeout.timeout - util::time::time_utility::get_now())
+            );
         }
 
         void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {

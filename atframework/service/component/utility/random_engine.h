@@ -17,9 +17,9 @@ namespace util {
         static ::util::random::taus88& _get_fast_generator();
     public:
         /**
-         * Ê¹ÓÃÖ¸¶¨ÖÖ×Ó³õÊ¼»¯Ëæ»úÊıÉú³ÉÆ÷
-         * @param [out] rnd Òª³õÊ¼»¯µÄÉú³ÉÆ÷
-         * @param [in] seed Ëæ»úÊıÖÖ×Ó
+         * ä½¿ç”¨æŒ‡å®šç§å­åˆå§‹åŒ–éšæœºæ•°ç”Ÿæˆå™¨
+         * @param [out] rnd è¦åˆå§‹åŒ–çš„ç”Ÿæˆå™¨
+         * @param [in] seed éšæœºæ•°ç§å­
          */
         template<typename RandomType>
         static void init_generator_with_seed(RandomType& rnd, typename RandomType::result_type seed) {
@@ -27,8 +27,8 @@ namespace util {
         }
 
         /**
-         * Ê¹ÓÃËæ»úÖÖ×Ó³õÊ¼»¯Ëæ»úÊıÉú³ÉÆ÷
-         * @param [out] rnd Òª³õÊ¼»¯µÄÉú³ÉÆ÷
+         * ä½¿ç”¨éšæœºç§å­åˆå§‹åŒ–éšæœºæ•°ç”Ÿæˆå™¨
+         * @param [out] rnd è¦åˆå§‹åŒ–çš„ç”Ÿæˆå™¨
          */
         template<typename RandomType>
         static void init_generator(RandomType& rnd) {
@@ -36,16 +36,16 @@ namespace util {
         }
 
         /**
-         * ±ê×¼Ëæ»úÊı
-         * @return Ëæ»úÊı
+         * æ ‡å‡†éšæœºæ•°
+         * @return éšæœºæ•°
          */
         static uint32_t random();
 
         /**
-         * ±ê×¼Ëæ»úÇø¼ä
-         * @param [in] lowest ÏÂÏŞ
-         * @param [in] highest ÉÏÏŞ
-         * @return ÔÚ[lowest, highest) Ö®¼äµÄËæ»úÊı
+         * æ ‡å‡†éšæœºåŒºé—´
+         * @param [in] lowest ä¸‹é™
+         * @param [in] highest ä¸Šé™
+         * @return åœ¨[lowest, highest) ä¹‹é—´çš„éšæœºæ•°
          */
         template<typename ResType>
         static ResType random_between(ResType lowest, ResType highest) {
@@ -53,16 +53,16 @@ namespace util {
         }
 
         /**
-         * ¿ìËÙËæ»úÊı
-         * @return Ëæ»úÊı
+         * å¿«é€Ÿéšæœºæ•°
+         * @return éšæœºæ•°
          */
         static uint32_t fast_random();
 
         /**
-         * ¿ìËÙËæ»úÇø¼ä
-         * @param [in] lowest ÏÂÏŞ
-         * @param [in] highest ÉÏÏŞ
-         * @return ÔÚ[lowest, highest) Ö®¼äµÄËæ»úÊı
+         * å¿«é€ŸéšæœºåŒºé—´
+         * @param [in] lowest ä¸‹é™
+         * @param [in] highest ä¸Šé™
+         * @return åœ¨[lowest, highest) ä¹‹é—´çš„éšæœºæ•°
          */
         template<typename ResType>
         static ResType fast_random_between(ResType lowest, ResType highest) {

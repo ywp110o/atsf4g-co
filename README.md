@@ -34,7 +34,13 @@ service framework for game server using libatbus, libatapp, libcopp and etc.
 7. autoconf
 8. automake
 9. p7zip
-10. etc.
+10. python2/python
+11. etc.
+
+### Python modules
+1. python-mako/python\*-mako/mingw-w64-x86_64-python\*-mako
+2. *[optional]* python-setuptools/python\*-setuptools/mingw-w64-x86_64-python\*-mako
+3. *[optional]* python-pip/python\*-pip/mingw-w64-x86_64-python\*-pip 
 
 ## Framework Code Tree
 
@@ -45,9 +51,9 @@ service framework for game server using libatbus, libatapp, libcopp and etc.
 > * libatbus: communication library used between servers
 > * libatapp: server application framework, used to build a specified server type
 > * services: inner services of atframework
->> 1. component: inner services common codes
->> 2. atproxy: proxy server, used to connect difference service group to each other
->> 3. atgateway: gateway server, used to manage client connections
+> > 1. component: inner services common codes
+> > 2. atproxy: proxy server, used to connect difference service group to each other
+> > 3. atgateway: gateway server, used to manage client connections
 
 + doc: documents
 + install: all resources and configure templates
@@ -61,12 +67,12 @@ service framework for game server using libatbus, libatapp, libcopp and etc.
 
 + src: all real projects
 > * server_frame: server common library
->> 1. config: server configure defines and excel configure data structures
->> 2. data: game data layer
->> 3. dispatcher: decide how to deal with each type of messages and manage coroutine tasks
->> 4. logic: game logic layer
->> 5. rpc: all remote procedure call APIs, include server to server message, DB message and so on
->> 6. utility: all shared utility codes
+> > 1. config: server configure defines and excel configure data structures
+> > 2. data: game data layer
+> > 3. dispatcher: decide how to deal with each type of messages and manage coroutine tasks
+> > 4. logic: game logic layer
+> > 5. rpc: all remote procedure call APIs, include server to server message, DB message and so on
+> > 6. utility: all shared utility codes
 
 > * tools: tool projects
 

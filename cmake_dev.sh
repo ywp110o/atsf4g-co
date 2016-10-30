@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/use/bin/env bash
 
 SYS_NAME="$(uname -s)";
 SYS_NAME="$(basename $SYS_NAME)";
@@ -11,7 +11,11 @@ CMAKE_CLANG_ANALYZER=0;
 CMAKE_CLANG_ANALYZER_PATH="";
 BUILD_DIR=$(echo "build_$SYS_NAME" | tr '[:upper:]' '[:lower:]');
 
-CHECK_MSYS=$(echo ${MSYSTEM:0:5} | tr '[:upper:]' '[:lower:]');
+if [ ! -z "$MSYSTEM" ]; then
+    CHECK_MSYS=$(echo "${MSYSTEM:0:5}" | tr '[:upper:]' '[:lower:]');
+else
+    CHECK_MSYS="";
+fi
 
 while getopts "ac:hm:o:tus-" OPTION; do
     case $OPTION in
@@ -108,7 +112,7 @@ cd "$SCRIPT_DIR/$BUILD_DIR";
 
 CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX";
 
-if [ "mingw" == "$CHECK_MSYS" ]; then
+if [ "$CHECK_MSYS" == "mingw" ]; then
     cmake .. -G "MSYS Makefiles" -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
 else
     cmake .. -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
