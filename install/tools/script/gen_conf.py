@@ -68,6 +68,9 @@ if __name__ == '__main__':
         stop_all_script
     )
     os.chmod(stop_all_script, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
+    restart_all_content = []
+    reload_all_content = []
+    stop_all_content = []
     
     def generate_service(svr_name, svr_index, install_prefix, section_name, **ext_options):
         project.set_server_inst(config[section_name], svr_name, svr_index)
@@ -104,7 +107,7 @@ if __name__ == '__main__':
                 **ext_options
             ))
             os.chmod(gen_out_path, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
-            open(restart_all_script, mode='a').write("""
+            restart_all_content.append("""
 # ==================== {0} ==================== 
 if [ $# -eq 0 ] || [ "0" == "$(is_in_server_list {1} $*)" ]; then 
     bash {2}
@@ -125,7 +128,7 @@ fi
                 **ext_options
             ))
             os.chmod(gen_out_path, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
-            open(stop_all_script, mode='a').write("""
+            stop_all_content.append("""
 # ==================== {0} ==================== 
 if [ $# -eq 0 ] || [ "0" == "$(is_in_server_list {1} $*)" ]; then 
     bash {2}
@@ -146,7 +149,7 @@ fi
                 **ext_options
             ))
             os.chmod(gen_out_path, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
-            open(reload_all_script, mode='a').write("""
+            reload_all_content.append("""
 # ==================== {0} ==================== 
 if [ $# -eq 0 ] || [ "0" == "$(is_in_server_list {1} $*)" ]; then 
     bash {2}
@@ -156,6 +159,7 @@ fi
                 project.get_server_full_name(), 
                 os.path.relpath(gen_out_path, script_dir)
             ))
+            
     
     # parse all services
     atgateway_index = 1 + opts.server_id_offset
@@ -174,5 +178,9 @@ fi
                 )
                 atgateway_index = atgateway_index + 1
 
+    open(restart_all_script, mode='a').write(os.linesep.join(restart_all_content))
+    open(reload_all_script, mode='a').write(os.linesep.join(reload_all_content))
+    stop_all_content.reverse()
+    open(stop_all_script, mode='a').write(os.linesep.join(stop_all_content))
     common.print_color.cprintf_stdout([common.print_color.print_style.FC_YELLOW, common.print_color.print_style.FW_BOLD], 'all jobs done.\r\n')
         

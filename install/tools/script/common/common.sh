@@ -170,6 +170,34 @@ function is_in_server_list()
 	return 1;
 }
 
+function WaitForMS() {
+	if [ $# -lt 1 ]; then
+		return 0;
+	fi
+
+	WAITTIME_MS=$1;
+	which usleep > /dev/null 2>&1;
+	if [ 0 -eq $? ]; then
+		let WAITTIME_MS=$WAITTIME_MS*1000;
+		usleep $WAITTIME_MS;
+		return 0;
+	fi
+
+	which python > /dev/null 2>&1;
+	if [ 0 -eq $? ]; then
+		python -c "import time; time.sleep($WAITTIME_MS / 1000.0)"
+		return 0;
+	fi
+
+	which python3 > /dev/null 2>&1;
+	if [ 0 -eq $? ]; then
+		python3 -c "import time; time.sleep($WAITTIME_MS / 1000.0)"
+		return 0;
+	fi
+
+	return 1;
+}
+
 function Message() {
 	COLOR_CODE="$1";
 	shift;
@@ -211,7 +239,7 @@ function WaitProcessStarted() {
 		return 1;
 	fi
 
-	WAIT_TIME=20;
+	WAIT_TIME=200;
 	PROC_NAME="$1"
 
 	if [ $# -gt 1 ]; then
@@ -220,7 +248,7 @@ function WaitProcessStarted() {
 
 	while [ ! -f "$PROC_NAME" ]; do
 		if [ $WAIT_TIME -gt 0 ]; then
-			sleep 1;
+			WaitForMS 100;
 			let WAIT_TIME=$WAIT_TIME-1;
 		else
 			return 2;
@@ -230,7 +258,7 @@ function WaitProcessStarted() {
 	PROC_PID=$(cat "$PROC_NAME");
 	while [ -z "$(cat /proc/$PROC_PID/status 2>&1 | grep State | grep sleeping)" ]; do
 		if [ $WAIT_TIME -gt 0 ]; then
-			sleep 1;
+			WaitForMS 100;
 			let WAIT_TIME=$WAIT_TIME-1;
 			PROC_PID=$(cat "$PROC_NAME");
 		else
@@ -261,7 +289,7 @@ function WaitProcessStoped() {
 		return 1;
 	fi
 
-	WAIT_TIME=20;
+	WAIT_TIME=200;
 	PROC_NAME="$1"
 
 	if [ $# -gt 1 ]; then
@@ -275,7 +303,7 @@ function WaitProcessStoped() {
 		fi
 		
 		if [ $WAIT_TIME -gt 0 ]; then
-			sleep 1;
+			WaitForMS 100;
 			let WAIT_TIME=$WAIT_TIME-1;
 		else
 			return 2;
