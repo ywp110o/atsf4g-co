@@ -52,10 +52,13 @@ def get_ip_list_v4():
     if 'ipv4' not in server_cache_ip:
         import socket
         server_cache_ip['ipv4'] = []
-        for ip_pair in socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, socket.SOCK_STREAM):
-            ip_addr = ip_pair[4][0]
-            if '127.0.0.1' != ip_addr:
-                server_cache_ip['ipv4'].append(ip_addr)
+        try:
+            for ip_pair in socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, socket.SOCK_STREAM):
+                ip_addr = ip_pair[4][0]
+                if '127.0.0.1' != ip_addr:
+                    server_cache_ip['ipv4'].append(ip_addr)
+        except:
+            pass
     return server_cache_ip['ipv4']
 
 def get_ip_list_v6():
