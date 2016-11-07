@@ -256,7 +256,11 @@ function WaitProcessStarted() {
 	done
 	
 	PROC_PID=$(cat "$PROC_NAME");
-	while [ -z "$(cat /proc/$PROC_PID/status 2>&1 | grep State | grep sleeping)" ]; do
+	SYSFLAGS="";
+	if [ "${MSYSTEM:0:5}" == "MINGW" ] || [ "${MSYSTEM:0:4}" == "MSYS" ]; then
+		SYSFLAGS="-W";
+	fi
+	while [ -z "$(ps -p $PROC_PID $SYSFLAGS 2>&1 | grep $PROC_PID)" ]; do
 		if [ $WAIT_TIME -gt 0 ]; then
 			WaitForMS 100;
 			let WAIT_TIME=$WAIT_TIME-1;
@@ -274,9 +278,13 @@ function CheckProcessRunning() {
 		return 0;
 	fi
 	PROC_NAME="$1" ;
+	SYSFLAGS="";
+	if [ "${MSYSTEM:0:5}" == "MINGW" ] || [ "${MSYSTEM:0:4}" == "MSYS" ] ; then
+		SYSFLAGS=" -W";
+	fi
 	if [ -f "$PROC_NAME" ]; then
 		PROC_PID=$(cat "$PROC_NAME");
-		if [ -d "/proc/$PROC_PID" ]; then
+		if [ ! -z "$(ps -p $PROC_PID $SYSFLAGS 2>&1 | grep $PROC_PID)" ]; then
 			return 1;
 		fi
 	fi

@@ -46,7 +46,9 @@ namespace atframe {
                 rpc_keepalive_->set_on_complete(NULL);
             }
 
-            util::network::http_request::destroy_curl_multi(curl_multi_);
+            if (curl_multi_) {
+                util::network::http_request::destroy_curl_multi(curl_multi_);
+            }
         }
 
         int etcd_v2_module::init() {
@@ -58,8 +60,8 @@ namespace atframe {
             }
 
             if (conf_.conf_hosts.empty()) {
-                WLOGERROR("etcd host can not be empty");
-                return -1;
+                WLOGINFO("etcd host not found, start singel mode");
+                return 0;
             }
 
             util::network::http_request::create_curl_multi(get_app()->get_bus_node()->get_evloop(), curl_multi_);
@@ -141,6 +143,21 @@ namespace atframe {
         const char *etcd_v2_module::name() const { return "etcd module"; }
 
         int etcd_v2_module::tick() {
+            // singel mode
+            if (conf_.conf_hosts.empty()) {
+                return 0;
+            }
+
+            // first startup when reloaded
+            if (!curl_multi_) {
+                int res = init();
+                if (res < 0) {
+                    WLOGERROR("initialize etcd failed, res: %d", res);
+                    get_app()->stop();
+                    return -1;
+                }
+            }
+
             // update members request
             if (0 != next_tick_update_etcd_mebers && util::time::time_utility::get_now() > next_tick_update_etcd_mebers) {
                 update_etcd_members(false);
