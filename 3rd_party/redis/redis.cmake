@@ -48,8 +48,11 @@ endif()
 
 if(LIBHIREDIS_FOUND)
     EchoWithColor(COLOR GREEN "-- Dependency: redis lib found.(${Libhiredis_LIBRARIES})")
+    get_filename_component(3RD_PARTY_LIBHIREDIS_LIB_DIR ${Libhiredis_LIBRARIES} DIRECTORY CACHE)
+    file(GLOB 3RD_PARTY_LIBHIREDIS_ALL_LIB_FILES  "${3RD_PARTY_LIBHIREDIS_LIB_DIR}/libhiredis*.so" "${3RD_PARTY_LIBHIREDIS_LIB_DIR}/libhiredis*.so.*")
+    project_copy_shared_lib(${3RD_PARTY_LIBHIREDIS_ALL_LIB_FILES} ${PROJECT_INSTALL_SHARED_DIR})
+
 elseif(WIN32 OR CYGWIN)
-    # windows 下仅用来看代码
     set(Libhiredis_INCLUDE_DIRS "${CMAKE_CURRENT_LIST_DIR}/prebuilt/linux_x86_64/include/hiredis")
     set(Libhiredis_LIBRARIES hiredis)
     set(LIBHIREDIS_FOUND TRUE)

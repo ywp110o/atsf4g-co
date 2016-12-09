@@ -1,3 +1,4 @@
+#include <string>
 
 #include "proto_base.h"
 #include "std/thread.h"
@@ -43,10 +44,10 @@ namespace atframe {
 
             static char *atgateway_get_msg_buffer(::atframe::gateway::proto_base::tls_buffer_t::type t) {
                 (void)pthread_once(&gt_atgateway_get_msg_buffer_tls_once, init_pthread_atgateway_get_msg_buffer_tls);
-                char *ret = reinterpret_cast<char *>(pthread_getspecific(gt_atgateway_get_msg_buffer_tls_key[i]));
+                char *ret = reinterpret_cast<char *>(pthread_getspecific(gt_atgateway_get_msg_buffer_tls_key[t]));
                 if (NULL == ret) {
                     ret = new char[ATBUS_MACRO_MSG_LIMIT + 2 * sizeof(size_t)]; // in case of padding
-                    pthread_setspecific(gt_atgateway_get_msg_buffer_tls_key[i], ret);
+                    pthread_setspecific(gt_atgateway_get_msg_buffer_tls_key[t], ret);
                 }
                 return ret;
             }

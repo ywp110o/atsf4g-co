@@ -4,7 +4,7 @@ set(EXPORT_SRC_BIN_NAME "lib${EXPORT_SRC_BIN_NAME}")
 EchoWithColor(COLOR GREEN "-- Configure ${EXPORT_SRC_BIN_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR} EXPORT_SRC_LIST)
-set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/export/lib")
+# set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/export/lib")
 
 # special setting for libatgw_inner_v1_c
 add_compiler_define(ATBUS_MACRO_MSG_LIMIT=${ATBUS_MACRO_MSG_LIMIT})

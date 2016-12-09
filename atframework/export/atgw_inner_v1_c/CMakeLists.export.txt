@@ -60,7 +60,12 @@ file(GLOB_RECURSE SRC_LIST
     src/*.hpp
 )
 
-add_library(atgw_inner_v1_c SHARED ${SRC_LIST})
+if (APPLE)
+    add_library(atgw_inner_v1_c SHARED ${SRC_LIST})
+else()
+    add_library(atgw_inner_v1_c STATIC ${SRC_LIST})
+endif()
+
 target_link_libraries(atgw_inner_v1_c
     ${3RD_PARTY_CRYPT_LINK_NAME}
     ${COMPILER_OPTION_EXTERN_CXX_LIBS}
