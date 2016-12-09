@@ -48,6 +48,7 @@ for ARCH in ${ARCHS}; do
     mkdir -p "$WORKING_DIR/build-$ARCH";
     cd "$WORKING_DIR/build-$ARCH";
     
+    # add -DCMAKE_OSX_DEPLOYMENT_TARGET=7.1 to specify the min SDK version
     cmake "$SRC_DIR" -DCMAKE_OSX_SYSROOT=$SDKROOT -DCMAKE_SYSROOT=$SDKROOT -DCMAKE_OSX_ARCHITECTURES=$ARCH "$@";
     make -j4;
 done
