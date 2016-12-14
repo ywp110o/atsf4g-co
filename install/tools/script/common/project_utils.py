@@ -57,6 +57,14 @@ def get_ip_list_v4():
                 ip_addr = ip_pair[4][0]
                 if '127.0.0.1' != ip_addr:
                     server_cache_ip['ipv4'].append(ip_addr)
+            # use socket to detect ipv6 address if can not find any address
+            if 0 == len(server_cache_ip['ipv4']):
+                csock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                csock.connect(('8.8.8.8', 53)) # use google's DNS
+                res = csock.getsockname()
+                if res:
+                    server_cache_ip['ipv4'].append(res[0])
+                csock.close()
         except:
             pass
     return server_cache_ip['ipv4']
@@ -75,6 +83,14 @@ def get_ip_list_v6():
                     ip_addr = ip_addr[0:interface_index]
                 if not ipaddress.ip_address(ip_addr).is_private:
                     server_cache_ip['ipv6'].append(ip_addr)
+            # use socket to detect ipv6 address if can not find any address
+            if 0 == len(server_cache_ip['ipv6']):
+                csock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                csock.connect(('2001:4860:4860::8888', 53)) # use google's DNS
+                res = csock.getsockname()
+                if res:
+                    server_cache_ip['ipv6'].append(res[0])
+                csock.close()
         except:
             pass
     return server_cache_ip['ipv6']
