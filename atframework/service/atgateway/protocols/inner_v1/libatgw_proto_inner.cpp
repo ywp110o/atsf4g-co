@@ -1690,10 +1690,6 @@ namespace atframe {
         }
 
         int libatgw_proto_inner_v1::try_write() {
-            if (check_flag(flag_t::EN_PFT_CLOSING)) {
-                return error_code_t::EN_ECT_CLOSING;
-            }
-
             if (NULL == callbacks_ || !callbacks_->write_fn) {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
             }
@@ -1743,6 +1739,8 @@ namespace atframe {
                     write_buffers_.pop_front(nwrite, true);
                 }
 
+                // no need to call write_done(status) to trigger on_close_fn here
+                // because on_close_fn is triggered when close(reason) is called or write_done(status) is called ouside
                 return error_code_t::EN_ECT_CLOSING;
             }
 
@@ -1800,7 +1798,9 @@ namespace atframe {
             // should always exist, empty will cause return before
             if (NULL == writing_block) {
                 assert(writing_block);
-                return error_code_t::EN_ECT_NO_DATA;
+                write_buffers_.pop_front(0, true);
+                set_flag(flag_t::EN_PFT_WRITING, true);
+                return write_done(error_code_t::EN_ECT_NO_DATA);
             }
 
             if (writing_block->raw_size() <= write_header_offset_) {
@@ -1864,7 +1864,7 @@ namespace atframe {
 
         int libatgw_proto_inner_v1::write_done(int status) {
             if (!check_flag(flag_t::EN_PFT_WRITING)) {
-                return 0;
+                return status;
             }
             flag_guard_t flag_guard(flags_, flag_t::EN_PFT_IN_CALLBACK);
 
@@ -1925,10 +1925,10 @@ namespace atframe {
             set_flag(flag_t::EN_PFT_WRITING, false);
 
             // write left data
-            try_write();
+            status = try_write();
 
-            // if in disconnecting status and there is no more data to write, close it
-            if (check_flag(flag_t::EN_PFT_CLOSING) && !check_flag(flag_t::EN_PFT_WRITING)) {
+            // if is disconnecting and there is no more data to write, close it
+            if (check_flag(flag_t::EN_PFT_CLOSING) && !check_flag(flag_t::EN_PFT_CLOSED) && !check_flag(flag_t::EN_PFT_WRITING)) {
                 set_flag(flag_t::EN_PFT_CLOSED, true);
 
                 if (NULL != callbacks_ && callbacks_->close_fn) {
@@ -1936,7 +1936,7 @@ namespace atframe {
                 }
             }
 
-            return 0;
+            return status;
         }
 
         int libatgw_proto_inner_v1::close(int reason) { return close(reason, true); }
