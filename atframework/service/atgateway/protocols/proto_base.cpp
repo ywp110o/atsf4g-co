@@ -13,7 +13,7 @@ namespace atframe {
     namespace gateway {
         namespace detail {
             static char *atgateway_get_msg_buffer(::atframe::gateway::proto_base::tls_buffer_t::type t) {
-                static THREAD_TLS char ret[ ::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX]
+                static THREAD_TLS char ret[::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX]
                                           [ATBUS_MACRO_MSG_LIMIT + 2 * sizeof(size_t)]; // in case of padding
                 return ret[t];
             }
@@ -27,7 +27,7 @@ namespace atframe {
     namespace gateway {
         namespace detail {
             static pthread_once_t gt_atgateway_get_msg_buffer_tls_once = PTHREAD_ONCE_INIT;
-            static pthread_key_t gt_atgateway_get_msg_buffer_tls_key[ ::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX];
+            static pthread_key_t gt_atgateway_get_msg_buffer_tls_key[::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX];
 
             static void dtor_pthread_atgateway_get_msg_buffer_tls(void *p) {
                 char *res = reinterpret_cast<char *>(p);
@@ -93,9 +93,7 @@ namespace atframe {
             }
         }
 
-        void *proto_base::get_tls_buffer(tls_buffer_t::type tls_type) {
-            return ::atframe::gateway::detail::atgateway_get_msg_buffer(tls_type);
-        }
+        void *proto_base::get_tls_buffer(tls_buffer_t::type tls_type) { return ::atframe::gateway::detail::atgateway_get_msg_buffer(tls_type); }
 
         size_t proto_base::get_tls_length(tls_buffer_t::type tls_type) { return ATBUS_MACRO_MSG_LIMIT; }
 
@@ -109,6 +107,9 @@ namespace atframe {
         }
 
         int proto_base::close(int reason) {
+            if (check_flag(flag_t::EN_PFT_CLOSING)) {
+                return 0;
+            }
             set_flag(flag_t::EN_PFT_CLOSING, true);
             set_flag(flag_t::EN_PFT_CLOSED, true);
 
@@ -147,12 +148,10 @@ namespace atframe {
             }
 
             set_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE, true);
-            
+
             return 0;
         }
 
-        std::string proto_base::get_info() const {
-            return std::string("");
-        }
+        std::string proto_base::get_info() const { return std::string(""); }
     }
 }

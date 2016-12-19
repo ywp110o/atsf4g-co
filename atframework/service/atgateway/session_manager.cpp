@@ -372,14 +372,22 @@ namespace atframe {
                 iter = actived_sessions_.find(old_sess_id);
                 if (iter != actived_sessions_.end() && NULL != new_sess.get_protocol_handle() && NULL != iter->second->get_protocol_handle()) {
                     if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
-                        WLOGDEBUG("session %s:%d try to reconnect 0x%llx and need to close old connection", new_sess.get_peer_host().c_str(),
-                                  new_sess.get_peer_port(), static_cast<unsigned long long>(old_sess_id));
+                        WLOGDEBUG("session %s:%d try to reconnect 0x%llx and need to close old connection %p", new_sess.get_peer_host().c_str(),
+                                  new_sess.get_peer_port(), static_cast<unsigned long long>(old_sess_id), iter->second.get());
 
                         has_reconnect_checked = true;
                         close(old_sess_id, close_reason_t::EN_CRT_LOGOUT, true);
-                        iter = reconnect_cache_.find(old_sess_id);
+                    } else {
+                        WLOGDEBUG("session %s:%d try to reconnect 0x%llx to old connection %p, but check_reconnect failed", new_sess.get_peer_host().c_str(),
+                                  new_sess.get_peer_port(), static_cast<unsigned long long>(old_sess_id), iter->second.get());
                     }
+                } else if (iter == actived_sessions_.end()) {
+                    WLOGDEBUG("old session 0x%llx not found", static_cast<unsigned long long>(old_sess_id));
+                } else if (NULL == iter->second->get_protocol_handle()) {
+                    WLOGERROR("old session 0x%llx(%p) has no protocol handle", static_cast<unsigned long long>(old_sess_id), iter->second.get());
                 }
+
+                iter = reconnect_cache_.find(old_sess_id);
             }
 
             if (iter == reconnect_cache_.end() || !iter->second) {
@@ -514,7 +522,7 @@ namespace atframe {
             } else {
                 sess_timeout.timeout = util::time::time_utility::get_now() + 1;
             }
-            WLOGINFO("accept a tcp socket(%s:%d), create sesson 0x%p and to wait for handshake now, expired time is %lld(+%lld)", sess->get_peer_host().c_str(),
+            WLOGINFO("accept a tcp socket(%s:%d), create sesson %p and to wait for handshake now, expired time is %lld(+%lld)", sess->get_peer_host().c_str(),
                      sess->get_peer_port(), sess.get(), static_cast<long long>(sess_timeout.timeout),
                      static_cast<long long>(sess_timeout.timeout - util::time::time_utility::get_now()));
         }

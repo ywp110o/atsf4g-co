@@ -1956,7 +1956,8 @@ namespace atframe {
             set_flag(flag_t::EN_PFT_CLOSING, true);
 
             // wait writing to finished
-            if (!check_flag(flag_t::EN_PFT_WRITING)) {
+            // close_fn may be called in send_kickoff/write_msg/write_done
+            if (!check_flag(flag_t::EN_PFT_WRITING) && !check_flag(flag_t::EN_PFT_CLOSED)) {
                 set_flag(flag_t::EN_PFT_CLOSED, true);
 
                 if (NULL != callbacks_ && callbacks_->close_fn) {
