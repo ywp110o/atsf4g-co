@@ -21,8 +21,7 @@
 #include <atframe/atapp.h>
 
 
-static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd,
-                                   const atbus::protocol::msg &m) {
+static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
     WLOGERROR("send data from 0x%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
     return 0;
 }
@@ -41,29 +40,27 @@ public:
             typedef std::unique_ptr< ::atframe::gateway::proto_base> proto_ptr_t;
             gw_mgr_.init(get_app()->get_bus_node().get(), std::bind<proto_ptr_t>(&gateway_module::create_proto_inner, this));
 
-            gw_mgr_.set_on_create_session(std::bind<int>(&gateway_module::proto_inner_callback_on_create_session, this,
-                                                         std::placeholders::_1, std::placeholders::_2));
+            gw_mgr_.set_on_create_session(
+                std::bind<int>(&gateway_module::proto_inner_callback_on_create_session, this, std::placeholders::_1, std::placeholders::_2));
 
             // init callbacks
-            proto_callbacks_.write_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_write, this, std::placeholders::_1,
-                                                       std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
-            proto_callbacks_.message_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_message, this, std::placeholders::_1,
-                                                         std::placeholders::_2, std::placeholders::_3);
+            proto_callbacks_.write_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_write, this, std::placeholders::_1, std::placeholders::_2,
+                                                       std::placeholders::_3, std::placeholders::_4);
+            proto_callbacks_.message_fn =
+                std::bind<int>(&gateway_module::proto_inner_callback_on_message, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
             proto_callbacks_.new_session_fn =
                 std::bind<int>(&gateway_module::proto_inner_callback_on_new_session, this, std::placeholders::_1, std::placeholders::_2);
             proto_callbacks_.reconnect_fn =
                 std::bind<int>(&gateway_module::proto_inner_callback_on_reconnect, this, std::placeholders::_1, std::placeholders::_2);
-            proto_callbacks_.close_fn =
-                std::bind<int>(&gateway_module::proto_inner_callback_on_close, this, std::placeholders::_1, std::placeholders::_2);
+            proto_callbacks_.close_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_close, this, std::placeholders::_1, std::placeholders::_2);
             proto_callbacks_.on_handshake_done_fn =
                 std::bind<int>(&gateway_module::proto_inner_callback_on_handshake_done, this, std::placeholders::_1, std::placeholders::_2);
 
             proto_callbacks_.on_handshake_update_fn =
                 std::bind<int>(&gateway_module::proto_inner_callback_on_update_done, this, std::placeholders::_1, std::placeholders::_2);
-            
-            proto_callbacks_.on_error_fn =
-                std::bind<int>(&gateway_module::proto_inner_callback_on_error, this, std::placeholders::_1, std::placeholders::_2,
-                               std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
+
+            proto_callbacks_.on_error_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_error, this, std::placeholders::_1, std::placeholders::_2,
+                                                          std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
 
 
         } else {
@@ -158,7 +155,7 @@ public:
             // cfg.dump_to("atgateway.client.crypt.rsa.private_key", crypt_conf.rsa_private_key);
             // if (!crypt_conf.rsa_public_key.empty() && !crypt_conf.rsa_private_key.empty()) {
             //     crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA;
-            // 
+            //
             //     val.clear();
             //     cfg.dump_to("atgateway.client.crypt.rsa.sign", val);
             //     if (0 == UTIL_STRFUNC_STRNCASE_CMP("pkcs1_v15", val.c_str(), 9)) {
@@ -345,8 +342,7 @@ private:
             req->data = proto->get_private_data();
             assert(sizeof(uv_write_t) <= proto->get_write_header_offset());
 
-            uv_buf_t bufs[1] = {
-                uv_buf_init(reinterpret_cast<char *>(real_buffer), static_cast<unsigned int>(sz))};
+            uv_buf_t bufs[1] = {uv_buf_init(reinterpret_cast<char *>(real_buffer), static_cast<unsigned int>(sz))};
             sess->set_flag(::atframe::gateway::session::flag_t::EN_FT_WRITING_FD, true);
 
             ret = uv_write(req, sess->get_uv_stream(), bufs, 1, proto_inner_callback_on_written_fn);
@@ -379,7 +375,7 @@ private:
 
         // send to router
         WLOGDEBUG("session 0x%llx send %llu bytes data to server 0x%llx", static_cast<unsigned long long>(sess_holder->get_id()),
-            static_cast<unsigned long long>(sz), static_cast<unsigned long long>(sess_holder->get_router()));
+                  static_cast<unsigned long long>(sz), static_cast<unsigned long long>(sess_holder->get_router()));
 
         return gw_mgr_.post_data(sess_holder->get_router(), post_msg);
     }
@@ -416,22 +412,19 @@ private:
 
         // check proto reconnect access
         if (sess_holder->check_flag(::atframe::gateway::session::flag_t::EN_FT_INITED)) {
-            WLOGERROR("try to reconnect session 0x%llx(%p) from 0x%llx, but already inited", 
-                static_cast<unsigned long long>(sess_holder->get_id()), sess, static_cast<unsigned long long>(sess_id));
+            WLOGERROR("try to reconnect session 0x%llx(%p) from 0x%llx, but already inited", static_cast<unsigned long long>(sess_holder->get_id()), sess,
+                      static_cast<unsigned long long>(sess_id));
             return -1;
         }
 
         int res = gw_mgr_.reconnect(*sess_holder, sess_id);
         if (0 != res) {
-            if (::atframe::gateway::error_code_t::EN_ECT_SESSION_NOT_FOUND != res &&
-                ::atframe::gateway::error_code_t::EN_ECT_REFUSE_RECONNECT != res) {
-                WLOGERROR("reconnect session 0x%llx(%p) from 0x%llx failed, res: %d", 
-                    static_cast<unsigned long long>(sess_holder->get_id()), sess,
-                    static_cast<unsigned long long>(sess_id), res);
+            if (::atframe::gateway::error_code_t::EN_ECT_SESSION_NOT_FOUND != res && ::atframe::gateway::error_code_t::EN_ECT_REFUSE_RECONNECT != res) {
+                WLOGERROR("reconnect session 0x%llx(%p) from 0x%llx failed, res: %d", static_cast<unsigned long long>(sess_holder->get_id()), sess,
+                          static_cast<unsigned long long>(sess_id), res);
             } else {
-                WLOGINFO("reconnect session 0x%llx(%p) from 0x%llx failed, res: %d", 
-                    static_cast<unsigned long long>(sess_holder->get_id()), sess,
-                    static_cast<unsigned long long>(sess_id), res);
+                WLOGINFO("reconnect session 0x%llx(%p) from 0x%llx failed, res: %d", static_cast<unsigned long long>(sess_holder->get_id()), sess,
+                         static_cast<unsigned long long>(sess_id), res);
             }
         } else {
             WLOGINFO("reconnect session 0x%llx(%p) success", static_cast<unsigned long long>(sess_holder->get_id()), sess);
@@ -455,18 +448,22 @@ private:
         if (!sess_holder->check_flag(::atframe::gateway::session::flag_t::EN_FT_CLOSING)) {
             // if network EOF or network error, do not close session, but wait for reconnect
             if (::atframe::gateway::close_reason_t::EN_CRT_RECONNECT_BOUND < reason) {
-                sess_holder->close(reason);
                 WLOGINFO("session 0x%llx(%p) closed disable reconnect", static_cast<unsigned long long>(sess_holder->get_id()), sess);
             } else {
                 WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess_holder->get_id()), sess);
             }
+            sess_holder->close(reason);
         } else {
-            WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess_holder->get_id()), sess);
+            if (sess_holder->check_flag(::atframe::gateway::session::flag_t::EN_FT_RECONNECTED)) {
+                WLOGINFO("session 0x%llx(%p) reconnected and release old connection", static_cast<unsigned long long>(sess_holder->get_id()), sess);
+            } else {
+                WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess_holder->get_id()), sess);
+            }
         }
         return 0;
     }
 
-    int proto_inner_callback_on_handshake_done(::atframe::gateway::proto_base * proto, int status) {
+    int proto_inner_callback_on_handshake_done(::atframe::gateway::proto_base *proto, int status) {
         if (0 == status) {
             ::atframe::gateway::session *sess = reinterpret_cast< ::atframe::gateway::session *>(proto->get_private_data());
             if (NULL == sess) {
@@ -487,13 +484,14 @@ private:
             if (NULL == sess) {
                 WLOGERROR("session NONE handshake failed,res: %d\n%s", status, proto->get_info().c_str());
             } else {
-                WLOGERROR("session 0x%llx(%p) handshake failed,res: %d\n%s", static_cast<unsigned long long>(sess->get_id()), sess, status, proto->get_info().c_str());
+                WLOGERROR("session 0x%llx(%p) handshake failed,res: %d\n%s", static_cast<unsigned long long>(sess->get_id()), sess, status,
+                          proto->get_info().c_str());
             }
         }
         return 0;
     }
 
-    int proto_inner_callback_on_update_done(::atframe::gateway::proto_base * proto, int status) {
+    int proto_inner_callback_on_update_done(::atframe::gateway::proto_base *proto, int status) {
         ::atframe::gateway::session *sess = reinterpret_cast< ::atframe::gateway::session *>(proto->get_private_data());
         if (0 == status) {
             if (NULL == sess) {
@@ -505,19 +503,18 @@ private:
             if (NULL == sess) {
                 WLOGERROR("session NONE handshake update failed,res: %d\n%s", status, proto->get_info().c_str());
             } else {
-                WLOGERROR("session 0x%llx(%p) handshake update failed,res: %d\n%s", static_cast<unsigned long long>(sess->get_id()), sess, status, proto->get_info().c_str());
+                WLOGERROR("session 0x%llx(%p) handshake update failed,res: %d\n%s", static_cast<unsigned long long>(sess->get_id()), sess, status,
+                          proto->get_info().c_str());
             }
         }
         return 0;
     }
 
     int proto_inner_callback_on_error(::atframe::gateway::proto_base *, const char *filename, int line, int errcode, const char *errmsg) {
-        if (::util::log::log_wrapper::check(WDTLOGGETCAT(::util::log::log_wrapper::categorize_t::DEFAULT),
-                                            ::util::log::log_wrapper::level_t::LOG_LW_ERROR)) {
+        if (::util::log::log_wrapper::check(WDTLOGGETCAT(::util::log::log_wrapper::categorize_t::DEFAULT), ::util::log::log_wrapper::level_t::LOG_LW_ERROR)) {
 
             WDTLOGGETCAT(::util::log::log_wrapper::categorize_t::DEFAULT)
-                ->log(::util::log::log_wrapper::caller_info_t(::util::log::log_wrapper::level_t::LOG_LW_ERROR, "Error", filename, line,
-                                                              "anonymous"),
+                ->log(::util::log::log_wrapper::caller_info_t(::util::log::log_wrapper::level_t::LOG_LW_ERROR, "Error", filename, line, "anonymous"),
                       "error code %d, msg: %s", errcode, errmsg);
         }
         return 0;
@@ -573,6 +570,7 @@ public:
 
         return 0;
     }
+
 private:
     ::atframe::gateway::session_manager gw_mgr_;
     ::atframe::gateway::proto_base::proto_callbacks_t proto_callbacks_;
@@ -582,7 +580,7 @@ struct app_handle_on_recv {
     std::reference_wrapper<gateway_module> mod_;
     app_handle_on_recv(gateway_module &mod) : mod_(mod) {}
 
-    int operator()(::atapp::app &app, const ::atapp::app::msg_t& recv_msg, const void *buffer, size_t len) {
+    int operator()(::atapp::app &app, const ::atapp::app::msg_t &recv_msg, const void *buffer, size_t len) {
         if (NULL == buffer || 0 == len || NULL == recv_msg.body.forward) {
             return 0;
         }
@@ -605,14 +603,13 @@ struct app_handle_on_recv {
 
             // post to single client
             if (0 != msg.head.session_id && msg.body.post->session_ids.empty()) {
-                WLOGDEBUG("from server 0x%llx: session 0x%llx send %llu bytes data to client", static_cast<unsigned long long>(recv_msg.body.forward->from), 
-                        static_cast<unsigned long long>(msg.head.session_id), static_cast<unsigned long long>(msg.body.post->content.size));
+                WLOGDEBUG("from server 0x%llx: session 0x%llx send %llu bytes data to client", static_cast<unsigned long long>(recv_msg.body.forward->from),
+                          static_cast<unsigned long long>(msg.head.session_id), static_cast<unsigned long long>(msg.body.post->content.size));
 
-                int res = mod_.get().get_session_manager().push_data(msg.head.session_id, msg.body.post->content.ptr,
-                                                                     msg.body.post->content.size);
+                int res = mod_.get().get_session_manager().push_data(msg.head.session_id, msg.body.post->content.ptr, msg.body.post->content.size);
                 if (0 != res) {
-                    WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", static_cast<unsigned long long>(recv_msg.body.forward->from), 
-                            static_cast<unsigned long long>(msg.head.session_id), res);
+                    WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", static_cast<unsigned long long>(recv_msg.body.forward->from),
+                              static_cast<unsigned long long>(msg.head.session_id), res);
 
                     // session not found, maybe gateway has restarted or server cache expired without remove
                     // notify to remove the expired session
@@ -631,34 +628,32 @@ struct app_handle_on_recv {
                     WLOGERROR("from server 0x%llx: broadcast data failed, res: %d ", static_cast<unsigned long long>(recv_msg.body.forward->from), res);
                 }
             } else { // multicast to more than one client
-                for (std::vector<uint64_t>::iterator iter = msg.body.post->session_ids.begin(); iter != msg.body.post->session_ids.end();
-                     ++iter) {
+                for (std::vector<uint64_t>::iterator iter = msg.body.post->session_ids.begin(); iter != msg.body.post->session_ids.end(); ++iter) {
                     int res = mod_.get().get_session_manager().push_data(*iter, msg.body.post->content.ptr, msg.body.post->content.size);
                     if (0 != res) {
-                        WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", static_cast<unsigned long long>(recv_msg.body.forward->from), 
-                            static_cast<unsigned long long>(*iter), res);
+                        WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", static_cast<unsigned long long>(recv_msg.body.forward->from),
+                                  static_cast<unsigned long long>(*iter), res);
                     }
                 }
             }
             break;
         }
         case ATFRAME_GW_CMD_SESSION_KICKOFF: {
-            WLOGINFO("from server 0x%llx: session 0x%llx kickoff by server", static_cast<unsigned long long>(recv_msg.body.forward->from), 
-                static_cast<unsigned long long>(msg.head.session_id));
+            WLOGINFO("from server 0x%llx: session 0x%llx kickoff by server", static_cast<unsigned long long>(recv_msg.body.forward->from),
+                     static_cast<unsigned long long>(msg.head.session_id));
             if (0 == msg.head.error_code) {
-                mod_.get().get_session_manager().close(msg.head.session_id,
-                                                       ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+                mod_.get().get_session_manager().close(msg.head.session_id, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
             } else {
                 mod_.get().get_session_manager().close(msg.head.session_id, msg.head.error_code,
-                                                       msg.head.error_code > 0 && msg.head.error_code < ::atframe::gateway::close_reason_t::EN_CRT_RECONNECT_BOUND
-                );
+                                                       msg.head.error_code > 0 &&
+                                                           msg.head.error_code < ::atframe::gateway::close_reason_t::EN_CRT_RECONNECT_BOUND);
             }
             break;
         }
         case ATFRAME_GW_CMD_SET_ROUTER_REQ: {
             int res = mod_.get().get_session_manager().set_session_router(msg.head.session_id, msg.body.router);
-            WLOGINFO("from server 0x%llx: session 0x%llx set router to 0x%llx by server, res: %d", static_cast<unsigned long long>(recv_msg.body.forward->from), 
-                static_cast<unsigned long long>(msg.head.session_id), static_cast<unsigned long long>(msg.body.router), res);
+            WLOGINFO("from server 0x%llx: session 0x%llx set router to 0x%llx by server, res: %d", static_cast<unsigned long long>(recv_msg.body.forward->from),
+                     static_cast<unsigned long long>(msg.head.session_id), static_cast<unsigned long long>(msg.body.router), res);
 
             ::atframe::gw::ss_msg rsp;
             rsp.init(ATFRAME_GW_CMD_SET_ROUTER_RSP, msg.head.session_id);
@@ -671,8 +666,8 @@ struct app_handle_on_recv {
             break;
         }
         default: {
-            WLOGERROR("from server 0x%llx: session 0x%llx recv invalid cmd %d", static_cast<unsigned long long>(recv_msg.body.forward->from), 
-                static_cast<unsigned long long>(msg.head.session_id), static_cast<int>(msg.head.cmd));
+            WLOGERROR("from server 0x%llx: session 0x%llx recv invalid cmd %d", static_cast<unsigned long long>(recv_msg.body.forward->from),
+                      static_cast<unsigned long long>(msg.head.session_id), static_cast<int>(msg.head.cmd));
             break;
         }
         }

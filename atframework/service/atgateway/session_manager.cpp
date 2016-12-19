@@ -372,7 +372,7 @@ namespace atframe {
                 iter = actived_sessions_.find(old_sess_id);
                 if (iter != actived_sessions_.end() && NULL != new_sess.get_protocol_handle() && NULL != iter->second->get_protocol_handle()) {
                     if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
-                        WLOGDEBUG("session %s:%d try to reconnect %llx and need to close old connection", new_sess.get_peer_host().c_str(),
+                        WLOGDEBUG("session %s:%d try to reconnect 0x%llx and need to close old connection", new_sess.get_peer_host().c_str(),
                                   new_sess.get_peer_port(), static_cast<unsigned long long>(old_sess_id));
 
                         has_reconnect_checked = true;
@@ -393,7 +393,7 @@ namespace atframe {
 
             // check if old session not reconnected
             if (iter->second->check_flag(session::flag_t::EN_FT_RECONNECTED)) {
-                WLOGERROR("session %s:%d try to reconnect %llx, but old session already reconnected", new_sess.get_peer_host().c_str(),
+                WLOGERROR("session %s:%d try to reconnect 0x%llx, but old session already reconnected", new_sess.get_peer_host().c_str(),
                           new_sess.get_peer_port(), static_cast<unsigned long long>(old_sess_id));
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
