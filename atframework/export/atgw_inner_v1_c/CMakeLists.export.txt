@@ -60,20 +60,26 @@ file(GLOB_RECURSE SRC_LIST
     src/*.hpp
 )
 
-if (APPLE)
-    add_library(atgw_inner_v1_c SHARED ${SRC_LIST})
+if(WIN32 AND NOT MINGW AND NOT CYGWIN)
+    set(LIB_NAME "libatgw_inner_v1_c")
 else()
-    add_library(atgw_inner_v1_c STATIC ${SRC_LIST})
+    set(LIB_NAME "atgw_inner_v1_c")
 endif()
 
-target_link_libraries(atgw_inner_v1_c
+if (APPLE)
+    add_library(${LIB_NAME} STATIC ${SRC_LIST})
+else()
+    add_library(${LIB_NAME} SHARED ${SRC_LIST})
+endif()
+
+target_link_libraries(${LIB_NAME}
     ${3RD_PARTY_CRYPT_LINK_NAME}
     ${COMPILER_OPTION_EXTERN_CXX_LIBS}
 )
 
 # 安装内容
 install(FILES "${CMAKE_CURRENT_LIST_DIR}/include/libatgw_inner_v1_c.h" DESTINATION "include")
-install(TARGETS atgw_inner_v1_c
+install(TARGETS ${LIB_NAME}
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)

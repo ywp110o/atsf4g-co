@@ -253,6 +253,9 @@ namespace atframe {
                     session::ptr_t s = first_idle_.front().s;
 
                     if (!s->check_flag(session::flag_t::EN_FT_REGISTERED)) {
+                        WLOGINFO("session 0x%llx(%p) register timeout", 
+                            static_cast<unsigned long long>(s->get_id()), s.get()
+                        );
                         s->close(close_reason_t::EN_CRT_FIRST_IDLE);
                     }
                 }
@@ -286,6 +289,10 @@ namespace atframe {
                 sess_timer.timeout = util::time::time_utility::get_now() + conf_.reconnect_timeout;
 
                 reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
+                WLOGINFO("session 0x%llx(%p) closed and setup reconnect timeout %lld", 
+                    static_cast<unsigned long long>(sess_timer.s->get_id()), 
+                    sess_timer.s.get(), static_cast<unsigned long long>(sess_timer.timeout)
+                );
 
                 // maybe transfer reconnecting session, old session still keep EN_FT_WAIT_RECONNECT flag
                 sess_timer.s->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, true);
@@ -293,6 +300,10 @@ namespace atframe {
                 // just close fd
                 sess_timer.s->close_fd(reason);
             } else {
+                WLOGINFO("session 0x%llx(%p) closed and disable reconnect", 
+                    static_cast<unsigned long long>(iter->second->get_id()), 
+                    iter->second.get()
+                );
                 iter->second->close(reason);
             }
 
@@ -363,7 +374,20 @@ namespace atframe {
 
         int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
             // find old session
+            bool has_reconnect_checked = false;
             session_map_t::iterator iter = reconnect_cache_.find(old_sess_id);
+            // replace the existed session, in case of the lost connection has not be detected
+            if (iter == reconnect_cache_.end()) {
+                iter = actived_sessions_.find(old_sess_id);
+                if (iter != actived_sessions_.end() && NULL != new_sess.get_protocol_handle() && NULL != iter->second->get_protocol_handle()) {
+                    if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
+                        has_reconnect_checked = true;
+                        close(old_sess_id, close_reason_t::EN_CRT_LOGOUT, true);
+                        iter = reconnect_cache_.find(old_sess_id);
+                    }
+                }
+            }
+
             if (iter == reconnect_cache_.end() || !iter->second) {
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
@@ -384,14 +408,16 @@ namespace atframe {
             if (NULL == new_sess.get_protocol_handle() || NULL == iter->second->get_protocol_handle()) {
                 return error_code_t::EN_ECT_BAD_PROTOCOL;
             }
-            if (!new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
+
+
+            if (!has_reconnect_checked && !new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
                 return error_code_t::EN_ECT_REFUSE_RECONNECT;
             }
 
             // init with reconnect
             new_sess.init_reconnect(*iter->second);
             // close old session
-            iter->second->close(0);
+            iter->second->close(close_reason_t::EN_CRT_LOGOUT);
 
             // erase reconnect cache, this session id may reconnect again
             reconnect_cache_.erase(iter);

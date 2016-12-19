@@ -168,7 +168,7 @@ namespace atframe {
             int setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf);
             void close_handshake(int status);
 
-            virtual bool check_reconnect(proto_base *other);
+            virtual bool check_reconnect(const proto_base *other);
 
             virtual void set_recv_buffer_limit(size_t max_size, size_t max_number);
             virtual void set_send_buffer_limit(size_t max_size, size_t max_number);

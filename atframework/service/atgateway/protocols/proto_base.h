@@ -259,7 +259,7 @@ namespace atframe {
              * @param other old protocol object
              * @return 0 or error code
              */
-            virtual bool check_reconnect(proto_base *other);
+            virtual bool check_reconnect(const proto_base *other);
 
             /**
              * @biref set receive buffer limit, it's useful only if custom protocol implement this

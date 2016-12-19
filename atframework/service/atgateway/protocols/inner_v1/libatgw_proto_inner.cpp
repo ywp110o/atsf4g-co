@@ -1967,13 +1967,13 @@ namespace atframe {
             return 0;
         }
 
-        bool libatgw_proto_inner_v1::check_reconnect(proto_base *other) {
+        bool libatgw_proto_inner_v1::check_reconnect(const proto_base *other) {
             bool ret = true;
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return false;
             }
 
-            libatgw_proto_inner_v1 *other_proto = dynamic_cast<libatgw_proto_inner_v1 *>(other);
+            const libatgw_proto_inner_v1 *other_proto = dynamic_cast<const libatgw_proto_inner_v1 *>(other);
             assert(other_proto);
 
             // use read handle first, maybe the new handshake not finished
