@@ -3,9 +3,10 @@
 
 #include "uv.h"
 
-#include <log/log_wrapper.h>
 #include <common/string_oprs.h>
+#include <log/log_wrapper.h>
 #include <time/time_utility.h>
+
 
 #include "config/atframe_service_types.h"
 
@@ -40,11 +41,9 @@ namespace atframe {
             }
         }
 
-        session_manager::session_manager():evloop_(NULL), app_node_(NULL), private_data_(NULL) {}
+        session_manager::session_manager() : evloop_(NULL), app_node_(NULL), private_data_(NULL) {}
 
-        session_manager::~session_manager() {
-            reset();
-        }
+        session_manager::~session_manager() { reset(); }
 
         int session_manager::init(::atbus::node *bus_node, create_proto_fn_t fn) {
             evloop_ = bus_node->get_evloop();
@@ -81,8 +80,7 @@ namespace atframe {
             listen_handle_ptr_t res;
             do {
                 // libuv listen and setup callbacks
-                if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv4", addr.scheme.c_str(), 4) ||
-                    0 == UTIL_STRFUNC_STRNCASE_CMP("ipv6", addr.scheme.c_str(), 4)) {
+                if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv4", addr.scheme.c_str(), 4) || 0 == UTIL_STRFUNC_STRNCASE_CMP("ipv6", addr.scheme.c_str(), 4)) {
                     uv_tcp_t *tcp_handle = ::atframe::gateway::detail::session_manager_make_stream_ptr<uv_tcp_t>(res);
                     if (res) {
                         uv_stream_set_blocking(res.get(), 0);
@@ -253,9 +251,7 @@ namespace atframe {
                     session::ptr_t s = first_idle_.front().s;
 
                     if (!s->check_flag(session::flag_t::EN_FT_REGISTERED)) {
-                        WLOGINFO("session 0x%llx(%p) register timeout", 
-                            static_cast<unsigned long long>(s->get_id()), s.get()
-                        );
+                        WLOGINFO("session 0x%llx(%p) register timeout", static_cast<unsigned long long>(s->get_id()), s.get());
                         s->close(close_reason_t::EN_CRT_FIRST_IDLE);
                     }
                 }
@@ -289,10 +285,8 @@ namespace atframe {
                 sess_timer.timeout = util::time::time_utility::get_now() + conf_.reconnect_timeout;
 
                 reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
-                WLOGINFO("session 0x%llx(%p) closed and setup reconnect timeout %lld", 
-                    static_cast<unsigned long long>(sess_timer.s->get_id()), 
-                    sess_timer.s.get(), static_cast<unsigned long long>(sess_timer.timeout)
-                );
+                WLOGINFO("session 0x%llx(%p) closed and setup reconnect timeout %lld", static_cast<unsigned long long>(sess_timer.s->get_id()),
+                         sess_timer.s.get(), static_cast<unsigned long long>(sess_timer.timeout));
 
                 // maybe transfer reconnecting session, old session still keep EN_FT_WAIT_RECONNECT flag
                 sess_timer.s->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, true);
@@ -300,10 +294,7 @@ namespace atframe {
                 // just close fd
                 sess_timer.s->close_fd(reason);
             } else {
-                WLOGINFO("session 0x%llx(%p) closed and disable reconnect", 
-                    static_cast<unsigned long long>(iter->second->get_id()), 
-                    iter->second.get()
-                );
+                WLOGINFO("session 0x%llx(%p) closed and disable reconnect", static_cast<unsigned long long>(iter->second->get_id()), iter->second.get());
                 iter->second->close(reason);
             }
 
@@ -381,6 +372,9 @@ namespace atframe {
                 iter = actived_sessions_.find(old_sess_id);
                 if (iter != actived_sessions_.end() && NULL != new_sess.get_protocol_handle() && NULL != iter->second->get_protocol_handle()) {
                     if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
+                        WLOGDEBUG("session %s:%d try to reconnect %llx and need to close old connection", new_sess.get_peer_host().c_str(),
+                                  new_sess.get_peer_port(), static_cast<unsigned long long>(old_sess_id));
+
                         has_reconnect_checked = true;
                         close(old_sess_id, close_reason_t::EN_CRT_LOGOUT, true);
                         iter = reconnect_cache_.find(old_sess_id);
@@ -428,7 +422,7 @@ namespace atframe {
             if (!sess) {
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
-            
+
             session_map_t::iterator iter = actived_sessions_.find(sess->get_id());
             if (iter != actived_sessions_.end()) {
                 close(sess->get_id(), close_reason_t::EN_CRT_KICKOFF);
@@ -513,18 +507,16 @@ namespace atframe {
 
             // first idle timeout
             mgr->first_idle_.push_back(session_timeout_t());
-            session_timeout_t& sess_timeout = mgr->first_idle_.back();
+            session_timeout_t &sess_timeout = mgr->first_idle_.back();
             sess_timeout.s = sess;
             if (mgr->conf_.first_idle_timeout > 0) {
                 sess_timeout.timeout = util::time::time_utility::get_now() + mgr->conf_.first_idle_timeout;
             } else {
                 sess_timeout.timeout = util::time::time_utility::get_now() + 1;
             }
-            WLOGINFO("accept a tcp socket(%s:%d), create sesson 0x%p and to wait for handshake now, expired time is %lld(+%lld)", 
-                sess->get_peer_host().c_str(), sess->get_peer_port(), sess.get(),
-                static_cast<long long>(sess_timeout.timeout), 
-                static_cast<long long>(sess_timeout.timeout - util::time::time_utility::get_now())
-            );
+            WLOGINFO("accept a tcp socket(%s:%d), create sesson 0x%p and to wait for handshake now, expired time is %lld(+%lld)", sess->get_peer_host().c_str(),
+                     sess->get_peer_port(), sess.get(), static_cast<long long>(sess_timeout.timeout),
+                     static_cast<long long>(sess_timeout.timeout - util::time::time_utility::get_now()));
         }
 
         void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
@@ -591,7 +583,7 @@ namespace atframe {
 
             // first idle timeout
             mgr->first_idle_.push_back(session_timeout_t());
-            session_timeout_t& sess_timeout = mgr->first_idle_.back();
+            session_timeout_t &sess_timeout = mgr->first_idle_.back();
             sess_timeout.s = sess;
             if (mgr->conf_.first_idle_timeout > 0) {
                 sess_timeout.timeout = util::time::time_utility::get_now() + mgr->conf_.first_idle_timeout;
