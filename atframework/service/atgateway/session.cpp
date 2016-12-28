@@ -180,19 +180,19 @@ namespace atframe {
             int ret = send_to_server(msg);
             if (0 == ret) {
                 set_flag(flag_t::EN_FT_REGISTERED, true);
-                WLOGINFO("session 0x%llx send register notify to 0x%llx success", static_cast<unsigned long long>(id_), static_cast<unsigned long long>(router_));
+                WLOGINFO("session 0x%llx send register notify to 0x%llx success", static_cast<unsigned long long>(id_),
+                         static_cast<unsigned long long>(router_));
             } else {
-                WLOGERROR("session 0x%llx send register notify to 0x%llx failed, res: %d", static_cast<unsigned long long>(id_), static_cast<unsigned long long>(router_), ret);
+                WLOGERROR("session 0x%llx send register notify to 0x%llx failed, res: %d", static_cast<unsigned long long>(id_),
+                          static_cast<unsigned long long>(router_), ret);
             }
 
             return ret;
         }
 
-        int session::send_remove_session() {
-            return send_remove_session(owner_);
-        }
+        int session::send_remove_session() { return send_remove_session(owner_); }
 
-        int session::send_remove_session(session_manager * mgr) {
+        int session::send_remove_session(session_manager *mgr) {
             if (!check_flag(flag_t::EN_FT_REGISTERED)) {
                 return 0;
             }
@@ -206,7 +206,8 @@ namespace atframe {
                 set_flag(flag_t::EN_FT_REGISTERED, false);
                 WLOGINFO("session 0x%llx send remove notify to 0x%llx success", static_cast<unsigned long long>(id_), static_cast<unsigned long long>(router_));
             } else {
-                WLOGERROR("session 0x%llx send remove notify to 0x%llx failed, res: %d", static_cast<unsigned long long>(id_), static_cast<unsigned long long>(router_), ret);
+                WLOGERROR("session 0x%llx send remove notify to 0x%llx failed, res: %d", static_cast<unsigned long long>(id_),
+                          static_cast<unsigned long long>(router_), ret);
             }
 
             return ret;
@@ -251,23 +252,20 @@ namespace atframe {
             return 0;
         }
 
-        int session::close(int reason) {
-            return close_with_manager(reason, owner_);
-        }
+        int session::close(int reason) { return close_with_manager(reason, owner_); }
 
-        int session::close_with_manager(int reason, session_manager * mgr) {
+        int session::close_with_manager(int reason, session_manager *mgr) {
+            // 这个接口会被多次调用（分别在关闭网络连接、重连超时、主动踢下线）
+            // 重连超时的逻辑不会走后面的流程了，但是还是要通知服务器踢下线
+            if (check_flag(flag_t::EN_FT_REGISTERED) && !check_flag(flag_t::EN_FT_RECONNECTED) && !check_flag(flag_t::EN_FT_WAIT_RECONNECT)) {
+                send_remove_session(mgr);
+            }
+
             if (check_flag(flag_t::EN_FT_CLOSING)) {
                 return 0;
             }
 
             set_flag(flag_t::EN_FT_CLOSING, true);
-
-            if (check_flag(flag_t::EN_FT_REGISTERED) && 
-                !check_flag(flag_t::EN_FT_RECONNECTED) &&
-                !check_flag(flag_t::EN_FT_WAIT_RECONNECT)) {
-                send_remove_session(mgr);
-            }
-
             return close_fd(reason);
         }
 
@@ -329,11 +327,9 @@ namespace atframe {
             return ret;
         }
 
-        int session::send_to_server(::atframe::gw::ss_msg &msg) {
-            return send_to_server(msg, owner_);
-        }
+        int session::send_to_server(::atframe::gw::ss_msg &msg) { return send_to_server(msg, owner_); }
 
-        int session::send_to_server(::atframe::gw::ss_msg &msg, session_manager * mgr) {
+        int session::send_to_server(::atframe::gw::ss_msg &msg, session_manager *mgr) {
             // send to router_
             if (0 == router_) {
                 WLOGERROR("sesseion %llx has not configure router", static_cast<unsigned long long>(id_));
@@ -389,7 +385,7 @@ namespace atframe {
             if (NULL == handle || NULL == handle->data) {
                 return;
             }
-            
+
             session *self = reinterpret_cast<session *>(handle->data);
             assert(self);
 
@@ -455,7 +451,7 @@ namespace atframe {
             if (NULL != owner_ && owner_->get_conf().crypt.update_interval > 0 && check_flag(flag_t::EN_FT_HAS_FD)) {
                 if (limit_.update_handshake_timepoint < ::util::time::time_utility::get_now()) {
                     limit_.update_handshake_timepoint = ::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
-                    proto_base * proto = get_protocol_handle();
+                    proto_base *proto = get_protocol_handle();
                     if (NULL != proto) {
                         proto->handshake_update();
                     }

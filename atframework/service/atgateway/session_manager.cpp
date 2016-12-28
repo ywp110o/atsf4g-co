@@ -41,7 +41,7 @@ namespace atframe {
             }
         }
 
-        session_manager::session_manager() : evloop_(NULL), app_node_(NULL), private_data_(NULL) {}
+        session_manager::session_manager() : evloop_(NULL), app_node_(NULL), last_tick_time_(0), private_data_(NULL) {}
 
         session_manager::~session_manager() { reset(); }
 
@@ -222,6 +222,25 @@ namespace atframe {
 
         int session_manager::tick() {
             time_t now = util::time::time_utility::get_now();
+            // 每秒只需要判定一次
+            if (last_tick_time_ == now) {
+                return 0;
+            }
+
+            // 每分钟打印一次统计数据
+            if (last_tick_time_ / util::time::time_utility::MINITE_SECONDS != now / util::time::time_utility::MINITE_SECONDS) {
+#if defined(__cpluscplus) && __cpluscplus >= 201103L
+                // std::list 在C++11以前可能是O(n)复杂度
+                WLOGINFO("[STAT] session manager: actived session %llu, reconnect session %llu, idle timer count %llu, reconnect timer count %llu",
+                         static_cast<unsigned long long>(actived_sessions_.size()), static_cast<unsigned long long>(reconnect_cache_.size()),
+                         static_cast<unsigned long long>(first_idle_.size()), static_cast<unsigned long long>(reconnect_timeout_.size()));
+#else
+                WLOGINFO("[STAT] session manager: actived session %llu, reconnect session %llu", static_cast<unsigned long long>(actived_sessions_.size()),
+                         static_cast<unsigned long long>(reconnect_cache_.size()));
+#endif
+            }
+            last_tick_time_ = now;
+
 
             // reconnect timeout
             while (!reconnect_timeout_.empty()) {
