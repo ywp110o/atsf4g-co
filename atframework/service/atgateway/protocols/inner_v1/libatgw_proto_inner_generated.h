@@ -154,6 +154,26 @@ inline const char **EnumNamescs_msg_body() {
 
 inline const char *EnumNamecs_msg_body(cs_msg_body e) { return EnumNamescs_msg_body()[static_cast<int>(e)]; }
 
+template<typename T> struct cs_msg_bodyTraits {
+  static const cs_msg_body enum_value = cs_msg_body_NONE;
+};
+
+template<> struct cs_msg_bodyTraits<cs_body_post> {
+  static const cs_msg_body enum_value = cs_msg_body_cs_body_post;
+};
+
+template<> struct cs_msg_bodyTraits<cs_body_kickoff> {
+  static const cs_msg_body enum_value = cs_msg_body_cs_body_kickoff;
+};
+
+template<> struct cs_msg_bodyTraits<cs_body_ping> {
+  static const cs_msg_body enum_value = cs_msg_body_cs_body_ping;
+};
+
+template<> struct cs_msg_bodyTraits<cs_body_handshake> {
+  static const cs_msg_body enum_value = cs_msg_body_cs_body_handshake;
+};
+
 inline bool Verifycs_msg_body(flatbuffers::Verifier &verifier, const void *union_obj, cs_msg_body type);
 
 struct cs_msg_head FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
@@ -323,7 +343,7 @@ inline flatbuffers::Offset<cs_body_rsa_cert> Createcs_body_rsa_certDirect(flatbu
 ///
 /// crypt_param is used for different purpose depends on step and switch_type, that's
 ///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : nothing
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : DH public key of server
+///     step=EN_HST_START_RSP, switch_type=EN_SST_DH : DH Parameters: P,G,GX (GX means G^X and pub_key in openssl). KeyExchangeData as in SSL3
 ///     step=EN_HST_DH_PUBKEY_REQ, switch_type=EN_SST_DH : DH public key of client
 ///     step=EN_HST_DH_PUBKEY_RSP, switch_type=EN_SST_DH : verify data prefix
 ///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT: secret
@@ -500,17 +520,27 @@ inline bool Verifycs_msg_body(flatbuffers::Verifier &verifier, const void *union
   }
 }
 
-inline const atframe::gw::inner::v1::cs_msg *Getcs_msg(const void *buf) { return flatbuffers::GetRoot<atframe::gw::inner::v1::cs_msg>(buf); }
+inline const atframe::gw::inner::v1::cs_msg *Getcs_msg(const void *buf) {
+  return flatbuffers::GetRoot<atframe::gw::inner::v1::cs_msg>(buf);
+}
 
-inline const char *cs_msgIdentifier() { return "ATGW"; }
+inline const char *cs_msgIdentifier() {
+  return "ATGW";
+}
 
-inline bool cs_msgBufferHasIdentifier(const void *buf) { return flatbuffers::BufferHasIdentifier(buf, cs_msgIdentifier()); }
+inline bool cs_msgBufferHasIdentifier(const void *buf) {
+  return flatbuffers::BufferHasIdentifier(buf, cs_msgIdentifier());
+}
 
-inline bool Verifycs_msgBuffer(flatbuffers::Verifier &verifier) { return verifier.VerifyBuffer<atframe::gw::inner::v1::cs_msg>(cs_msgIdentifier()); }
+inline bool Verifycs_msgBuffer(flatbuffers::Verifier &verifier) {
+  return verifier.VerifyBuffer<atframe::gw::inner::v1::cs_msg>(cs_msgIdentifier());
+}
 
 inline const char *cs_msgExtension() { return "atgw"; }
 
-inline void Finishcs_msgBuffer(flatbuffers::FlatBufferBuilder &fbb, flatbuffers::Offset<atframe::gw::inner::v1::cs_msg> root) { fbb.Finish(root, cs_msgIdentifier()); }
+inline void Finishcs_msgBuffer(flatbuffers::FlatBufferBuilder &fbb, flatbuffers::Offset<atframe::gw::inner::v1::cs_msg> root) {
+  fbb.Finish(root, cs_msgIdentifier());
+}
 
 }  // namespace v1
 }  // namespace inner
