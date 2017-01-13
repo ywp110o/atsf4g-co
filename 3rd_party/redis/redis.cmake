@@ -31,7 +31,7 @@ if (NOT LIBHIREDIS_FOUND)
         find_package(Git)
         if(GIT_FOUND)
             message(STATUS "git found: ${GIT_EXECUTABLE}")
-            execute_process(COMMAND ${GIT_EXECUTABLE} clone "https://github.com/owent-contrib/hiredis" hiredis
+            execute_process(COMMAND ${GIT_EXECUTABLE} clone --depth=1 "https://github.com/owent-contrib/hiredis" hiredis
                 WORKING_DIRECTORY ${3RD_PARTY_REDIS_PKG_DIR}
             )
         endif()
