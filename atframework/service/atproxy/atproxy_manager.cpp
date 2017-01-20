@@ -48,8 +48,8 @@ namespace atframe {
                     if (res >= 0) {
                         ++ret;
                     } else {
-                        WLOGERROR("try to connect to proxy: %llx, address: %s failed, res: %d",
-                                  static_cast<unsigned long long>(iter->second.id), iter->second.listens.front().c_str(), res);
+                        WLOGERROR("try to connect to proxy: %llx, address: %s failed, res: %d", static_cast<unsigned long long>(iter->second.id),
+                                  iter->second.listens.front().c_str(), res);
                         ci.timeout_sec = now + app.get_bus_node()->get_conf().retry_interval;
                         if (ci.timeout_sec <= now) {
                             ci.timeout_sec = now + 1;
@@ -122,10 +122,15 @@ namespace atframe {
             if (proxy_set_.end() != proxy_set_.find(id)) {
                 check_info_t ci;
 
-                if (app.get_bus_node() && app.get_bus_node()->get_conf().retry_interval > 0) {
-                    ci.timeout_sec = util::time::time_utility::get_now() + app.get_bus_node()->get_conf().retry_interval;
+                // when stoping bus noe may be unavailable
+                if (!app.check(::atapp::app::flag_t::STOPING)) {
+                    if (app.get_bus_node() && app.get_bus_node()->get_conf().retry_interval > 0) {
+                        ci.timeout_sec = util::time::time_utility::get_now() + app.get_bus_node()->get_conf().retry_interval;
+                    } else {
+                        ci.timeout_sec = util::time::time_utility::get_now() + 1;
+                    }
                 } else {
-                    ci.timeout_sec = util::time::time_utility::get_now() + 1;
+                    ci.timeout_sec = 0;
                 }
                 ci.proxy_id = id;
                 check_list_.push_back(ci);
