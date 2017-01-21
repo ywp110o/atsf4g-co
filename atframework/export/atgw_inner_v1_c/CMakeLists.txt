@@ -39,6 +39,14 @@ file(COPY
     USE_SOURCE_PERMISSIONS
 )
 
+file(MAKE_DIRECTORY "${EXPORT_SOURCE_SRC_DIR}/config")
+file(COPY 
+    "${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/config/compile_optimize.h"
+    "${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/config/compiler_features.h"
+    DESTINATION "${EXPORT_SOURCE_SRC_DIR}/config"
+    USE_SOURCE_PERMISSIONS
+)
+
 file(MAKE_DIRECTORY "${EXPORT_SOURCE_SRC_DIR}/common")
 file(COPY 
     "${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/common/string_oprs.h"
