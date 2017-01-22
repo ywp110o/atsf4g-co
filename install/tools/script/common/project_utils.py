@@ -169,12 +169,12 @@ def str_to_list(val):
 
 def list_to_hosts(val):
     ret = []
-    mat = re.compile('([^:]*):(\d+)-(\d+)\s*$')
+    mat = re.compile('(.*):(\d+)-(\d+)(.*)$')
     for item in val:
         mat_res = mat.match(item)
         if not mat_res is None:
             for i in range(int(mat_res.group(2)), int(mat_res.group(3)) + 1):
-                ret.append('{0}:{1}'.format(mat_res.group(1), i))
+                ret.append('{0}:{1}{2}'.format(mat_res.group(1), i, mat_res.group(4)))
         else:
             ret.append(item)
     return ret
