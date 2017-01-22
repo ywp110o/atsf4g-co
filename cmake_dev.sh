@@ -4,6 +4,7 @@ SYS_NAME="$(uname -s)";
 SYS_NAME="$(basename $SYS_NAME)";
 CC=gcc;
 CXX=g++;
+CCACHE="$(which ccache)";
 
 CMAKE_OPTIONS="";
 CMAKE_CLANG_TIDY="";
@@ -17,7 +18,7 @@ else
     CHECK_MSYS="";
 fi
 
-while getopts "ac:hm:o:tus-" OPTION; do
+while getopts "ac:e:hm:o:tus-" OPTION; do
     case $OPTION in
         a)
             echo "Ready to check ccc-analyzer and c++-analyzer, please do not use -c to change the compiler when using clang-analyzer.";
@@ -59,11 +60,15 @@ while getopts "ac:hm:o:tus-" OPTION; do
             CXX="${CC/clang/clang++}";
             CXX="${CXX/gcc/g++}";
         ;;
+        e)
+            CCACHE="$OPTARG";
+        ;;
         h)
             echo "usage: $0 [options] [-- [cmake options...] ]";
             echo "options:";
             echo "-a                            using clang-analyzer.";
             echo "-c <compiler>                 compiler toolchains(gcc, clang or others).";
+            echo "-e <ccache path>              try to use specify ccache to speed up building.";
             echo "-h                            help message.";
             echo "-m [mbedtls root]             set root of mbedtls.";
             echo "-o [openssl root]             set root of openssl.";
@@ -110,7 +115,12 @@ SCRIPT_DIR="$(dirname $0)";
 mkdir -p "$SCRIPT_DIR/$BUILD_DIR";
 cd "$SCRIPT_DIR/$BUILD_DIR";
 
-CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX";
+if [ ! -z "$CCACHE" ] && [ -e "$CCACHE" ]; then
+    #CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER=$CCACHE -DCMAKE_CXX_COMPILER=$CCACHE -DCMAKE_C_COMPILER_ARG1=$CC -DCMAKE_CXX_COMPILER_ARG1=$CXX";
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX";
+else
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX";
+fi
 
 if [ "$CHECK_MSYS" == "mingw" ]; then
     cmake .. -G "MSYS Makefiles" -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
