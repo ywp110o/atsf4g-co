@@ -2353,6 +2353,9 @@ namespace atframe {
                 return error_code_t::EN_ECT_CLOSING;
             }
 
+            // TODO compression
+            // we should compressed data first, because encrypted data will decrease compression rate.
+
             // encrypt
             if (!crypt_write_) {
                 outsz = insz;
@@ -2364,7 +2367,6 @@ namespace atframe {
             //     return ret;
             // }
 
-            // TODO zip
             return ret;
         }
 
@@ -2375,14 +2377,21 @@ namespace atframe {
                 return error_code_t::EN_ECT_CLOSING;
             }
 
-            // TODO unzip
             // decrypt
             if (!crypt_read_) {
                 outsz = insz;
                 out = in;
                 return error_code_t::EN_ECT_HANDSHAKE;
             }
-            return decrypt_data(*crypt_read_, in, insz, out, outsz);
+            int ret = decrypt_data(*crypt_read_, in, insz, out, outsz);
+            if (ret < 0) {
+                out = in;
+                outsz = insz;
+                return ret;
+            }
+
+            // TODO decompression
+            return ret;
         }
 
         int libatgw_proto_inner_v1::encrypt_data(crypt_session_t &crypt_info, const void *in, size_t insz, const void *&out, size_t &outsz) {
