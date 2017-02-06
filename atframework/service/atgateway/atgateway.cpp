@@ -9,10 +9,10 @@
 #include <std/smart_ptr.h>
 #include <vector>
 
-
 #include <uv.h>
 
 #include <common/string_oprs.h>
+#include <common/file_system.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
@@ -681,6 +681,13 @@ int main(int argc, char *argv[]) {
     if (!gw_mod) {
         fprintf(stderr, "create gateway module failed\n");
         return -1;
+    }
+
+    // project directory
+    {
+        std::string proj_dir;
+        util::file_system::dirname(__FILE__, 0, proj_dir, 4);
+        util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
     }
 
     // setup module

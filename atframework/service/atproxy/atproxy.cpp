@@ -7,9 +7,9 @@
 #include <std/ref.h>
 #include <vector>
 
-
 #include <uv.h>
 
+#include <common/file_system.h>
 #include <atframe/atapp.h>
 #include <time/time_utility.h>
 
@@ -52,6 +52,13 @@ int main(int argc, char *argv[]) {
     if (!etcd_mod) {
         fprintf(stderr, "create etcd module failed\n");
         return -1;
+    }
+
+    // project directory
+    {
+        std::string proj_dir;
+        util::file_system::dirname(__FILE__, 0, proj_dir, 4);
+        util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
     }
 
     // setup module

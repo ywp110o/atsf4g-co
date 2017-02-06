@@ -7,6 +7,7 @@
 #include <vector>
 #include <map>
 
+#include <common/file_system.h>
 #include <atframe/atapp.h>
 #include <time/time_utility.h>
 
@@ -138,6 +139,13 @@ static int app_handle_on_disconnected(atapp::app &app, atbus::endpoint &ep, int 
 int main(int argc, char *argv[]) {
     atapp::app app;
     session_gw_map_t gws;
+
+    // project directory
+    {
+        std::string proj_dir;
+        util::file_system::dirname(__FILE__, 0, proj_dir, 4);
+        util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
+    }
 
     // setup cmd
     util::cli::cmd_option_ci::ptr_type cmgr = app.get_command_manager();
