@@ -269,7 +269,7 @@ namespace atframe {
                 if (first_idle_.front().s) {
                     session::ptr_t s = first_idle_.front().s;
 
-                    if (!s->check_flag(session::flag_t::EN_FT_REGISTERED)) {
+                    if (!s->check_flag(session::flag_t::EN_FT_REGISTERED) && !s->check_flag(session::flag_t::EN_FT_CLOSING)) {
                         WLOGINFO("session 0x%llx(%p) register timeout", static_cast<unsigned long long>(s->get_id()), s.get());
                         s->close(close_reason_t::EN_CRT_FIRST_IDLE);
                     }
