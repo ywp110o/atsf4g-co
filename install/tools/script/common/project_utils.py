@@ -142,11 +142,6 @@ def get_outer_ipv6():
         ret = '::'
     return ret
 
-def get_hostname():
-    if 'SYSTEM_MACRO_HOST_NAME' in os.environ:
-        return os.environ['SYSTEM_MACRO_HOST_NAME']
-    return ''
-
 def get_global_option(section, key, default_val, env_name = None):
     global global_opts
     if not env_name is None and env_name in os.environ:
@@ -156,6 +151,9 @@ def get_global_option(section, key, default_val, env_name = None):
         return global_opts.get(section, key)
     
     return default_val
+
+def get_hostname():
+    return get_global_option('atsystem', 'hostname', '', 'SYSTEM_MACRO_HOSTNAME')
 
 def str_to_list(val):
     ret = []
