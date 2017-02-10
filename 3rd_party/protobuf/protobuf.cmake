@@ -21,8 +21,8 @@ if (NOT WIN32 OR CYGWIN OR MINGW)
         PREBUILD_COMMAND "./autogen.sh"
         WORKING_DIRECTORY "${3RD_PARTY_PROTOBUF_PKG_DIR}"
         PREFIX_DIRECTORY "${3RD_PARTY_PROTOBUF_ROOT_DIR}"
-        SRC_DIRECTORY_NAME "protobuf-3.1.0"
-        TAR_URL "https://github.com/google/protobuf/releases/download/v3.1.0/protobuf-cpp-3.1.0.tar.gz"
+        SRC_DIRECTORY_NAME "protobuf-3.2.0"
+        TAR_URL "https://github.com/google/protobuf/releases/download/v3.2.0/protobuf-cpp-3.2.0.tar.gz"
     )
     # try again, cached vars wiil cause find failed.
     if (NOT PROTOBUF_FOUND OR NOT PROTOBUF_PROTOC_EXECUTABLE OR NOT Protobuf_INCLUDE_DIRS OR NOT Protobuf_LIBRARY)
