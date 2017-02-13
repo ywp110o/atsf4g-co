@@ -8,17 +8,15 @@
 #include <vector>
 
 
-#include "common/string_oprs.h"
 #include "common/compiler_message.h"
+#include "common/string_oprs.h"
 
-# if !defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) && !defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL) && !defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-    COMPILER_MSG_ERROR(at least one of LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS must be defined)
+
+#if !defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) && !defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL) && !defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+COMPILER_MSG_ERROR(at least one of LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS must be defined)
 #endif
 
 #include <inner_v1/libatgw_proto_inner.h>
-
-#define ATGW_CONTEXT(x) ((::atframe::gateway::libatgw_proto_inner_v1 *)(x).pa)
-#define ATGW_CONTEXT_IS_NULL(x) (NULL == (x).pa)
 
 #define ATGW_CONTEXT(x) ((::atframe::gateway::libatgw_proto_inner_v1 *)(x).pa)
 #define ATGW_CONTEXT_IS_NULL(x) (NULL == (x).pa)
@@ -206,9 +204,9 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_error_fn(libatgw_i
 
 ATFRAME_SYMBOL_EXPORT libatgw_inner_v1_c_context __cdecl libatgw_inner_v1_c_create() {
     libatgw_inner_v1_c_context ret;
-    assert(sizeof(void*) == sizeof(libatgw_inner_v1_c_context));
+    assert(sizeof(void *) == sizeof(libatgw_inner_v1_c_context));
 
-    atframe::gateway::libatgw_proto_inner_v1* res = new (std::nothrow) atframe::gateway::libatgw_proto_inner_v1();
+    atframe::gateway::libatgw_proto_inner_v1 *res = new (std::nothrow) atframe::gateway::libatgw_proto_inner_v1();
     if (NULL != res) {
         res->set_callbacks(libatgw_inner_v1_c_get_proto_callbacks());
     }
@@ -217,9 +215,7 @@ ATFRAME_SYMBOL_EXPORT libatgw_inner_v1_c_context __cdecl libatgw_inner_v1_c_crea
     return ret;
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_destroy(libatgw_inner_v1_c_context context) {
-    delete ATGW_CONTEXT(context);
-}
+ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_destroy(libatgw_inner_v1_c_context context) { delete ATGW_CONTEXT(context); }
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_recv_buffer_limit(libatgw_inner_v1_c_context context, uint64_t max_size, uint64_t max_number) {
     if (ATGW_CONTEXT_IS_NULL(context)) {

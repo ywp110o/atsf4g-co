@@ -3,13 +3,14 @@
 
 #pragma once
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
-#if defined(_MSC_VER)
+
+#if !defined(ATFRAME_SYMBOL_EXPORT) && defined(_MSC_VER)
 #define ATFRAME_SYMBOL_EXPORT __declspec(dllexport)
 
-#elif defined(__GNUC__)
+#elif !defined(ATFRAME_SYMBOL_EXPORT) && defined(__GNUC__)
 
 #ifndef __cdecl
 // see https://gcc.gnu.org/onlinedocs/gcc-4.0.0/gcc/Function-Attributes.html
@@ -50,18 +51,18 @@ extern "C" {
 #endif
 
 typedef union {
-    void* pa;
+    void *pa;
     uintptr_t pu;
     intptr_t pi;
 } libatgw_inner_v1_c_context;
 
-typedef int32_t(*libatgw_inner_v1_c_on_write_start_fn_t)(libatgw_inner_v1_c_context, void *, uint64_t, int32_t *);
-typedef int32_t(*libatgw_inner_v1_c_on_message_fn_t)(libatgw_inner_v1_c_context, const void *, uint64_t);
-typedef int32_t(*libatgw_inner_v1_c_on_init_new_session_fn_t)(libatgw_inner_v1_c_context, uint64_t *);
-typedef int32_t(*libatgw_inner_v1_c_on_init_reconnect_fn_t)(libatgw_inner_v1_c_context, uint64_t);
-typedef int32_t(*libatgw_inner_v1_c_on_close_fn_t)(libatgw_inner_v1_c_context, int32_t);
-typedef int32_t(*libatgw_inner_v1_c_on_handshake_done_fn_t)(libatgw_inner_v1_c_context, int32_t);
-typedef int32_t(*libatgw_inner_v1_c_on_error_fn_t)(libatgw_inner_v1_c_context, const char *, int32_t, int32_t, const char *);
+typedef int32_t (*libatgw_inner_v1_c_on_write_start_fn_t)(libatgw_inner_v1_c_context, void *, uint64_t, int32_t *);
+typedef int32_t (*libatgw_inner_v1_c_on_message_fn_t)(libatgw_inner_v1_c_context, const void *, uint64_t);
+typedef int32_t (*libatgw_inner_v1_c_on_init_new_session_fn_t)(libatgw_inner_v1_c_context, uint64_t *);
+typedef int32_t (*libatgw_inner_v1_c_on_init_reconnect_fn_t)(libatgw_inner_v1_c_context, uint64_t);
+typedef int32_t (*libatgw_inner_v1_c_on_close_fn_t)(libatgw_inner_v1_c_context, int32_t);
+typedef int32_t (*libatgw_inner_v1_c_on_handshake_done_fn_t)(libatgw_inner_v1_c_context, int32_t);
+typedef int32_t (*libatgw_inner_v1_c_on_error_fn_t)(libatgw_inner_v1_c_context, const char *, int32_t, int32_t, const char *);
 
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_write_start_fn(libatgw_inner_v1_c_on_write_start_fn_t fn);
@@ -81,7 +82,7 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_send_buffer_limit(liba
 
 ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_start_session(libatgw_inner_v1_c_context context);
 ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_inner_v1_c_context context, uint64_t sessios_id, int32_t crypt_type,
-                                                                           const unsigned char* secret_buf, uint64_t secret_len, uint32_t keybits);
+                                                                           const unsigned char *secret_buf, uint64_t secret_len, uint32_t keybits);
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_get_info(libatgw_inner_v1_c_context context, char *info_str, uint64_t info_len);
 
@@ -91,8 +92,7 @@ ATFRAME_SYMBOL_EXPORT void *__cdecl libatgw_inner_v1_c_get_private_data(libatgw_
 ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_session_id(libatgw_inner_v1_c_context context);
 ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_get_crypt_type(libatgw_inner_v1_c_context context);
 ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_crypt_secret_size(libatgw_inner_v1_c_context context);
-ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_copy_crypt_secret(libatgw_inner_v1_c_context context, unsigned char *secret,
-                                                                            uint64_t available_size);
+ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_copy_crypt_secret(libatgw_inner_v1_c_context context, unsigned char *secret, uint64_t available_size);
 ATFRAME_SYMBOL_EXPORT uint32_t __cdecl libatgw_inner_v1_c_get_crypt_keybits(libatgw_inner_v1_c_context context);
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read_alloc(libatgw_inner_v1_c_context context, uint64_t suggested_size, char **out_buf,
