@@ -1974,7 +1974,7 @@ namespace atframe {
                 return false;
             }
 
-            const libatgw_proto_inner_v1 *other_proto = dynamic_cast<const libatgw_proto_inner_v1 *>(other);
+            const libatgw_proto_inner_v1 *other_proto = static_cast<const libatgw_proto_inner_v1 *>(other);
             assert(other_proto);
 
             // use read handle first, maybe the new handshake not finished
