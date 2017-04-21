@@ -26,8 +26,8 @@
 
 namespace atframe {
     namespace proxy {
-        etcd_v2_module::etcd_v2_module()
-            : rpc_watch_index_(0), next_keepalive_refresh(false), next_tick_update_etcd_mebers(0) {
+        etcd_v2_module::etcd_v2_module() : rpc_watch_index_(0), next_keepalive_refresh(false), next_tick_update_etcd_mebers(0) {
+            random_generator_.init_seed((util::random::mt19937::result_type)time(NULL));
             conf_.path = "/";
             conf_.http_renew_ttl_timeout = 5000;
             conf_.http_watch_timeout = 3600000;
@@ -266,8 +266,8 @@ namespace atframe {
             new_req->set_opt_bool(CURLOPT_FORBID_REUSE, true);
 
             new_req->set_on_complete(std::bind(&etcd_v2_module::on_watch_complete, this, std::placeholders::_1));
-            new_req->set_on_header(std::bind(&etcd_v2_module::on_watch_header, this, std::placeholders::_1, std::placeholders::_2,
-                                             std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
+            new_req->set_on_header(std::bind(&etcd_v2_module::on_watch_header, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
+                                             std::placeholders::_4, std::placeholders::_5));
 
             // etcd must use PUT method
             int ret = new_req->start(util::network::http_request::method_t::EN_MT_GET, false);
@@ -292,16 +292,14 @@ namespace atframe {
 
             if (conf_.hosts.empty()) {
                 if (conf_.conf_hosts.size() > 1) {
-                    util::random::mt19937 rnd;
-                    size_t index = rnd.random_between<size_t>(0, conf_.conf_hosts.size());
+                    size_t index = random_generator_.random_between<size_t>(0, conf_.conf_hosts.size());
                     selected_host = conf_.conf_hosts[index];
                 } else {
                     selected_host = conf_.conf_hosts[0];
                 }
             } else {
                 if (conf_.hosts.size() > 1) {
-                    util::random::mt19937 rnd;
-                    size_t index = rnd.random_between<size_t>(0, conf_.hosts.size());
+                    size_t index = random_generator_.random_between<size_t>(0, conf_.hosts.size());
                     selected_host = conf_.hosts[index];
 
                     // remove this host, if got a response, all hosts will be updated
@@ -377,8 +375,6 @@ namespace atframe {
                 return 0;
             }
 
-            util::random::mt19937 rnd;
-
             {
                 rapidjson::Document json_doc;
                 json_doc.Parse(json_data.c_str());
@@ -397,8 +393,8 @@ namespace atframe {
                         continue;
                     }
                     rapidjson::Document::Array all_client_urls = client_urls->value.GetArray();
-                    for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.begin();
-                         cli_url_iter != all_client_urls.end(); ++cli_url_iter) {
+                    for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.begin(); cli_url_iter != all_client_urls.end();
+                         ++cli_url_iter) {
                         if (cli_url_iter->GetStringLength() > 0) {
                             conf_.hosts.push_back(cli_url_iter->GetString());
                         }
@@ -410,7 +406,7 @@ namespace atframe {
                     return -1;
                 }
 
-                conf_.host_index = rnd.random_between<size_t>(0, conf_.hosts.size());
+                conf_.host_index = random_generator_.random_between<size_t>(0, conf_.hosts.size());
             }
 
             // select one host
@@ -664,15 +660,13 @@ namespace atframe {
 
         int etcd_v2_module::on_keepalive_complete(util::network::http_request &req) {
             if (0 != req.get_error_code() ||
-                util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
-                    util::network::http_request::get_status_code_group(req.get_response_code())) {
+                util::network::http_request::status_code_t::EN_ECG_SUCCESS != util::network::http_request::get_status_code_group(req.get_response_code())) {
 
                 // only network error will trigger a etcd member update
                 if (0 != req.get_error_code()) {
                     setup_update_etcd_members();
                 }
-                WLOGERROR("keepalive failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(),
-                          req.get_error_msg());
+                WLOGERROR("keepalive failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(), req.get_error_msg());
             }
 
             // if not found, keepalive(false)
@@ -699,8 +693,7 @@ namespace atframe {
         int etcd_v2_module::on_watch_complete(util::network::http_request &req) {
             int errcode = req.get_error_code();
             if (0 != errcode ||
-                util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
-                    util::network::http_request::get_status_code_group(req.get_response_code())) {
+                util::network::http_request::status_code_t::EN_ECG_SUCCESS != util::network::http_request::get_status_code_group(req.get_response_code())) {
 
                 // skip timeout
                 if (CURLE_AGAIN == errcode || CURLE_OPERATION_TIMEDOUT == errcode) {
@@ -711,8 +704,7 @@ namespace atframe {
                     if (0 != errcode) {
                         setup_update_etcd_members();
                     }
-                    WLOGERROR("watch failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(),
-                              req.get_error_msg());
+                    WLOGERROR("watch failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(), req.get_error_msg());
                 }
             }
 
@@ -768,8 +760,7 @@ namespace atframe {
             return 0;
         }
 
-        int etcd_v2_module::on_watch_header(util::network::http_request &req, const char *key, size_t keylen, const char *val,
-                                            size_t vallen) {
+        int etcd_v2_module::on_watch_header(util::network::http_request &req, const char *key, size_t keylen, const char *val, size_t vallen) {
             if (NULL != key && 0 == UTIL_STRFUNC_STRNCASE_CMP("X-Etcd-Index", key, keylen)) {
                 if (NULL != val && vallen > 0) {
                     rpc_watch_index_ = static_cast<uint64_t>(strtoull(val, NULL, 10)) + 1;
@@ -783,11 +774,9 @@ namespace atframe {
             node_list_t nl;
 
             if (0 != req.get_error_code() ||
-                util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
-                    util::network::http_request::get_status_code_group(req.get_response_code())) {
+                util::network::http_request::status_code_t::EN_ECG_SUCCESS != util::network::http_request::get_status_code_group(req.get_response_code())) {
                 setup_update_etcd_members();
-                WLOGERROR("update etcd members failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(),
-                          req.get_error_msg());
+                WLOGERROR("update etcd members failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(), req.get_error_msg());
             }
 
             std::string msg = req.get_response_stream().str();
