@@ -18,7 +18,7 @@ else
     CHECK_MSYS="";
 fi
 
-while getopts "ac:e:hm:o:tus-" OPTION; do
+while getopts "ac:e:hlm:o:tus-" OPTION; do
     case $OPTION in
         a)
             echo "Ready to check ccc-analyzer and c++-analyzer, please do not use -c to change the compiler when using clang-analyzer.";
@@ -75,6 +75,7 @@ while getopts "ac:e:hm:o:tus-" OPTION; do
             echo "-t                            enable clang-tidy.";
             echo "-u                            enable unit test.";
             echo "-s                            enable sample.";
+            echo "-l                            enable tools.";
             exit 0;
         ;;
         m)
@@ -95,10 +96,13 @@ while getopts "ac:e:hm:o:tus-" OPTION; do
             CMAKE_CLANG_TIDY="-D -checks=* --";
         ;;
         u)
-            CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_ENABLE_UNITTEST=ON";
+            CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_ENABLE_UNITTEST=YES";
         ;;
         s)
-            CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_ENABLE_SAMPLE=ON";
+            CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_ENABLE_SAMPLE=YES";
+        ;;
+        l)
+            CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_ENABLE_TOOLS=YES";
         ;;
         -)
             break;
