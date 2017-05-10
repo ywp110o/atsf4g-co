@@ -3,11 +3,12 @@
 
 #pragma once
 
+#include <ctime>
+#include <list>
+#include <map>
 #include <string>
 #include <vector>
-#include <list>
-#include <ctime>
-#include <map>
+
 
 #include <atframe/atapp.h>
 
@@ -46,6 +47,7 @@ namespace atframe {
 
                 int error_code;
             };
+
         private:
             typedef struct {
                 time_t timeout_sec;
@@ -53,24 +55,24 @@ namespace atframe {
             } check_info_t;
 
         public:
-            int tick(const ::atapp::app& app);
+            int tick(const ::atapp::app &app);
 
-            int set(node_info_t& proxy_info);
+            int set(node_info_t &proxy_info);
 
             int remove(::atapp::app::app_id_t id);
 
-            int reset(node_list_t& all_proxys);
+            int reset(node_list_t &all_proxys);
 
-            int on_connected(const ::atapp::app& app, ::atapp::app::app_id_t id);
+            int on_connected(const ::atapp::app &app, ::atapp::app::app_id_t id);
 
-            int on_disconnected(const ::atapp::app& app, ::atapp::app::app_id_t id);
+            int on_disconnected(const ::atapp::app &app, ::atapp::app::app_id_t id);
 
         private:
-            void swap(node_info_t& l, node_info_t& r);
+            void swap(node_info_t &l, node_info_t &r);
 
         private:
             std::list<check_info_t> check_list_;
-            std::map<::atapp::app::app_id_t, node_info_t> proxy_set_;
+            std::map< ::atapp::app::app_id_t, node_info_t> proxy_set_;
         };
     }
 }

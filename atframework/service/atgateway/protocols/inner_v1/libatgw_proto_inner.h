@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include <std/smart_ptr.h>
 #include <std/chrono.h>
+#include <std/smart_ptr.h>
 #include <vector>
 
 
@@ -84,9 +84,9 @@ namespace atframe {
                 // int hash_id;                 /** hash id, md5,sha1,sha256,sha512 **/
                 // std::string rsa_public_key;  /** RSA public key file path. **/
                 // std::string rsa_private_key; /** RSA private key file path. **/
-                std::string dh_param;        /** DH parameter file path. **/
+                std::string dh_param; /** DH parameter file path. **/
 
-                bool client_mode;         /** client mode, must be false in server when call global_reload(cfg) **/
+                bool client_mode; /** client mode, must be false in server when call global_reload(cfg) **/
             };
 
             struct crypt_session_aes_t {
@@ -152,10 +152,9 @@ namespace atframe {
             int dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
 
             int pack_handshake_start_rsp(flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id,
-                flatbuffers::Offset<::atframe::gw::inner::v1::cs_body_handshake> &handshake_body);
-            int pack_handshake_dh_pubkey_req(flatbuffers::FlatBufferBuilder &builder,
-                                             const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
-                flatbuffers::Offset<::atframe::gw::inner::v1::cs_body_handshake> &handshake_body);
+                                         flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_body);
+            int pack_handshake_dh_pubkey_req(flatbuffers::FlatBufferBuilder &builder, const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
+                                             flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_body);
 
             int try_write();
             int write_msg(flatbuffers::FlatBufferBuilder &builder);
@@ -190,11 +189,12 @@ namespace atframe {
 
             const ping_data_t &get_last_ping() const { return ping_; }
 
-            const crypt_session_ptr_t& get_crypt_read() const;
-            const crypt_session_ptr_t& get_crypt_write() const;
-            const crypt_session_ptr_t& get_crypt_handshake() const;
+            const crypt_session_ptr_t &get_crypt_read() const;
+            const crypt_session_ptr_t &get_crypt_write() const;
+            const crypt_session_ptr_t &get_crypt_handshake() const;
 
             inline uint64_t get_session_id() const { return session_id_; }
+
         private:
             int encode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
             int decode_post(const void *in, size_t insz, const void *&out, size_t &outsz);

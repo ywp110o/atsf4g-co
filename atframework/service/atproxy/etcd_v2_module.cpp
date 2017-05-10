@@ -387,13 +387,13 @@ namespace atframe {
                 conf_.hosts.clear();
                 // get all cluster member
                 rapidjson::Document::Array all_members = members->value.GetArray();
-                for (rapidjson::Document::Array::ValueIterator iter = all_members.begin(); iter != all_members.end(); ++iter) {
+                for (rapidjson::Document::Array::ValueIterator iter = all_members.Begin(); iter != all_members.End(); ++iter) {
                     rapidjson::Document::MemberIterator client_urls = iter->FindMember("clientURLs");
                     if (client_urls == iter->MemberEnd()) {
                         continue;
                     }
                     rapidjson::Document::Array all_client_urls = client_urls->value.GetArray();
-                    for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.begin(); cli_url_iter != all_client_urls.end();
+                    for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.Begin(); cli_url_iter != all_client_urls.End();
                          ++cli_url_iter) {
                         if (cli_url_iter->GetStringLength() > 0) {
                             conf_.hosts.push_back(cli_url_iter->GetString());
@@ -415,7 +415,7 @@ namespace atframe {
                 ss << conf_.hosts[conf_.host_index] << ETCD_API_V2_KEYS << conf_.path;
                 conf_.path_watch = ss.str();
 
-                if (conf_.path.empty() || '/' != conf_.path.back()) {
+                if (conf_.path.empty() || '/' != *conf_.path.rbegin()) {
                     ss << "/";
                 }
                 ss << get_app()->get_id();
@@ -495,7 +495,7 @@ namespace atframe {
 
                     if (val.MemberEnd() != (atproxy_iter = val.FindMember("listen"))) {
                         rapidjson::Document::Array nodes = atproxy_iter->value.GetArray();
-                        for (rapidjson::Document::Array::ValueIterator iter = nodes.begin(); iter != nodes.end(); ++iter) {
+                        for (rapidjson::Document::Array::ValueIterator iter = nodes.Begin(); iter != nodes.End(); ++iter) {
                             out.listens.push_back(iter->GetString());
                         }
                     }
@@ -560,7 +560,7 @@ namespace atframe {
 
             if (node.MemberEnd() != (iter = node.FindMember("nodes"))) {
                 rapidjson::Document::Array nodes = iter->value.GetArray();
-                for (rapidjson::Document::Array::ValueIterator iter = nodes.begin(); iter != nodes.end(); ++iter) {
+                for (rapidjson::Document::Array::ValueIterator iter = nodes.Begin(); iter != nodes.End(); ++iter) {
                     out.nodes.push_back(node_info_t());
                     node_info_t &n = out.nodes.back();
                     unpack(n, *iter, NULL, true);
