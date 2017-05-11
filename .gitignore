@@ -54,6 +54,7 @@
 /3rd_party/jemalloc/prebuilt
 
 ## rapidjson
+/3rd_party/rapidjson/repo
 
 ## atframework
 /atframework/service/component/config/atframe_services_build_feature.h

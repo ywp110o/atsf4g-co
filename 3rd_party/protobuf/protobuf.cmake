@@ -2,6 +2,7 @@
 # =========== 3rdparty protobuf ==================
 set (3RD_PARTY_PROTOBUF_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 set (3RD_PARTY_PROTOBUF_PKG_DIR "${CMAKE_CURRENT_LIST_DIR}/pkg")
+set (3RD_PARTY_PROTOBUF_VERSION "3.3.0")
 
 if(PROTOBUF_ROOT)
     set (3RD_PARTY_PROTOBUF_ROOT_DIR "${PROTOBUF_ROOT}")
@@ -12,35 +13,39 @@ endif()
 list(APPEND CMAKE_INCLUDE_PATH "${3RD_PARTY_PROTOBUF_ROOT_DIR}/include")
 list(APPEND CMAKE_LIBRARY_PATH "${3RD_PARTY_PROTOBUF_ROOT_DIR}/lib")
 list(APPEND CMAKE_PROGRAM_PATH "${3RD_PARTY_PROTOBUF_ROOT_DIR}/bin")
-if (NOT WIN32 OR CYGWIN OR MINGW)
-    FindConfigurePackage(
-        PACKAGE Protobuf
-        BUILD_WITH_CONFIGURE
-        CONFIGURE_FLAGS "--enable-static=no"
-        MAKE_FLAGS "-j4"
-        PREBUILD_COMMAND "./autogen.sh"
-        WORKING_DIRECTORY "${3RD_PARTY_PROTOBUF_PKG_DIR}"
-        PREFIX_DIRECTORY "${3RD_PARTY_PROTOBUF_ROOT_DIR}"
-        SRC_DIRECTORY_NAME "protobuf-3.3.0"
-        TAR_URL "https://github.com/google/protobuf/releases/download/v3.3.0/protobuf-cpp-3.3.0.tar.gz"
-    )
-    # try again, cached vars wiil cause find failed.
-    if (NOT PROTOBUF_FOUND OR NOT PROTOBUF_PROTOC_EXECUTABLE OR NOT Protobuf_INCLUDE_DIRS OR NOT Protobuf_LIBRARY)
-        EchoWithColor(COLOR YELLOW "-- Dependency: Try to find protobuf libraries again")
-        unset(Protobuf_LIBRARY)
-        unset(Protobuf_PROTOC_LIBRARY)
-        unset(Protobuf_INCLUDE_DIR)
-        unset(Protobuf_PROTOC_EXECUTABLE)
-        unset(Protobuf_LIBRARY_DEBUG)
-        unset(Protobuf_PROTOC_LIBRARY_DEBUG)
-        unset(Protobuf_LITE_LIBRARY)
-        unset(Protobuf_LITE_LIBRARY_DEBUG)
-        unset(Protobuf_LIBRARIES)
-        unset(Protobuf_PROTOC_LIBRARIES)
-        unset(Protobuf_LITE_LIBRARIES)
-        find_package(Protobuf)
-    endif()
+if(NOT WIN32 AND NOT CYGWIN AND NOT MINGW) 
+    set(3RD_PARTY_PROTOBUF_PIE -DCMAKE_C_FLAGS=-fPIC -DCMAKE_CXX_FLAGS=-fPIC)
 else()
+    set(3RD_PARTY_PROTOBUF_PIE )
+endif()
+
+FindConfigurePackage(
+    PACKAGE Protobuf
+    BUILD_WITH_CMAKE
+    CMAKE_FLAGS ${3RD_PARTY_PROTOBUF_PIE}
+    WORKING_DIRECTORY "${3RD_PARTY_PROTOBUF_PKG_DIR}"
+    PREFIX_DIRECTORY "${3RD_PARTY_PROTOBUF_ROOT_DIR}"
+    SRC_DIRECTORY_NAME "protobuf-${3RD_PARTY_PROTOBUF_VERSION}"
+    BUILD_DIRECTORY "${3RD_PARTY_PROTOBUF_PKG_DIR}/protobuf-${3RD_PARTY_PROTOBUF_VERSION}/build"
+    PROJECT_DIRECTORY "${3RD_PARTY_PROTOBUF_PKG_DIR}/protobuf-${3RD_PARTY_PROTOBUF_VERSION}/cmake"
+    TAR_URL "https://github.com/google/protobuf/releases/download/v${3RD_PARTY_PROTOBUF_VERSION}/protobuf-cpp-${3RD_PARTY_PROTOBUF_VERSION}.tar.gz"
+    ZIP_URL "https://github.com/google/protobuf/releases/download/v${3RD_PARTY_PROTOBUF_VERSION}/protobuf-cpp-${3RD_PARTY_PROTOBUF_VERSION}.zip"
+)
+
+# try again, cached vars wiil cause find failed.
+if (NOT PROTOBUF_FOUND OR NOT PROTOBUF_PROTOC_EXECUTABLE OR NOT Protobuf_INCLUDE_DIRS OR NOT Protobuf_LIBRARY)
+    EchoWithColor(COLOR YELLOW "-- Dependency: Try to find protobuf libraries again")
+    unset(Protobuf_LIBRARY)
+    unset(Protobuf_PROTOC_LIBRARY)
+    unset(Protobuf_INCLUDE_DIR)
+    unset(Protobuf_PROTOC_EXECUTABLE)
+    unset(Protobuf_LIBRARY_DEBUG)
+    unset(Protobuf_PROTOC_LIBRARY_DEBUG)
+    unset(Protobuf_LITE_LIBRARY)
+    unset(Protobuf_LITE_LIBRARY_DEBUG)
+    unset(Protobuf_LIBRARIES)
+    unset(Protobuf_PROTOC_LIBRARIES)
+    unset(Protobuf_LITE_LIBRARIES)
     find_package(Protobuf)
 endif()
 
