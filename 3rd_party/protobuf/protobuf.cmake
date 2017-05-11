@@ -19,6 +19,10 @@ else()
     set(3RD_PARTY_PROTOBUF_PIE )
 endif()
 
+if (NOT EXISTS ${3RD_PARTY_PROTOBUF_PKG_DIR})
+    file(MAKE_DIRECTORY ${3RD_PARTY_PROTOBUF_PKG_DIR})
+endif()
+
 FindConfigurePackage(
     PACKAGE Protobuf
     BUILD_WITH_CMAKE
