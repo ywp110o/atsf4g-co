@@ -1,4 +1,5 @@
 ﻿#include <sstream>
+#include <limits>
 
 #include "algorithm/murmur_hash.h"
 #include "common/string_oprs.h"
@@ -43,6 +44,11 @@
 #endif
 
 #endif
+
+
+#ifdef max
+#undef max
+#endif 
 
 namespace atframe {
     namespace gateway {
@@ -1828,7 +1834,7 @@ namespace atframe {
 
             // push back message
             if (NULL != buf && len > 0) {
-                if (len >= UINT32_MAX) {
+                if (len >= std::numeric_limits<uint32_t>::max()) {
                     return error_code_t::EN_ECT_INVALID_SIZE;
                 }
 

@@ -115,6 +115,7 @@ file(RENAME "${EXPORT_SOURCE_DIR}/CMakeLists.export.txt" "${EXPORT_SOURCE_DIR}/C
 
 # ----- copy script files -----
 file(COPY "${CMAKE_CURRENT_LIST_DIR}/build_ios.sh" DESTINATION ${EXPORT_SOURCE_DIR} USE_SOURCE_PERMISSIONS)
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/build_android.sh" DESTINATION ${EXPORT_SOURCE_DIR} USE_SOURCE_PERMISSIONS)
 
 # crypt library check
 if (OPENSSL_FOUND)
