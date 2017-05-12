@@ -80,9 +80,9 @@ while getopts "ac:e:hlm:o:tus-" OPTION; do
         ;;
         m)
             if [ -z "$OPTARG" ]; then
-                CMAKE_OPTIONS="$CMAKE_OPTIONS -DMSGPACK_ROOT=$OPTARG";
+                CMAKE_OPTIONS="$CMAKE_OPTIONS -DMBEDTLS_ROOT=$OPTARG";
             else
-                CMAKE_OPTIONS="$CMAKE_OPTIONS -DMSGPACK_ROOT=c:/workspace/lib/crypt/prebuilt/win64";
+                CMAKE_OPTIONS="$CMAKE_OPTIONS -DMBEDTLS_ROOT=c:/workspace/lib/crypt/prebuilt/win64";
             fi
         ;;
         o)

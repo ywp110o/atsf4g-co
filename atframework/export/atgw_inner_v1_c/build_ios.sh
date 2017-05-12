@@ -8,14 +8,16 @@ SDKVERSION=$(xcrun -sdk iphoneos --show-sdk-version);
 ###########################################################################
 #
 # Don't change anything here
-WORKING_DIR="$(cd $(dirname $0))";
+WORKING_DIR="$(pwd)";
 
 ARCHS="i386 x86_64 armv7 armv7s arm64";
 DEVELOPER_ROOT=$(xcode-select -print-path);
 SRC_DIR="$PWD";
+MBEDTLS_ROOT="" ;
+OPENSSL_ROOT="" ;
 
 # ======================= options ======================= 
-while getopts "a:d:hr:s:-" OPTION; do
+while getopts "a:d:hm:o:r:s:-" OPTION; do
     case $OPTION in
         a)
             ARCHS="$OPTARG";
@@ -30,8 +32,16 @@ while getopts "a:d:hr:s:-" OPTION; do
             echo "-d [developer root directory] developer root directory, we use xcode-select -print-path to find default value.(default: $DEVELOPER_ROOT)";
             echo "-s [sdk version]              sdk version, we use xcrun -sdk iphoneos --show-sdk-version to find default value.(default: $SDKVERSION)";
             echo "-r [source dir]               root directory of this library";
+            echo "-o [openssl root directory]   openssl root directory, which has [$ARCHS]/include and [$ARCHS]/lib";
+            echo "-m [mbedtls root directory]   mbedtls root directory, which has [$ARCHS]/include and [$ARCHS]/lib";
             echo "-h                            help message.";
             exit 0;
+        ;;
+        o)
+            OPENSSL_ROOT="$OPTARG";
+        ;;
+        m)
+            MBEDTLS_ROOT="$OPTARG";
         ;;
         r)
             SRC_DIR="$OPTARG";
@@ -88,9 +98,17 @@ for ARCH in ${ARCHS}; do
     mkdir -p "$WORKING_DIR/build-$ARCH";
     cd "$WORKING_DIR/build-$ARCH";
     
+    EXT_OPTIONS="";
+    if [ ! -z "$OPENSSL_ROOT" ] && [ -e "$OPENSSL_ROOT" ]; then
+        EXT_OPTIONS="$EXT_OPTIONS -DOPENSSL_ROOT_DIR=$OPENSSL_ROOT/$ARCH";
+    fi
+    if [ ! -z "$MBEDTLS_ROOT" ] && [ -e "$MBEDTLS_ROOT" ]; then
+        EXT_OPTIONS="$EXT_OPTIONS -DMBEDTLS_ROOT=$MBEDTLS_ROOT/$ARCH";
+    fi
+
     # add -DCMAKE_OSX_DEPLOYMENT_TARGET=7.1 to specify the min SDK version
-    cmake "$SRC_DIR" -DCMAKE_OSX_SYSROOT=$SDKROOT -DCMAKE_SYSROOT=$SDKROOT -DCMAKE_OSX_ARCHITECTURES=$ARCH "$@";
-    make -j4;
+    cmake "$SRC_DIR" -DCMAKE_OSX_SYSROOT=$SDKROOT -DCMAKE_SYSROOT=$SDKROOT -DCMAKE_OSX_ARCHITECTURES=$ARCH $EXT_OPTIONS "$@";
+    cmake --build . ;
 done
 
 cd "$WORKING_DIR";
