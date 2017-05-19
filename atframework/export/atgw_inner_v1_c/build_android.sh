@@ -14,12 +14,16 @@ ANDROID_TOOLCHAIN=clang ;
 ANDROID_STL=c++_shared ; #
 MBEDTLS_ROOT="" ;
 OPENSSL_ROOT="" ;
+BUILD_TYPE="RelWithDebInfo" ;
 
 # ======================= options ======================= 
-while getopts "a:c:n:hl:m:o:r:t:-" OPTION; do
+while getopts "a:b:c:n:hl:m:o:r:t:-" OPTION; do
     case $OPTION in
         a)
             ARCHS="$OPTARG";
+        ;;
+        b)
+            BUILD_TYPE="$OPTARG";
         ;;
         c)
             ANDROID_STL="$OPTARG";
@@ -31,6 +35,7 @@ while getopts "a:c:n:hl:m:o:r:t:-" OPTION; do
             echo "usage: $0 [options] -n NDK_ROOT -r SOURCE_DIR [-- [cmake options]]";
             echo "options:";
             echo "-a [archs]                    which arch need to built, multiple values must be split by space(default: $ARCHS)";
+            echo "-b [build type]               build type(default: $BUILD_TYPE, available: Debug, Release, RelWithDebInfo, MinSizeRel)";
             echo "-c [android stl]              stl used by ndk(default: $ANDROID_STL, available: system, stlport_static, stlport_shared, gnustl_static, gnustl_shared, c++_static, c++_shared, none)";
             echo "-n [ndk root directory]       ndk root directory.(default: $DEVELOPER_ROOT)";
             echo "-l [api level]                API level, see $NDK_ROOT/platforms for detail.(default: $ANDROID_NATIVE_API_LEVEL)";
@@ -108,7 +113,7 @@ for ARCH in ${ARCHS}; do
     fi
 
     # add -DCMAKE_OSX_DEPLOYMENT_TARGET=7.1 to specify the min SDK version
-    cmake "$SOURCE_DIR" \
+    cmake "$SOURCE_DIR" -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
         -DCMAKE_LIBRARY_OUTPUT_DIRECTORY="$WORKING_DIR/lib/$ARCH" -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY="$WORKING_DIR/lib/$ARCH" \
         -DCMAKE_TOOLCHAIN_FILE="$NDK_ROOT/build/cmake/android.toolchain.cmake" \
         -DANDROID_NDK="$NDK_ROOT" -DCMAKE_ANDROID_NDK="$NDK_ROOT" \
