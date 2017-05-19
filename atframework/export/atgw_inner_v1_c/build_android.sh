@@ -11,7 +11,7 @@ NDK_ROOT=$NDK_ROOT;
 SOURCE_DIR="$PWD";
 ANDROID_NATIVE_API_LEVEL=16 ;
 ANDROID_TOOLCHAIN=clang ;
-ANDROID_STL=c++_shared ; #
+ANDROID_STL=c++_static ; #
 MBEDTLS_ROOT="" ;
 OPENSSL_ROOT="" ;
 BUILD_TYPE="RelWithDebInfo" ;
@@ -40,7 +40,7 @@ while getopts "a:b:c:n:hl:m:o:r:t:-" OPTION; do
             echo "-n [ndk root directory]       ndk root directory.(default: $DEVELOPER_ROOT)";
             echo "-l [api level]                API level, see $NDK_ROOT/platforms for detail.(default: $ANDROID_NATIVE_API_LEVEL)";
             echo "-r [source dir]               root directory of this library";
-            echo "-t [toolchain]                ANDROID_TOOLCHAIN.(gcc/clang, default: $ANDROID_TOOLCHAIN)";
+            echo "-t [toolchain]                ANDROID_TOOLCHAIN.(gcc version/clang, default: $ANDROID_TOOLCHAIN, @see CMAKE_ANDROID_NDK_TOOLCHAIN_VERSION in cmake)";
             echo "-o [openssl root directory]   openssl root directory, which has [$ARCHS]/include and [$ARCHS]/lib";
             echo "-m [mbedtls root directory]   mbedtls root directory, which has [$ARCHS]/include and [$ARCHS]/lib";
             echo "-h                            help message.";
@@ -83,6 +83,11 @@ SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)";
 
 mkdir -p "$WORKING_DIR/lib";
 
+CMAKE_ANDROID_NDK_TOOLCHAIN_VERSION=$ANDROID_TOOLCHAIN;
+if [ "${ANDROID_TOOLCHAIN:0:5}" != "clang" ]; then
+    ANDROID_TOOLCHAIN="gcc";
+fi
+
 for ARCH in ${ARCHS}; do
     echo "================== Compling $ARCH ==================";
     echo "Building mbedtls for android-$ANDROID_NATIVE_API_LEVEL ${ARCH}"
@@ -118,7 +123,7 @@ for ARCH in ${ARCHS}; do
         -DCMAKE_TOOLCHAIN_FILE="$NDK_ROOT/build/cmake/android.toolchain.cmake" \
         -DANDROID_NDK="$NDK_ROOT" -DCMAKE_ANDROID_NDK="$NDK_ROOT" \
         -DANDROID_NATIVE_API_LEVEL=$ANDROID_NATIVE_API_LEVEL -DCMAKE_ANDROID_API=$ANDROID_NATIVE_API_LEVEL \
-        -DANDROID_TOOLCHAIN=$ANDROID_TOOLCHAIN -DCMAKE_ANDROID_NDK_TOOLCHAIN_VERSION=$ANDROID_TOOLCHAIN \
+        -DANDROID_TOOLCHAIN=$ANDROID_TOOLCHAIN -DCMAKE_ANDROID_NDK_TOOLCHAIN_VERSION=$CMAKE_ANDROID_NDK_TOOLCHAIN_VERSION \
         -DANDROID_ABI=$ARCH -DCMAKE_ANDROID_ARCH_ABI=$ARCH \
         -DANDROID_STL=$ANDROID_STL -DCMAKE_ANDROID_STL_TYPE=$ANDROID_STL \
         -DANDROID_PIE=YES $EXT_OPTIONS "$@";
