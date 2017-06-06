@@ -90,6 +90,7 @@ if [ ! -e "$SRC_DIR/CMakeLists.txt" ]; then
     exit -2;
 fi
 
+SRC_DIR="$(cd $SRC_DIR && pwd)";
 mkdir -p "$WORKING_DIR/lib";
 
 for ARCH in ${ARCHS}; do
@@ -117,7 +118,11 @@ for ARCH in ${ARCHS}; do
         EXT_OPTIONS="$EXT_OPTIONS -DOPENSSL_ROOT_DIR=$OPENSSL_ROOT/$ARCH";
     fi
     if [ ! -z "$MBEDTLS_ROOT" ] && [ -e "$MBEDTLS_ROOT" ]; then
-        EXT_OPTIONS="$EXT_OPTIONS -DMBEDTLS_ROOT=$MBEDTLS_ROOT/$ARCH";
+        if [ -e "$MBEDTLS_ROOT/$ARCH" ]; then
+            EXT_OPTIONS="$EXT_OPTIONS -DMBEDTLS_ROOT=$MBEDTLS_ROOT/$ARCH";
+        else
+            EXT_OPTIONS="$EXT_OPTIONS -DMBEDTLS_ROOT=$MBEDTLS_ROOT";
+        fi
     fi
 
     # add -DCMAKE_OSX_DEPLOYMENT_TARGET=7.1 to specify the min SDK version
