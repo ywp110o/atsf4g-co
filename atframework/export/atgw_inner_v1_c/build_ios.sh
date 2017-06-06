@@ -139,12 +139,12 @@ done
 
 echo "Copying include files...";
 
-if [ "$WORKING_DIR" != "$SOURCE_DIR" ]; then
+if [ "$WORKING_DIR" != "$SRC_DIR" ]; then
     if [ -e "$WORKING_DIR/include" ]; then
         rm -rf "$WORKING_DIR/include";
     fi  
     
-    cp -rf "$SOURCE_DIR/include" "$WORKING_DIR/include";
+    cp -rf "$SRC_DIR/include" "$WORKING_DIR/include";
 fi  
 
 echo "Building done.";
