@@ -40,8 +40,10 @@ message SSMsgHead {
 
 // 协议包体
 message SSMsgBody {
-    SSPlayerKickOffReq mss_player_kickoff_req = 2001;
-    SSPlayerKickOffRsp mss_player_kickoff_rsp = 2002;
+    oneof body_oneof {
+        SSPlayerKickOffReq mss_player_kickoff_req = 2001;
+        SSPlayerKickOffRsp mss_player_kickoff_rsp = 2002;
+    }
 }
 
 // 协议包

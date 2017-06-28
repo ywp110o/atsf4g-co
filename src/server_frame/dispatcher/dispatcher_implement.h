@@ -22,12 +22,12 @@ namespace hello {
 class dispatcher_implement : public ::atapp::module_impl {
 public:
     typedef uint32_t msg_type_t;
-    typedef hello::message_container* msg_ptr_t;
+    typedef hello::message_container *msg_ptr_t;
     typedef UTIL_ENV_AUTO_MAP(msg_type_t, task_manager::task_action_creator_t) msg_task_action_set_t;
     typedef UTIL_ENV_AUTO_MAP(msg_type_t, task_manager::actor_action_creator_t) msg_actor_action_set_t;
 
     struct msg_filter_data_t {
-        const void* msg_buffer;
+        const void *msg_buffer;
         size_t msg_size;
 
         msg_ptr_t msg;
@@ -37,7 +37,8 @@ public:
      * @brief 消息过滤器函数，调用式为: bool(const msg_filter_data_t&)
      * @note 返回false可以中断后续过滤器的执行并禁止消息分发
      */
-    typedef std::function<bool(const msg_filter_data_t&)> msg_filter_handle_t;
+    typedef std::function<bool(const msg_filter_data_t &)> msg_filter_handle_t;
+
 public:
     virtual int init();
 
@@ -48,7 +49,17 @@ public:
      * @param msg_size 数据长度
      * @return 返回错误码或0
      */
-    virtual int32_t on_recv_msg(msg_ptr_t msgc, const void* msg_buf, size_t msg_size);
+    virtual int32_t on_recv_msg(msg_ptr_t msgc, const void *msg_buf, size_t msg_size);
+
+    /**
+     * @brief 发送消息消息失败的通知接口，通常会尝试填充错误码后恢复协程任务
+     * @param msgc 消息数据包装器
+     * @param msg_buf 数据地址
+     * @param msg_size 数据长度
+     * @param error_code 数据长度
+     * @return 返回错误码或0
+     */
+    virtual int32_t on_send_msg_failed(msg_ptr_t msgc, const void *msg_buf, size_t msg_size, int32_t error_code);
 
     /**
      * @brief 数据解包
@@ -57,7 +68,7 @@ public:
      * @param msg_size 数据长度
      * @return 返回错误码或0
      */
-    virtual int32_t unpack_msg(msg_ptr_t msg_container, const void* msg_buf, size_t msg_size) = 0;
+    virtual int32_t unpack_msg(msg_ptr_t msg_container, const void *msg_buf, size_t msg_size) = 0;
 
     /**
      * @brief 获取任务信息
@@ -72,7 +83,7 @@ public:
      * @param task_id 相关的任务id
      * @return 返回错误码或0
      */
-    virtual int create_task(const msg_ptr_t msg_container, task_manager::id_t& task_id);
+    virtual int create_task(const msg_ptr_t msg_container, task_manager::id_t &task_id);
 
     /**
      * @brief 创建Actor
@@ -86,7 +97,7 @@ public:
      * @param msg_container 填充目标
      * @return 消息名称
      */
-    virtual const std::string& pick_msg_name(const msg_ptr_t msg_container) = 0;
+    virtual const std::string &pick_msg_name(const msg_ptr_t msg_container) = 0;
 
     /**
      * @brief 获取消息名称
@@ -100,7 +111,7 @@ public:
      * @param msg_name 消息名称
      * @return 消息类型ID
      */
-    virtual msg_type_t msg_name_to_type_id(const std::string& msg_name) = 0;
+    virtual msg_type_t msg_name_to_type_id(const std::string &msg_name) = 0;
 
     /**
      * @brief 注册Action
@@ -108,7 +119,7 @@ public:
      * @return 或错误码
      */
     template <typename TAction>
-    int register_action(const std::string& msg_name) {
+    int register_action(const std::string &msg_name) {
         return _register_action(msg_name, task_manager::me()->make_task_creator<TAction>());
     }
 
@@ -118,7 +129,7 @@ public:
      * @return 或错误码
      */
     template <typename TAction>
-    int register_actor(const std::string& msg_name) {
+    int register_actor(const std::string &msg_name) {
         return _register_action(msg_name, task_manager::me()->make_actor_creator<TAction>());
     }
 
@@ -137,12 +148,11 @@ public:
     void push_filter_to_back(msg_filter_handle_t fn);
 
 protected:
-    const std::string& get_empty_string();
+    const std::string &get_empty_string();
 
 private:
-
-    int _register_action(const std::string& msg_name, task_manager::task_action_creator_t action);
-    int _register_action(const std::string& msg_name, task_manager::actor_action_creator_t action);
+    int _register_action(const std::string &msg_name, task_manager::task_action_creator_t action);
+    int _register_action(const std::string &msg_name, task_manager::actor_action_creator_t action);
 
 private:
     msg_task_action_set_t task_action_name_map_;
@@ -151,12 +161,18 @@ private:
 };
 
 
-#define REG_TASK_MSG_HANDLE(dispatcher, ret, act, proto)\
-    if (ret < 0) { dispatcher::me()->register_action<act>(proto); } \
-    else { ret = dispatcher::me()->register_action<act>(proto); }
+#define REG_TASK_MSG_HANDLE(dispatcher, ret, act, proto)     \
+    if (ret < 0) {                                           \
+        dispatcher::me()->register_action<act>(proto);       \
+    } else {                                                 \
+        ret = dispatcher::me()->register_action<act>(proto); \
+    }
 
-#define REG_ACTOR_MSG_HANDLE(dispatcher, ret, act, proto)\
-    if (ret < 0) { dispatcher::me()->register_actor<act>(proto); } \
-    else { ret = dispatcher::me()->register_actor<act>(proto); }
+#define REG_ACTOR_MSG_HANDLE(dispatcher, ret, act, proto)   \
+    if (ret < 0) {                                          \
+        dispatcher::me()->register_actor<act>(proto);       \
+    } else {                                                \
+        ret = dispatcher::me()->register_actor<act>(proto); \
+    }
 
-#endif //ATF4G_CO_DISPATCHER_IMPLEMENT_H
+#endif // ATF4G_CO_DISPATCHER_IMPLEMENT_H

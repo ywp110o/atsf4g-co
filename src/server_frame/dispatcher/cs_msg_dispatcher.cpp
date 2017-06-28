@@ -63,20 +63,25 @@ const std::string &cs_msg_dispatcher::pick_msg_name(const msg_ptr_t msg_containe
         return get_empty_string();
     }
 
-    std::vector<const google::protobuf::FieldDescriptor *> output;
-    msg_container->csmsg().body().GetReflection()->ListFields(msg_container->csmsg().body(), &output);
-    if (output.empty()) {
+    const google::protobuf::FieldDescriptor *fd =
+        msg_container->csmsg().body().GetReflection()->GetOneofFieldDescriptor(msg_container->csmsg().body(), get_body_oneof_desc());
+    //->ListFields(msg_container->csmsg().body(), &output);
+    //    if (output.empty()) {
+    //        return get_empty_string();
+    //    }
+    //
+    //    if (output.size() > 1) {
+    //        WLOGERROR("there is more than one body");
+    //        for (size_t i = 0; i < output.size(); ++i) {
+    //            WLOGERROR("body[%d]=%s", static_cast<int>(i), output[i]->name().c_str());
+    //        }
+    //    }
+
+    if (NULL == fd) {
         return get_empty_string();
     }
 
-    if (output.size() > 1) {
-        WLOGERROR("there is more than one body");
-        for (size_t i = 0; i < output.size(); ++i) {
-            WLOGERROR("body[%d]=%s", static_cast<int>(i), output[i]->name().c_str());
-        }
-    }
-
-    return output[0]->name();
+    return fd->name();
 }
 
 cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(const msg_ptr_t msg_container) {
@@ -92,20 +97,7 @@ cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(const msg_ptr_
         return 0;
     }
 
-    std::vector<const google::protobuf::FieldDescriptor *> output;
-    msg_container->csmsg().body().GetReflection()->ListFields(msg_container->csmsg().body(), &output);
-    if (output.empty()) {
-        return 0;
-    }
-
-    if (output.size() > 1) {
-        WLOGERROR("there is more than one body");
-        for (size_t i = 0; i < output.size(); ++i) {
-            WLOGERROR("body [%d]=%s", static_cast<int>(i), output[i]->name().c_str());
-        }
-    }
-
-    return static_cast<msg_type_t>(output[0]->number());
+    return static_cast<msg_type_t>(msg_container->csmsg().body().body_oneof_case());
 }
 
 cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::msg_name_to_type_id(const std::string &msg_name) {
@@ -301,4 +293,21 @@ int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uin
     }
 
     return ret;
+}
+
+const google::protobuf::OneofDescriptor *cs_msg_dispatcher::get_body_oneof_desc() const {
+    static const google::protobuf::OneofDescriptor *ret = NULL;
+    if (NULL != ret) {
+        return ret;
+    }
+
+    if (hello::CSMsgBody::descriptor()->oneof_decl_count() > 0) {
+        return hello::CSMsgBody::descriptor()->oneof_decl(0);
+    }
+    //    ret = hello::CSMsgBody::descriptor()->FindOneofByName("body_oneof");
+    //    if (NULL == ret) {
+    //        WLOGERROR("find oneof descriptor \"body_oneof\" in hello::CSMsgBody failed");
+    //    }
+
+    return NULL;
 }

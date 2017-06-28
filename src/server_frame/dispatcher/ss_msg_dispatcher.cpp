@@ -65,20 +65,28 @@ const std::string &ss_msg_dispatcher::pick_msg_name(const msg_ptr_t msg_containe
         return get_empty_string();
     }
 
-    std::vector<const google::protobuf::FieldDescriptor *> output;
-    msg_container->ssmsg().body().GetReflection()->ListFields(msg_container->ssmsg().body(), &output);
-    if (output.empty()) {
+    //    std::vector<const google::protobuf::FieldDescriptor *> output;
+    //    msg_container->ssmsg().body().GetReflection()->ListFields(msg_container->ssmsg().body(), &output);
+    //    if (output.empty()) {
+    //        return get_empty_string();
+    //    }
+    //
+    //    if (output.size() > 1) {
+    //        WLOGERROR("there is more than one body");
+    //        for (size_t i = 0; i < output.size(); ++i) {
+    //            WLOGERROR("body[%d]=%s", static_cast<int>(i), output[i]->name().c_str());
+    //        }
+    //    }
+    //
+    //    return output[0]->name();
+    const google::protobuf::FieldDescriptor *fd =
+        msg_container->ssmsg().body().GetReflection()->GetOneofFieldDescriptor(msg_container->ssmsg().body(), get_body_oneof_desc());
+
+    if (NULL == fd) {
         return get_empty_string();
     }
 
-    if (output.size() > 1) {
-        WLOGERROR("there is more than one body");
-        for (size_t i = 0; i < output.size(); ++i) {
-            WLOGERROR("body[%d]=%s", static_cast<int>(i), output[i]->name().c_str());
-        }
-    }
-
-    return output[0]->name();
+    return fd->name();
 }
 
 ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(const msg_ptr_t msg_container) {
@@ -94,20 +102,21 @@ ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(const msg_ptr_
         return 0;
     }
 
-    std::vector<const google::protobuf::FieldDescriptor *> output;
-    msg_container->ssmsg().body().GetReflection()->ListFields(msg_container->ssmsg().body(), &output);
-    if (output.empty()) {
-        return 0;
-    }
-
-    if (output.size() > 1) {
-        WLOGERROR("there is more than one body");
-        for (size_t i = 0; i < output.size(); ++i) {
-            WLOGERROR("body[%d]=%s", static_cast<int>(i), output[i]->name().c_str());
-        }
-    }
-
-    return static_cast<msg_type_t>(output[0]->number());
+    //    std::vector<const google::protobuf::FieldDescriptor *> output;
+    //    msg_container->ssmsg().body().GetReflection()->ListFields(msg_container->ssmsg().body(), &output);
+    //    if (output.empty()) {
+    //        return 0;
+    //    }
+    //
+    //    if (output.size() > 1) {
+    //        WLOGERROR("there is more than one body");
+    //        for (size_t i = 0; i < output.size(); ++i) {
+    //            WLOGERROR("body[%d]=%s", static_cast<int>(i), output[i]->name().c_str());
+    //        }
+    //    }
+    //
+    //    return static_cast<msg_type_t>(output[0]->number());
+    return static_cast<msg_type_t>(msg_container->ssmsg().body().body_oneof_case());
 }
 
 ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::msg_name_to_type_id(const std::string &msg_name) {
@@ -186,4 +195,44 @@ int32_t ss_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
     }
 
     return ret;
+}
+
+int32_t ss_msg_dispatcher::notify_send_failed(const atbus::protocol::msg &msg, const void *buffer, size_t len) {
+    if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.head.type) {
+        WLOGERROR("message type %d invalid", msg.head.type);
+        return hello::err::EN_SYS_PARAM;
+    }
+
+    if (NULL == msg.body.forward) {
+        WLOGERROR("send a message from unknown source");
+        return hello::err::EN_SYS_PARAM;
+    }
+
+    hello::message_container ss_msg;
+    ss_msg.mutable_src_server()->set_bus_id(msg.body.forward->from);
+
+    int32_t ret = on_send_msg_failed(&ss_msg, buffer, len, msg.head.ret);
+    if (ret < 0) {
+        WLOGERROR("dispatch ss message from 0x%llx failed, res: %d", static_cast<unsigned long long>(msg.body.forward->from), ret);
+    }
+
+    return ret;
+}
+
+const google::protobuf::OneofDescriptor *ss_msg_dispatcher::get_body_oneof_desc() const {
+    static const google::protobuf::OneofDescriptor *ret = NULL;
+    if (NULL != ret) {
+        return ret;
+    }
+
+    if (hello::SSMsgBody::descriptor()->oneof_decl_count() > 0) {
+        return hello::SSMsgBody::descriptor()->oneof_decl(0);
+    }
+    //    ret = hello::SSMsgBody::descriptor()->FindOneofByName("body_oneof");
+    //    if (NULL == ret) {
+    //        WLOGERROR("find oneof descriptor \"body_oneof\" in hello::SSMsgBody failed");
+    //    }
+    //
+    //    return ret;
+    return NULL;
 }

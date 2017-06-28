@@ -91,6 +91,34 @@ int32_t dispatcher_implement::on_recv_msg(msg_ptr_t msgc, const void *msg_buf, s
     return ret;
 }
 
+int32_t dispatcher_implement::on_send_msg_failed(msg_ptr_t msgc, const void *msg_buf, size_t msg_size, int32_t error_code) {
+    if (NULL == msgc) {
+        return hello::err::EN_SYS_PARAM;
+    }
+
+    int32_t ret = unpack_msg(msgc, msg_buf, msg_size);
+    if (ret < 0) {
+        msgc->mutable_src_server()->set_rpc_result(ret);
+        WLOGERROR("unpack message failed.");
+    }
+
+    if (NULL != WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT) &&
+        WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->check(util::log::log_wrapper::level_t::LOG_LW_DEBUG)) {
+        WLOGDEBUG("dispatcher %s send msg failed, res: %d.\n%s", name(), error_code, protobuf_mini_dumper_get_readable(*msgc));
+    }
+
+    msgc->mutable_src_server()->set_rpc_result(hello::err::EN_SYS_RPC_SEND_FAILED);
+    uint64_t task_id = pick_msg_task(msgc);
+    if (task_id > 0) { // 如果是恢复任务则尝试切回协程任务
+        WLOGERROR("send data failed with error code = %d, try to resume task %llx", error_code, static_cast<unsigned long long>(task_id));
+        // 查找并恢复已有task
+        return task_manager::me()->resume_task(task_id, *msgc);
+    }
+
+    WLOGERROR("send data failed with error code = %d", error_code);
+    return ret;
+}
+
 uint64_t dispatcher_implement::pick_msg_task(const msg_ptr_t msg_container) {
     if (NULL == msg_container || !msg_container->has_src_server()) {
         return 0;
