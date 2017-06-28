@@ -18,4 +18,12 @@ if [ $? -ne 0 ]; then
 fi
 
 WaitProcessStoped "$SERVER_PID_FILE_NAME";
+
+CheckProcessRunning "$SERVER_PID_FILE_NAME";
+if [ 0 -ne $? ]; then
+	NoticeMsg "$SERVER_FULL_NAME can not be stoped by command, try to kill by signal";
+	kill $(cat "$SERVER_PID_FILE_NAME");
+	WaitProcessStoped "$SERVER_PID_FILE_NAME";
+fi
+
 NoticeMsg "stop $SERVER_FULL_NAME done." ;
