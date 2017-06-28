@@ -1,0 +1,46 @@
+syntax = "proto3";
+// 前后台共用数据结构定义
+
+import "com.struct.proto";
+import "svr.struct.proto";
+
+package hello;
+
+message table_login {
+    string openid             = 1;
+    uint64 login_pd           = 2; // 登入进程id
+    uint32 login_time         = 3; // 上次登入时间
+    string login_code         = 4; // 认证码
+    uint32 login_code_expired = 5; // 认证码到期时间
+
+    uint32 ban_time = 6; // 封号期限
+
+    uint32 register_time = 7; // 注册时间
+    uint32 logout_time   = 8; // 登出时间
+
+    platform_information platform   = 11; // 平台信息
+    login_record         last_login = 12; // 上次登入的信息
+    account_except       except     = 13; // 账户异常数据
+
+    // 统计数据
+    uint32 stat_login_total_times   = 31; // 总登入次数
+    uint32 stat_login_success_times = 32; // 成功登入次数
+    uint32 stat_login_failed_times  = 33; // 失败登入次数
+}
+
+message table_user {
+    string openid = 1;
+
+    platform_information platform     = 2; // 平台信息
+    player_data          player       = 3; // 玩家数据
+    uint32               data_version = 4; // 数据版本号
+
+    player_options options = 21; // 玩家选项
+}
+
+message table_all_message {
+    table_login       login   = 1;
+    table_user        user    = 2;
+    string            version = 3; //透传版本
+    table_simple_info simple  = 4; //简单数据类型
+}

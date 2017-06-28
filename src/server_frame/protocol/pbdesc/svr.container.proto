@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+// 后台数据结构定义
+
+import "com.protocol.proto";
+import "svr.gm.protocol.proto";
+import "svr.protocol.proto";
+import "svr.table.proto";
+
+package hello;
+
+message server_info {
+    uint64 bus_id      = 1;
+    uint64 src_task_id = 2;
+    uint64 dst_task_id = 3;
+    int32  type        = 4;
+
+    int32 rpc_result = 5; // rpc透传返回码
+}
+
+message client_info { uint64 session_id = 1; }
+
+message message_container {
+    server_info src_server = 1; // 消息来源服务器信息
+    client_info src_client = 2; // 消息来源客户端信息
+
+    SSMsg ssmsg = 101; // 服务器间通信消息
+    CSMsg csmsg = 102; // 服务器-客户端通信消息
+    GMMsg gmmsg = 103; // GM服务器-GM客户端通信消息
+
+    // 数据库消息
+    table_all_message dbmsg = 201; // 数据库消息
+
+    // 透传数据
+    bytes private_data = 301; //
+}

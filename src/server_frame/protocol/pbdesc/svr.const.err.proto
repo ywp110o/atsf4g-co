@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+// 后台协议常量定义
+
+package hello.err;
+
+enum EnSysErrorType {
+    EN_SUCCESS = 0;
+
+    EN_SYS_UNKNOWN = -1;
+
+
+    EN_SYS_PARAM       = -1000001;
+    EN_SYS_INIT        = -1000002;
+    EN_SYS_MALLOC      = -1000003;
+    EN_SYS_NOTFOUND    = -1000004;
+    EN_SYS_BUFF_EXTEND = -1000005;
+    EN_SYS_BUSY        = -1000006;
+    EN_SYS_TIMEOUT     = -1000007;
+    EN_SYS_PACK        = -1000008;
+    EN_SYS_UNPACK      = -1000009;
+
+    EN_SYS_RPC_CALL    = -1000021; // 通用调用错误
+    EN_SYS_RPC_NO_TASK = -1000022; // 不在协程任务中
+
+    EN_SYS_SIGN_VERIFY = -1000031; // 签名校检失败
+
+    EN_DB_RECORD_NOT_FOUND = -1000101;
+    EN_DB_SEND_FAILED      = -1000102;
+    EN_DB_OLD_VERSION      = -1000103; // CAS数据已经过期
+    EN_DB_REPLY_ERROR      = -1000104; // 数据库返回错误信息
+    EN_DB_KEY_EXISTS       = -1000105; // key已经存在
+
+    EN_MSG_PACK_NOT_ENOUGH = -1000201;
+    EN_MSG_PARSE_FAIL      = -1000202;
+
+    EN_PLAYER_KICKOUT = -1001001; // 踢出用户失败
+}

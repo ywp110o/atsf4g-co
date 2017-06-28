@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+// 后台通信协议定义
+
+import "com.struct.proto";
+import "svr.struct.proto";
+
+package hello;
+
+/////////////////////////////////////////////////////
+////  此处开始是登入相关协议
+/////////////////////////////////////////////////////
+message SSPlayerKickOffReq {
+    uint32 reason    = 1; // 原因
+    string gm_reason = 2; // 原因
+}
+
+message SSPlayerKickOffRsp {}
+
+/////////////////////////////////////////////////////
+////  登入相关协议到此结束
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  此处开始是外部接入支持的协议
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  外部接入支持的协议到此结束
+/////////////////////////////////////////////////////
+
+// 协议包头
+message SSMsgHead {
+    int32  error_code = 1;
+    int64  timestamp  = 2;
+    uint32 sequence   = 3;
+
+    string openid = 100;
+}
+
+// 协议包体
+message SSMsgBody {
+    SSPlayerKickOffReq mss_player_kickoff_req = 2001;
+    SSPlayerKickOffRsp mss_player_kickoff_rsp = 2002;
+}
+
+// 协议包
+message SSMsg {
+    SSMsgHead head = 1;
+    SSMsgBody body = 2;
+}
