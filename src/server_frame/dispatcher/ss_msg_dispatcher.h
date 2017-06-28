@@ -10,6 +10,7 @@
 #include <config/compiler_features.h>
 #include <design_pattern/singleton.h>
 
+#include <google/protobuf/descriptor.h>
 
 #include "dispatcher_implement.h"
 
