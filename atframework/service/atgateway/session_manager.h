@@ -23,12 +23,19 @@ namespace atframe {
         class session_manager {
         public:
             struct client_limit_t {
-                size_t total_recv_limit;
-                size_t total_send_limit;
-                size_t hour_recv_limit;
-                size_t hour_send_limit;
-                size_t minute_recv_limit;
-                size_t minute_send_limit;
+                size_t total_recv_bytes;
+                size_t total_send_bytes;
+                size_t hour_recv_bytes;
+                size_t hour_send_bytes;
+                size_t minute_recv_bytes;
+                size_t minute_send_bytes;
+
+                size_t total_recv_times;
+                size_t total_send_times;
+                size_t hour_recv_times;
+                size_t hour_send_times;
+                size_t minute_recv_times;
+                size_t minute_send_times;
 
                 size_t max_client_number;
             };

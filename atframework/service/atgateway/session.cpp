@@ -317,6 +317,9 @@ namespace atframe {
             limit_.hour_send_bytes += len;
             limit_.minute_send_bytes += len;
             limit_.total_send_bytes += len;
+            ++limit_.total_send_times;
+            ++limit_.hour_send_times;
+            ++limit_.minute_send_times;
 
             int ret = proto_->write(data, len);
 
@@ -356,6 +359,9 @@ namespace atframe {
             limit_.hour_recv_bytes += len;
             limit_.minute_recv_bytes += len;
             limit_.total_recv_bytes += len;
+            ++limit_.minute_recv_times;
+            ++limit_.hour_recv_times;
+            ++limit_.total_recv_times;
 
             int ret = mgr->post_data(router_, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(), len);
 
@@ -401,6 +407,8 @@ namespace atframe {
                 limit_.hour_timepoint = now_hr;
                 limit_.hour_recv_bytes = 0;
                 limit_.hour_send_bytes = 0;
+                limit_.hour_recv_times = 0;
+                limit_.hour_send_times = 0;
                 return;
             }
 
@@ -412,11 +420,19 @@ namespace atframe {
                 return;
             }
 
-            if (check_recv && owner_->get_conf().limits.hour_recv_limit > 0 && limit_.hour_recv_bytes > owner_->get_conf().limits.hour_recv_limit) {
+            if (check_recv && owner_->get_conf().limits.hour_recv_bytes > 0 && limit_.hour_recv_bytes > owner_->get_conf().limits.hour_recv_bytes) {
                 close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
             }
 
-            if (check_send && owner_->get_conf().limits.hour_send_limit > 0 && limit_.hour_send_bytes > owner_->get_conf().limits.hour_send_limit) {
+            if (check_recv && owner_->get_conf().limits.hour_send_bytes > 0 && limit_.hour_send_bytes > owner_->get_conf().limits.hour_send_bytes) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+            }
+
+            if (check_send && owner_->get_conf().limits.hour_recv_times > 0 && limit_.hour_recv_times > owner_->get_conf().limits.hour_recv_times) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+            }
+
+            if (check_send && owner_->get_conf().limits.hour_send_times > 0 && limit_.hour_send_times > owner_->get_conf().limits.hour_send_times) {
                 close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
             }
         }
@@ -427,6 +443,8 @@ namespace atframe {
                 limit_.minute_timepoint = now_mi;
                 limit_.minute_recv_bytes = 0;
                 limit_.minute_send_bytes = 0;
+                limit_.minute_recv_times = 0;
+                limit_.minute_send_times = 0;
                 return;
             }
 
@@ -438,12 +456,22 @@ namespace atframe {
                 return;
             }
 
-            if (check_recv && owner_->get_conf().limits.minute_recv_limit > 0 && limit_.minute_recv_bytes > owner_->get_conf().limits.minute_recv_limit) {
+            if (check_recv && owner_->get_conf().limits.minute_recv_bytes > 0 && limit_.minute_recv_bytes > owner_->get_conf().limits.minute_recv_bytes) {
                 close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
                 return;
             }
 
-            if (check_send && owner_->get_conf().limits.minute_send_limit > 0 && limit_.minute_send_bytes > owner_->get_conf().limits.minute_send_limit) {
+            if (check_recv && owner_->get_conf().limits.minute_recv_times > 0 && limit_.minute_recv_times > owner_->get_conf().limits.minute_recv_times) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+                return;
+            }
+
+            if (check_send && owner_->get_conf().limits.minute_send_bytes > 0 && limit_.minute_send_bytes > owner_->get_conf().limits.minute_send_bytes) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+                return;
+            }
+
+            if (check_send && owner_->get_conf().limits.minute_send_times > 0 && limit_.minute_send_times > owner_->get_conf().limits.minute_send_times) {
                 close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
                 return;
             }
@@ -468,11 +496,19 @@ namespace atframe {
                 return;
             }
 
-            if (check_recv && owner_->get_conf().limits.total_recv_limit > 0 && limit_.total_recv_bytes > owner_->get_conf().limits.total_recv_limit) {
+            if (check_recv && owner_->get_conf().limits.total_recv_bytes > 0 && limit_.total_recv_bytes > owner_->get_conf().limits.total_send_bytes) {
                 close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
             }
 
-            if (check_send && owner_->get_conf().limits.total_send_limit > 0 && limit_.total_send_bytes > owner_->get_conf().limits.total_send_limit) {
+            if (check_recv && owner_->get_conf().limits.total_recv_times > 0 && limit_.total_recv_times > owner_->get_conf().limits.total_recv_times) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+            }
+
+            if (check_send && owner_->get_conf().limits.total_send_bytes > 0 && limit_.total_send_bytes > owner_->get_conf().limits.total_send_bytes) {
+                close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
+            }
+
+            if (check_send && owner_->get_conf().limits.total_send_times > 0 && limit_.total_send_times > owner_->get_conf().limits.total_send_times) {
                 close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
             }
         }

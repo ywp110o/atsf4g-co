@@ -11,8 +11,8 @@
 
 #include <uv.h>
 
-#include <common/string_oprs.h>
 #include <common/file_system.h>
+#include <common/string_oprs.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
@@ -82,12 +82,18 @@ public:
         ++gw_mgr_.get_conf().version;
 
         // load init cluster member from configure
-        gw_mgr_.get_conf().limits.total_recv_limit = 0;
-        gw_mgr_.get_conf().limits.total_send_limit = 0;
-        gw_mgr_.get_conf().limits.hour_recv_limit = 0;
-        gw_mgr_.get_conf().limits.hour_send_limit = 0;
-        gw_mgr_.get_conf().limits.minute_recv_limit = 0;
-        gw_mgr_.get_conf().limits.minute_send_limit = 0;
+        gw_mgr_.get_conf().limits.total_recv_bytes = 0;
+        gw_mgr_.get_conf().limits.total_send_bytes = 0;
+        gw_mgr_.get_conf().limits.hour_recv_bytes = 0;
+        gw_mgr_.get_conf().limits.hour_send_bytes = 0;
+        gw_mgr_.get_conf().limits.minute_recv_bytes = 0;
+        gw_mgr_.get_conf().limits.minute_send_bytes = 0;
+        gw_mgr_.get_conf().limits.total_recv_times = 0;
+        gw_mgr_.get_conf().limits.total_send_times = 0;
+        gw_mgr_.get_conf().limits.hour_recv_times = 0;
+        gw_mgr_.get_conf().limits.hour_send_times = 0;
+        gw_mgr_.get_conf().limits.minute_recv_times = 0;
+        gw_mgr_.get_conf().limits.minute_send_times = 0;
         gw_mgr_.get_conf().limits.max_client_number = 65536;
 
         gw_mgr_.get_conf().listen.address.clear();
@@ -113,12 +119,18 @@ public:
         cfg.dump_to("atgateway.client.first_idle_timeout", gw_mgr_.get_conf().first_idle_timeout);
 
         // client limit
-        cfg.dump_to("atgateway.client.limit.total_send", gw_mgr_.get_conf().limits.total_send_limit);
-        cfg.dump_to("atgateway.client.limit.total_recv", gw_mgr_.get_conf().limits.total_recv_limit);
-        cfg.dump_to("atgateway.client.limit.hour_send", gw_mgr_.get_conf().limits.hour_send_limit);
-        cfg.dump_to("atgateway.client.limit.hour_recv", gw_mgr_.get_conf().limits.hour_recv_limit);
-        cfg.dump_to("atgateway.client.limit.minute_send", gw_mgr_.get_conf().limits.minute_send_limit);
-        cfg.dump_to("atgateway.client.limit.minute_recv", gw_mgr_.get_conf().limits.minute_recv_limit);
+        cfg.dump_to("atgateway.client.limit.total_send_bytes", gw_mgr_.get_conf().limits.total_send_bytes);
+        cfg.dump_to("atgateway.client.limit.total_recv_bytes", gw_mgr_.get_conf().limits.total_recv_bytes);
+        cfg.dump_to("atgateway.client.limit.hour_send_bytes", gw_mgr_.get_conf().limits.hour_send_bytes);
+        cfg.dump_to("atgateway.client.limit.hour_recv_bytes", gw_mgr_.get_conf().limits.hour_recv_bytes);
+        cfg.dump_to("atgateway.client.limit.minute_send_bytes", gw_mgr_.get_conf().limits.minute_send_bytes);
+        cfg.dump_to("atgateway.client.limit.minute_recv_bytes", gw_mgr_.get_conf().limits.minute_recv_bytes);
+        cfg.dump_to("atgateway.client.limit.total_send_times", gw_mgr_.get_conf().limits.total_send_times);
+        cfg.dump_to("atgateway.client.limit.total_recv_times", gw_mgr_.get_conf().limits.total_recv_times);
+        cfg.dump_to("atgateway.client.limit.hour_send_times", gw_mgr_.get_conf().limits.hour_send_times);
+        cfg.dump_to("atgateway.client.limit.hour_recv_times", gw_mgr_.get_conf().limits.hour_recv_times);
+        cfg.dump_to("atgateway.client.limit.minute_send_times", gw_mgr_.get_conf().limits.minute_send_times);
+        cfg.dump_to("atgateway.client.limit.minute_recv_times", gw_mgr_.get_conf().limits.minute_recv_times);
 
         // crypt
         ::atframe::gateway::session_manager::crypt_conf_t &crypt_conf = gw_mgr_.get_conf().crypt;

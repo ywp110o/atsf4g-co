@@ -4,8 +4,9 @@
 #pragma once
 
 #include <cstddef>
-#include <stdint.h>
 #include <ctime>
+#include <stdint.h>
+
 
 #include "uv.h"
 
@@ -28,6 +29,13 @@ namespace atframe {
                 size_t hour_send_bytes;
                 size_t minute_recv_bytes;
                 size_t minute_send_bytes;
+
+                size_t total_recv_times;
+                size_t total_send_times;
+                size_t hour_recv_times;
+                size_t hour_send_times;
+                size_t minute_recv_times;
+                size_t minute_send_times;
 
                 time_t hour_timepoint;
                 time_t minute_timepoint;
@@ -76,7 +84,7 @@ namespace atframe {
 
             int close(int reason);
 
-            int close_with_manager(int reason, session_manager * mgr);
+            int close_with_manager(int reason, session_manager *mgr);
 
             int close_fd(int reason);
 
@@ -84,7 +92,7 @@ namespace atframe {
 
             int send_to_server(::atframe::gw::ss_msg &msg);
 
-            int send_to_server(::atframe::gw::ss_msg &msg, session_manager * mgr);
+            int send_to_server(::atframe::gw::ss_msg &msg, session_manager *mgr);
 
             proto_base *get_protocol_handle();
             const proto_base *get_protocol_handle() const;
@@ -93,10 +101,11 @@ namespace atframe {
             const uv_stream_t *get_uv_stream() const;
 
             int send_new_session();
+
         private:
             int send_remove_session();
 
-            int send_remove_session(session_manager * mgr);
+            int send_remove_session(session_manager *mgr);
 
             static void on_evt_shutdown(uv_shutdown_t *req, int status);
             static void on_evt_closed(uv_handle_t *handle);
@@ -104,6 +113,7 @@ namespace atframe {
             void check_hour_limit(bool check_recv, bool check_send);
             void check_minute_limit(bool check_recv, bool check_send);
             void check_total_limit(bool check_recv, bool check_send);
+
         public:
             inline void *get_private_data() const { return private_data_; }
             inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
