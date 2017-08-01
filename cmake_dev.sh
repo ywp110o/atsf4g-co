@@ -79,14 +79,14 @@ while getopts "ac:e:hlm:o:tus-" OPTION; do
             exit 0;
         ;;
         m)
-            if [ -z "$OPTARG" ]; then
+            if [ ! -z "$OPTARG" ]; then
                 CMAKE_OPTIONS="$CMAKE_OPTIONS -DMBEDTLS_ROOT=$OPTARG";
             else
                 CMAKE_OPTIONS="$CMAKE_OPTIONS -DMBEDTLS_ROOT=c:/workspace/lib/crypt/prebuilt/win64";
             fi
         ;;
         o)
-            if [ -z "$OPTARG" ]; then
+            if [ ! -z "$OPTARG" ]; then
                 CMAKE_OPTIONS="$CMAKE_OPTIONS -DOPENSSL_ROOT_DIR=$OPTARG";
             else
                 CMAKE_OPTIONS="$CMAKE_OPTIONS -DOPENSSL_ROOT_DIR=c:/workspace/lib/crypt/prebuilt/openssl-1.0.2h-vs2015";
