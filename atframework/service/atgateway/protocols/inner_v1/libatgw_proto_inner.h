@@ -8,35 +8,35 @@
 #include <vector>
 
 
+#include "algorithm/crypto_cipher.h"
 #include "algorithm/xxtea.h"
 #include "detail/buffer.h"
+
 
 #include "../proto_base.h"
 
 extern "C" {
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-#include <openssl/aes.h>
 #include <openssl/bio.h>
 #include <openssl/bn.h>
-#include <openssl/crypto.h>
 #include <openssl/dh.h>
+#include <openssl/ecdh.h>
 #include <openssl/err.h>
-#include <openssl/err.h>
-#include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
-#include <openssl/sha.h>
+
 
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
 #include "mbedtls/platform.h"
 // "mbedtls/platform.h" must be the first
-#include "mbedtls/aes.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/dhm.h"
+#include "mbedtls/ecdh.h"
 #include "mbedtls/entropy.h"
 #include "mbedtls/net.h"
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha1.h"
+
 
 #endif
 }
@@ -75,9 +75,8 @@ namespace atframe {
             struct crypt_conf_t {
                 std::string default_key; /** default key, different used for different crypt protocol **/
                 time_t update_interval;  /** crypt key refresh interval **/
-                int type;                /** crypt type. XXTEA, AES and etc. **/
+                std::string type;        /** crypt type. XXTEA, AES and etc. **/
                 int switch_secret_type;  /** how to generate the secret key, dh, rsa or direct send. recommander to use DH **/
-                uint32_t keybits;        /** key length in bits. **/
 
                 // Not supported now
                 // int rsa_sign_type;           /** RSA sign type. PKCS1, PKCS1_V15 or PSS **/
@@ -89,38 +88,20 @@ namespace atframe {
                 bool client_mode; /** client mode, must be false in server when call global_reload(cfg) **/
             };
 
-            struct crypt_session_aes_t {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-                AES_KEY openssl_encrypt_key;
-                AES_KEY openssl_decrypt_key;
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                mbedtls_aes_context mbedtls_aes_encrypt_ctx;
-                mbedtls_aes_context mbedtls_aes_decrypt_ctx;
-#endif
-            };
-
-            struct crypt_session_xtea_t {
-                ::util::xxtea_key util_xxtea_ctx;
-            };
-
             struct crypt_session_t {
                 std::shared_ptr<detail::crypt_global_configure_t> shared_conf;
-                int type;                          /** crypt type. XXTEA, AES and etc. **/
+                std::string type;                  /** crypt type. XXTEA, AES and etc. **/
                 std::vector<unsigned char> secret; /** crypt secret. **/
-                uint32_t keybits;                  /** key length in bits. **/
 
                 std::vector<unsigned char> param; /** cache data used for generate key, dhparam if using DH algorithm. **/
 
                 crypt_session_t();
                 ~crypt_session_t();
 
-                int setup(int type, uint32_t keybits);
+                int setup(std::string type);
                 void close();
 
-                union {
-                    crypt_session_aes_t aes_key;
-                    crypt_session_xtea_t xtea_key;
-                };
+                util::crypto::cipher cipher;
             };
             typedef std::shared_ptr<crypt_session_t> crypt_session_ptr_t;
 
@@ -177,7 +158,7 @@ namespace atframe {
             virtual std::string get_info() const;
 
             int start_session();
-            int reconnect_session(uint64_t sess_id, int type, const std::vector<unsigned char> &secret, uint32_t keybits);
+            int reconnect_session(uint64_t sess_id, const std::string &crypt_type, const std::vector<unsigned char> &secret);
 
             int send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len);
             int send_post(const void *buffer, size_t len);

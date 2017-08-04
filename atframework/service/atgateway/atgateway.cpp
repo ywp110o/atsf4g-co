@@ -136,13 +136,12 @@ public:
         ::atframe::gateway::session_manager::crypt_conf_t &crypt_conf = gw_mgr_.get_conf().crypt;
         crypt_conf.default_key.clear();
         crypt_conf.update_interval = 300; // 5min
-        crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE;
+        crypt_conf.type.clear();
         crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT;
-        crypt_conf.keybits = 128;
         crypt_conf.client_mode = false;
 
         // crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
-        // crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5;
+        // crypt_conf.hash_id =
         // crypt_conf.rsa_public_key.clear();
         // crypt_conf.rsa_private_key.clear();
         crypt_conf.dh_param.clear();
@@ -151,16 +150,7 @@ public:
             cfg.dump_to("atgateway.client.crypt.key", crypt_conf.default_key);
             cfg.dump_to("atgateway.client.crypt.update_interval", crypt_conf.update_interval);
             cfg.dump_to("atgateway.client.crypt.keybits", crypt_conf.keybits);
-            cfg.dump_to("atgateway.client.crypt.type", val);
-
-            if (0 == UTIL_STRFUNC_STRNCASE_CMP("xxtea", val.c_str(), 5)) {
-                crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA;
-                crypt_conf.keybits = 128;
-            } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("aes", val.c_str(), 3)) {
-                crypt_conf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES;
-            } else {
-                break;
-            }
+            cfg.dump_to("atgateway.client.crypt.type", crypt_conf.type);
 
             // rsa
             // cfg.dump_to("atgateway.client.crypt.rsa.public_key", crypt_conf.rsa_public_key);
@@ -187,16 +177,7 @@ public:
 
             // hash id
             // val.clear();
-            // cfg.dump_to("atgateway.client.crypt.hash_id", val);
-            // if (0 == UTIL_STRFUNC_STRNCASE_CMP("md5", val.c_str(), 3)) {
-            //     crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5;
-            // } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha512", val.c_str(), 6)) {
-            //     crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA512;
-            // } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha256", val.c_str(), 6)) {
-            //     crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA256;
-            // } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("sha1", val.c_str(), 4)) {
-            //     crypt_conf.hash_id = ::atframe::gw::inner::v1::hash_id_t_EN_HIT_SHA1;
-            // }
+            // cfg.dump_to("atgateway.client.crypt.hash_id", crypt_conf.hash_id);
         } while (false);
 
         // protocol reload

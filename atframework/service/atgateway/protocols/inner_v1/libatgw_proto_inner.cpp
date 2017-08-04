@@ -1,5 +1,6 @@
-﻿#include <sstream>
-#include <limits>
+﻿#include <limits>
+#include <sstream>
+
 
 #include "algorithm/murmur_hash.h"
 #include "common/string_oprs.h"
@@ -9,6 +10,22 @@
 
 
 #include "libatgw_proto_inner.h"
+
+#if (defined(__cplusplus) && __cplusplus >= 201103L) || (defined(_MSC_VER) && _MSC_VER >= 1600)
+
+#include <unordered_map>
+#include <unordered_set>
+#define LIBATGW_ENV_AUTO_MAP(...) std::unordered_map<__VA_ARGS__>
+#define LIBATGW_ENV_AUTO_SET(...) std::unordered_set<__VA_ARGS__>
+#define LIBATGW_ENV_AUTO_UNORDERED 1
+#else
+
+#include <map>
+#include <set>
+#define LIBATGW_ENV_AUTO_MAP(...) std::map<__VA_ARGS__>
+#define LIBATGW_ENV_AUTO_SET(...) std::set<__VA_ARGS__>
+
+#endif
 
 // the same as openssl, mbedtls also use this as a constant integer
 #ifndef AES_BLOCK_SIZE
@@ -48,7 +65,7 @@
 
 #ifdef max
 #undef max
-#endif 
+#endif
 
 namespace atframe {
     namespace gateway {
@@ -184,6 +201,12 @@ namespace atframe {
                     }
                     }
 
+                    // init supported algorithms
+                    std::vector<std::string> types;
+                    util::crypto::cipher::split_ciphers(conf_.type, types);
+                    for (size_t i = 0; i < types.size(); ++i) {
+                    }
+
                     return ret;
                 }
 
@@ -192,6 +215,7 @@ namespace atframe {
                         return;
                     }
                     inited_ = false;
+                    available_types_.clear();
 
                     switch (conf_.switch_secret_type) {
                     case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
@@ -247,6 +271,7 @@ namespace atframe {
 
                 libatgw_proto_inner_v1::crypt_conf_t conf_;
                 bool inited_;
+                LIBATGW_ENV_AUTO_SET(std::string) available_types_;
 
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
                 BIO *openssl_dh_bio_;
@@ -2127,7 +2152,7 @@ namespace atframe {
             return write_msg(builder);
         }
 
-        int libatgw_proto_inner_v1::reconnect_session(uint64_t sess_id, int type, const std::vector<unsigned char> &secret, uint32_t keybits) {
+        int libatgw_proto_inner_v1::reconnect_session(uint64_t sess_id, const std::string &crypt_type, const std::vector<unsigned char> &secret) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
             }

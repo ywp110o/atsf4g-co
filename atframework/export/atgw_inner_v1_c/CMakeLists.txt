@@ -43,6 +43,7 @@ file(MAKE_DIRECTORY "${EXPORT_SOURCE_SRC_DIR}/config")
 file(COPY 
     "${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/config/compile_optimize.h"
     "${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/config/compiler_features.h"
+    "${ATFRAMEWORK_ATFRAME_UTILS_INC_DIR}/config/atframe_utils_build_feature.h.in"
     DESTINATION "${EXPORT_SOURCE_SRC_DIR}/config"
     USE_SOURCE_PERMISSIONS
 )
