@@ -1,6 +1,6 @@
-﻿#include <limits>
+﻿#include <algorithm>
+#include <limits>
 #include <sstream>
-
 
 #include "algorithm/murmur_hash.h"
 #include "common/string_oprs.h"
@@ -201,10 +201,14 @@ namespace atframe {
                     }
                     }
 
-                    // init supported algorithms
+                    // init supported algorithms index
                     std::vector<std::string> types;
                     util::crypto::cipher::split_ciphers(conf_.type, types);
                     for (size_t i = 0; i < types.size(); ++i) {
+                        std::transform(types[i].begin(), types[i].end(), types[i].begin(), ::tolower);
+                        if (NULL != util::crypto::cipher::get_cipher_by_name(types[i])) {
+                            available_types_.insert(types[i]);
+                        }
                     }
 
                     return ret;
@@ -259,12 +263,16 @@ namespace atframe {
 #endif
                 }
 
+                bool check_type(std::string &crypt_type) {
+                    std::transform(crypt_type.begin(), crypt_type.end(), crypt_type.begin(), ::tolower);
+                    return available_types_.find(crypt_type) != available_types_.end();
+                }
+
                 static void default_crypt_configure(libatgw_proto_inner_v1::crypt_conf_t &dconf) {
                     dconf.default_key = "atgw-key";
                     dconf.dh_param.clear();
-                    dconf.keybits = 128;
                     dconf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT;
-                    dconf.type = ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE;
+                    dconf.type.clear();
                     dconf.update_interval = 1200;
                     dconf.client_mode = false;
                 }
@@ -288,11 +296,11 @@ namespace atframe {
             };
         }
 
-        libatgw_proto_inner_v1::crypt_session_t::crypt_session_t() : type(::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE), keybits(0) {}
+        libatgw_proto_inner_v1::crypt_session_t::crypt_session_t() {}
 
         libatgw_proto_inner_v1::crypt_session_t::~crypt_session_t() { close(); }
 
-        int libatgw_proto_inner_v1::crypt_session_t::setup(int t, uint32_t kb) {
+        int libatgw_proto_inner_v1::crypt_session_t::setup(const std::string &type) {
             if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE != type) {
                 return error_code_t::EN_ECT_CRYPT_ALREADY_INITED;
             }
@@ -350,29 +358,12 @@ namespace atframe {
 
 
             type = t;
-            keybits = kb;
             return 0;
         }
 
         void libatgw_proto_inner_v1::crypt_session_t::close() {
-            switch (type) {
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
-                // donothing
-                break;
-            }
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                mbedtls_aes_free(&aes_key.mbedtls_aes_encrypt_ctx);
-                mbedtls_aes_free(&aes_key.mbedtls_aes_decrypt_ctx);
-#endif
-                break;
-            }
-            default: { break; }
-            }
-
-            type = 0;
-            keybits = 0;
+            cipher.close();
+            type.clear();
         }
 
         libatgw_proto_inner_v1::libatgw_proto_inner_v1() : session_id_(0), last_write_ptr_(NULL), close_reason_(0) {

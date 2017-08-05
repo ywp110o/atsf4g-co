@@ -241,15 +241,15 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_start_session(libatgw_i
     return ATGW_CONTEXT(context)->start_session();
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_inner_v1_c_context context, uint64_t sessios_id, int32_t crypt_type,
-                                                                           const unsigned char *secret_buf, uint64_t secret_len, uint32_t keybits) {
+ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_inner_v1_c_context context, uint64_t sessios_id, const char *crypt_type,
+                                                                           const unsigned char *secret_buf, uint64_t secret_len) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
 
     std::vector<unsigned char> secret;
     secret.assign(secret_buf, secret_buf + secret_len);
-    return ATGW_CONTEXT(context)->reconnect_session(sessios_id, crypt_type, secret, keybits);
+    return ATGW_CONTEXT(context)->reconnect_session(sessios_id, crypt_type, secret);
 }
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_get_info(libatgw_inner_v1_c_context context, char *info_str, uint64_t info_len) {
@@ -332,7 +332,7 @@ ATFRAME_SYMBOL_EXPORT uint32_t __cdecl libatgw_inner_v1_c_get_crypt_keybits(liba
         return 0;
     }
 
-    return ATGW_CONTEXT(context)->get_crypt_handshake()->keybits;
+    return ATGW_CONTEXT(context)->get_crypt_handshake()->cipher->get_key_bits();
 }
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read_alloc(libatgw_inner_v1_c_context context, uint64_t suggested_size, char **out_buf,

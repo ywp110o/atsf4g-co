@@ -81,8 +81,8 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_recv_buffer_limit(liba
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_send_buffer_limit(libatgw_inner_v1_c_context context, uint64_t max_size, uint64_t max_number);
 
 ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_start_session(libatgw_inner_v1_c_context context);
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_inner_v1_c_context context, uint64_t sessios_id, int32_t crypt_type,
-                                                                           const unsigned char *secret_buf, uint64_t secret_len, uint32_t keybits);
+ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_inner_v1_c_context context, uint64_t sessios_id, const char *crypt_type,
+                                                                           const unsigned char *secret_buf, uint64_t secret_len);
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_get_info(libatgw_inner_v1_c_context context, char *info_str, uint64_t info_len);
 

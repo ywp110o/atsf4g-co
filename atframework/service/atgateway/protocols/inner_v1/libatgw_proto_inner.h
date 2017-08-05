@@ -98,7 +98,7 @@ namespace atframe {
                 crypt_session_t();
                 ~crypt_session_t();
 
-                int setup(std::string type);
+                int setup(const std::string &type);
                 void close();
 
                 util::crypto::cipher cipher;
