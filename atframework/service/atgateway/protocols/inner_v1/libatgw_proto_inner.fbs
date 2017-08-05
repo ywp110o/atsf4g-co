@@ -87,9 +87,8 @@ table cs_body_handshake {
     step: handshake_step_t (id: 1);
     switch_type: switch_secret_t (id: 2);
     crypt_type: string (id: 3);
-    crypt_bits: uint (id: 4); 
-    crypt_param: [byte] (id: 5); 
-    rsa_cert: cs_body_rsa_cert (id: 6);
+    crypt_param: [byte] (id: 4); 
+    rsa_cert: cs_body_rsa_cert (id: 5);
 }
 
 table cs_body_ping {

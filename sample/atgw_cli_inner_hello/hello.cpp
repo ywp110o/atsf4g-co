@@ -46,6 +46,7 @@ client_session_data_t g_client_sess;
 
 std::string g_host;
 int g_port;
+std::string crypt_types;
 
 // ======================== 以下为网络处理及回调 ========================
 static int close_sock();
@@ -126,7 +127,7 @@ static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
     } else {
         g_client_sess.proto = sess_proto;
 
-        ret = libatgw_inner_v1_c_start_session(sess_proto->ctx);
+        ret = libatgw_inner_v1_c_start_session(sess_proto->ctx, crypt_types.c_str());
     }
     if (0 != ret) {
         fprintf(stderr, "start session failed, res: %d\n", ret);
@@ -242,7 +243,7 @@ static int32_t proto_inner_callback_on_write(libatgw_inner_v1_c_context ctx, voi
 
     if (NULL != is_done) {
         // if not writting, notify write finished
-        *is_done = (0 != ret)? 1: 0;
+        *is_done = (0 != ret) ? 1 : 0;
     }
 
     return ret;
@@ -257,7 +258,7 @@ static int proto_inner_callback_on_message(libatgw_inner_v1_c_context ctx, const
 
 // useless
 static int proto_inner_callback_on_new_session(libatgw_inner_v1_c_context ctx, uint64_t *sess_id) {
-    printf("create session 0x%llx\n", NULL == sess_id? 0: static_cast<unsigned long long>(*sess_id));
+    printf("create session 0x%llx\n", NULL == sess_id ? 0 : static_cast<unsigned long long>(*sess_id));
     return 0;
 }
 
@@ -355,7 +356,7 @@ static void libuv_tick_timer_callback(uv_timer_t *handle) {
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s <ip> <port> [mode]\n\tmode can only be tick\n", argv[0]);
+        fprintf(stderr, "usage: %s <ip> <port> [crypt types] [mode]\n\tmode can only be tick\n", argv[0]);
         return -1;
     }
 
@@ -380,7 +381,13 @@ int main(int argc, char *argv[]) {
     memset(&g_client, 0, sizeof(g_client));
 
     if (argc > 3) {
-        mode = argv[3];
+        crypt_types = argv[3];
+    } else {
+        crypt_types = "xxtea:aes-128-cfb:aes-256-cfb";
+    }
+
+    if (argc > 4) {
+        mode = argv[4];
         std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
     }
 

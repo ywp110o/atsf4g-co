@@ -233,12 +233,12 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_send_buffer_limit(liba
     ATGW_CONTEXT(context)->set_send_buffer_limit((size_t)max_size, (size_t)max_number);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_start_session(libatgw_inner_v1_c_context context) {
+ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_start_session(libatgw_inner_v1_c_context context, const char *crypt_type) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
 
-    return ATGW_CONTEXT(context)->start_session();
+    return ATGW_CONTEXT(context)->start_session(crypt_type);
 }
 
 ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_inner_v1_c_context context, uint64_t sessios_id, const char *crypt_type,

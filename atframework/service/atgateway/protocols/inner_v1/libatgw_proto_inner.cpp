@@ -264,6 +264,10 @@ namespace atframe {
                 }
 
                 bool check_type(std::string &crypt_type) {
+                    if (crypt_type.empty()) {
+                        return true;
+                    }
+
                     std::transform(crypt_type.begin(), crypt_type.end(), crypt_type.begin(), ::tolower);
                     return available_types_.find(crypt_type) != available_types_.end();
                 }
@@ -300,62 +304,28 @@ namespace atframe {
 
         libatgw_proto_inner_v1::crypt_session_t::~crypt_session_t() { close(); }
 
-        int libatgw_proto_inner_v1::crypt_session_t::setup(const std::string &type) {
-            if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE != type) {
+        int libatgw_proto_inner_v1::crypt_session_t::setup(const std::string &t) {
+            if (!type.empty()) {
                 return error_code_t::EN_ECT_CRYPT_ALREADY_INITED;
             }
 
-            if (secret.size() * 8 < kb) {
-                secret.resize(kb / 8, 0);
-            }
-
-            if (secret.size() * 8 > kb) {
-                secret.resize(kb / 8);
-            }
-
-            switch (t) {
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
-                if (kb != 8 * sizeof(xtea_key.util_xxtea_ctx)) {
+            if (!t.empty()) {
+                if (cipher.init(t.c_str()) < 0) {
                     return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                 }
 
-                ::util::xxtea_setup(&xtea_key.util_xxtea_ctx, reinterpret_cast<const unsigned char *>(secret.data()));
-                break;
-            }
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
+                size_t kb = cipher.get_key_bits();
                 if (secret.size() * 8 < kb) {
-                    return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                    secret.resize(kb / 8, 0);
                 }
 
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-                int res = AES_set_encrypt_key(reinterpret_cast<const unsigned char *>(secret.data()), kb, &aes_key.openssl_encrypt_key);
-                if (res < 0) {
-                    return res;
+                if (secret.size() * 8 > kb) {
+                    secret.resize(kb / 8);
                 }
-
-                res = AES_set_decrypt_key(reinterpret_cast<const unsigned char *>(secret.data()), kb, &aes_key.openssl_decrypt_key);
-                if (res < 0) {
-                    return res;
-                }
-
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                mbedtls_aes_init(&aes_key.mbedtls_aes_encrypt_ctx);
-                mbedtls_aes_init(&aes_key.mbedtls_aes_decrypt_ctx);
-                int res = mbedtls_aes_setkey_enc(&aes_key.mbedtls_aes_encrypt_ctx, reinterpret_cast<const unsigned char *>(secret.data()), kb);
-                if (res < 0) {
-                    return res;
-                }
-
-                res = mbedtls_aes_setkey_dec(&aes_key.mbedtls_aes_decrypt_ctx, reinterpret_cast<const unsigned char *>(secret.data()), kb);
-                if (res < 0) {
-                    return res;
-                }
-#endif
-                break;
+            } else {
+                secret.clear();
+                cipher.close();
             }
-            default: { break; }
-            }
-
 
             type = t;
             return 0;
@@ -717,6 +687,13 @@ namespace atframe {
                 return ret;
             }
 
+            std::string crypt_type;
+            if (NULL != body_handshake.crypt_type()) {
+                crypt_type = body_handshake.crypt_type()->str();
+            }
+
+            // TODO select a available crypt type
+
             callbacks_->new_session_fn(this, session_id_);
 
             using namespace ::atframe::gw::inner::v1;
@@ -724,7 +701,9 @@ namespace atframe {
             flatbuffers::FlatBufferBuilder builder;
             flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE, ::atframe::gateway::detail::alloc_seq());
             flatbuffers::Offset<cs_body_handshake> handshake_body;
-            ret = pack_handshake_start_rsp(builder, session_id_, handshake_body);
+
+            //
+            ret = pack_handshake_start_rsp(builder, session_id_, crypt_type, handshake_body);
             if (ret < 0) {
                 handshake_done(ret);
                 return ret;
@@ -749,23 +728,25 @@ namespace atframe {
             // assign session id,
             session_id_ = body_handshake.session_id();
 
+            std::string crypt_type;
             // if is running handshake, can not handshake again
             if (!handshake_.has_data) {
+                if (NULL != body_handshake.crypt_type()) {
+                    crypt_type = body_handshake.crypt_type()->str();
+                }
+
                 // make a new crypt session for handshake
                 if (crypt_handshake_->shared_conf) {
                     crypt_handshake_ = std::make_shared<crypt_session_t>();
                 }
 
-
                 std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
                 // check if global configure changed
-                if (!global_cfg || global_cfg->conf_.type != body_handshake.crypt_type() ||
-                    global_cfg->conf_.switch_secret_type != body_handshake.switch_type() || global_cfg->conf_.keybits != body_handshake.crypt_bits()) {
+                if (!global_cfg || !global_cfg->check_type(crypt_type) || global_cfg->conf_.switch_secret_type != body_handshake.switch_type()) {
                     crypt_conf_t global_crypt_cfg;
                     detail::crypt_global_configure_t::default_crypt_configure(global_crypt_cfg);
-                    global_crypt_cfg.type = body_handshake.crypt_type();
+                    global_crypt_cfg.type = crypt_type;
                     global_crypt_cfg.switch_secret_type = body_handshake.switch_type();
-                    global_crypt_cfg.keybits = body_handshake.crypt_bits();
                     global_crypt_cfg.client_mode = true;
                     ::atframe::gateway::libatgw_proto_inner_v1::global_reload(global_crypt_cfg);
                     global_cfg = detail::crypt_global_configure_t::current();
@@ -779,12 +760,13 @@ namespace atframe {
             }
 
             // if not use crypt, assign crypt information and close_handshake(0)
-            if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == body_handshake.crypt_type()) {
-                crypt_handshake_->setup(::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE, 0);
+            int ret = 0;
+            if (crypt_type.empty()) {
+                ret = crypt_handshake_->setup(crypt_type);
                 crypt_read_ = crypt_handshake_;
                 crypt_write_ = crypt_handshake_;
-                close_handshake(0);
-                return 0;
+                close_handshake(ret);
+                return ret;
             }
 
             handshake_.switch_secret_type = body_handshake.switch_type();
@@ -793,13 +775,12 @@ namespace atframe {
                 return error_code_t::EN_ECT_HANDSHAKE;
             }
 
-            int ret = 0;
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
                 crypt_handshake_->secret.resize(body_handshake.crypt_param()->size());
                 memcpy(crypt_handshake_->secret.data(), body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size());
 
-                crypt_handshake_->setup(body_handshake.crypt_type(), body_handshake.crypt_bits());
+                crypt_handshake_->setup(crypt_type);
                 crypt_read_ = crypt_handshake_;
                 crypt_write_ = crypt_handshake_;
                 close_handshake(0);
@@ -868,7 +849,7 @@ namespace atframe {
 
             reconn_body = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_RECONNECT_RSP,
                                                   static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
-                                                  static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->type), crypt_handshake_->keybits);
+                                                  builder.CreateString(crypt_handshake_->type));
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, reconn_body.Union()), cs_msgIdentifier());
 
@@ -906,14 +887,16 @@ namespace atframe {
             }
 
             std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
+            std::string crypt_type;
+            if (NULL != body_handshake.crypt_type()) {
+                crypt_type = body_handshake.crypt_type()->str();
+            }
             // check if global configure changed
-            if (!global_cfg || global_cfg->conf_.type != body_handshake.crypt_type() || global_cfg->conf_.switch_secret_type != body_handshake.switch_type() ||
-                global_cfg->conf_.keybits != body_handshake.crypt_bits()) {
+            if (!global_cfg || !global_cfg->check_type(crypt_type) || global_cfg->conf_.switch_secret_type != body_handshake.switch_type()) {
                 crypt_conf_t global_crypt_cfg;
                 detail::crypt_global_configure_t::default_crypt_configure(global_crypt_cfg);
-                global_crypt_cfg.type = body_handshake.crypt_type();
+                global_crypt_cfg.type = crypt_type;
                 global_crypt_cfg.switch_secret_type = body_handshake.switch_type();
-                global_crypt_cfg.keybits = body_handshake.crypt_bits();
                 global_crypt_cfg.client_mode = true;
                 ::atframe::gateway::libatgw_proto_inner_v1::global_reload(global_crypt_cfg);
                 global_cfg = detail::crypt_global_configure_t::current();
@@ -1185,25 +1168,25 @@ namespace atframe {
             return ret;
         }
 
-        int libatgw_proto_inner_v1::pack_handshake_start_rsp(flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id,
+        int libatgw_proto_inner_v1::pack_handshake_start_rsp(flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id, std::string &crypt_type,
                                                              flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_data) {
             using namespace ::atframe::gw::inner::v1;
 
             int ret = 0;
             // if not use crypt, assign crypt information and close_handshake(0)
-            if (0 == sess_id || !crypt_handshake_->shared_conf ||
-                ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == crypt_handshake_->shared_conf->conf_.type) {
+            if (0 == sess_id || !crypt_handshake_->shared_conf || crypt_type.empty()) {
                 // empty data
                 handshake_data = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_START_RSP, switch_secret_t_EN_SST_DIRECT,
-                                                         crypt_type_t_EN_ET_NONE, 0, builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+                                                         builder.CreateString(crypt_type), builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
 
-                crypt_handshake_->setup(::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE, 0);
+                ret = crypt_handshake_->setup(crypt_type);
                 crypt_read_ = crypt_handshake_;
                 crypt_write_ = crypt_handshake_;
-                close_handshake(0);
+                close_handshake(ret);
                 return ret;
             }
 
+            // TODO using crypt_type
             crypt_handshake_->param.clear();
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
@@ -1582,7 +1565,7 @@ namespace atframe {
             }
 
             int ret = 0;
-            if (!crypt_handshake_->shared_conf || ::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == crypt_handshake_->shared_conf->conf_.type) {
+            if (!crypt_handshake_->shared_conf || crypt_handshake_->shared_conf->conf_.type.empty()) {
                 return ret;
             }
 
@@ -2117,7 +2100,7 @@ namespace atframe {
             return ss.str();
         }
 
-        int libatgw_proto_inner_v1::start_session() {
+        int libatgw_proto_inner_v1::start_session(const std::string &crypt_type) {
             if (check_flag(flag_t::EN_PFT_CLOSING)) {
                 return error_code_t::EN_ECT_CLOSING;
             }
@@ -2136,8 +2119,8 @@ namespace atframe {
             flatbuffers::Offset<cs_msg_head> header_data = Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE, ::atframe::gateway::detail::alloc_seq());
             flatbuffers::Offset<cs_body_handshake> handshake_body;
 
-            handshake_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_START_REQ, switch_secret_t_EN_SST_DIRECT, crypt_type_t_EN_ET_NONE, 0,
-                                                     builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+            handshake_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_START_REQ, switch_secret_t_EN_SST_DIRECT,
+                                                     builder.CreateString(crypt_type), builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
@@ -2154,7 +2137,10 @@ namespace atframe {
 
             // encrypt secrets
             crypt_handshake_->secret = secret;
-            crypt_handshake_->setup(type, keybits);
+            int ret = crypt_handshake_->setup(crypt_type);
+            if (ret < 0) {
+                return ret;
+            }
 
             const void *secret_buffer = NULL;
             size_t secret_length = secret.size();
@@ -2168,8 +2154,7 @@ namespace atframe {
 
             handshake_body =
                 Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_RECONNECT_REQ, static_cast<switch_secret_t>(handshake_.switch_secret_type),
-                                        static_cast< ::atframe::gw::inner::v1::crypt_type_t>(type), keybits,
-                                        builder.CreateVector(reinterpret_cast<const int8_t *>(secret_buffer), secret_length));
+                                        builder.CreateString(crypt_type), builder.CreateVector(reinterpret_cast<const int8_t *>(secret_buffer), secret_length));
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
@@ -2255,9 +2240,11 @@ namespace atframe {
                 return error_code_t::EN_ECT_CLOSING;
             }
 
-            if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == crypt_handshake_->type) {
+            if (crypt_handshake_->type.empty()) {
                 return 0;
             }
+
+            std::string crypt_type = crypt_handshake_->type;
 
             if (NULL == callbacks_ || !callbacks_->write_fn || !crypt_write_) {
                 return error_code_t::EN_ECT_MISS_CALLBACKS;
@@ -2289,7 +2276,7 @@ namespace atframe {
                 Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_POST_KEY_SYN, ::atframe::gateway::detail::alloc_seq());
 
             flatbuffers::Offset<cs_body_handshake> handshake_body;
-            ret = pack_handshake_start_rsp(builder, session_id_, handshake_body);
+            ret = pack_handshake_start_rsp(builder, session_id_, crypt_type, handshake_body);
             if (ret < 0) {
                 handshake_done(ret);
                 return ret;
