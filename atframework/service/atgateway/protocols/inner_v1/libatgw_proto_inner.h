@@ -15,8 +15,14 @@
 
 #include "../proto_base.h"
 
+#if defined(CRYPTO_USE_OPENSSL) || defined(CRYPTO_USE_LIBRESSL) || defined(CRYPTO_USE_BORINGSSL)
+#define LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL 1
+#elif defined(CRYPTO_USE_MBEDTLS)
+#define LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS 1
+#endif
+
 extern "C" {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <openssl/dh.h>
@@ -100,8 +106,11 @@ namespace atframe {
 
                 int setup(const std::string &t);
                 void close();
+                int generate_secret(int &libres);
+                int swap_secret(std::vector<unsigned char> &in, int &libres);
 
                 util::crypto::cipher cipher;
+                bool is_inited_;
             };
             typedef std::shared_ptr<crypt_session_t> crypt_session_ptr_t;
 
@@ -216,7 +225,7 @@ namespace atframe {
                 int switch_secret_type;
                 bool has_data;
                 const void *ext_data;
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 struct dh_t {
                     DH *openssl_dh_ptr_;
                 };

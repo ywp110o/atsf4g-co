@@ -48,7 +48,7 @@
 #define UNUSED(x) ((void)x)
 #endif
 
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
 
 // copy from ssl_locl.h
 #ifndef n2s
@@ -90,7 +90,7 @@ namespace atframe {
                     close();
 
 // init random engine
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                     mbedtls_ctr_drbg_init(&mbedtls_ctr_drbg_);
                     mbedtls_entropy_init(&mbedtls_entropy_);
@@ -124,7 +124,7 @@ namespace atframe {
                         size_t pem_sz = static_cast<size_t>(ftell(pem));
                         fseek(pem, 0, SEEK_SET);
 // init DH param file
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                         openssl_dh_bio_ = NULL;
 
                         do {
@@ -188,7 +188,7 @@ namespace atframe {
                     case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
                         // TODO init public key and private key
                         // mbedtls: use API in mbedtls/pk.h => mbedtls_pk_parse_public_key, mbedtls_pk_parse_keyfile
-                        // openssl/libressl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
+                        // openssl/libressl/boringssl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
                         return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                         break;
                     }
@@ -202,12 +202,20 @@ namespace atframe {
                     }
 
                     // init supported algorithms index
-                    std::vector<std::string> types;
-                    util::crypto::cipher::split_ciphers(conf_.type, types);
-                    for (size_t i = 0; i < types.size(); ++i) {
-                        std::transform(types[i].begin(), types[i].end(), types[i].begin(), ::tolower);
-                        if (NULL != util::crypto::cipher::get_cipher_by_name(types[i])) {
-                            available_types_.insert(types[i]);
+                    if (!conf_.type.empty()) {
+                        std::pair<const char *, const char *> res;
+                        res.first = res.second = conf_.type.c_str();
+                        while (NULL != res.second) {
+                            res = util::crypto::cipher::ciphertok(res.second);
+
+                            if (NULL != res.first && NULL != res.second) {
+                                std::string cipher_type;
+                                cipher_type.assign(res.first, res.second);
+                                std::transform(cipher_type.begin(), cipher_type.end(), cipher_type.begin(), ::tolower);
+                                if (NULL != util::crypto::cipher::get_cipher_by_name(cipher_type.c_str())) {
+                                    available_types_.insert(cipher_type);
+                                }
+                            }
                         }
                     }
 
@@ -228,7 +236,7 @@ namespace atframe {
                             break;
                         }
 // free DH param file
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                         if (NULL != openssl_dh_bio_) {
                             BIO_free(openssl_dh_bio_);
                             openssl_dh_bio_ = NULL;
@@ -242,7 +250,7 @@ namespace atframe {
                     case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
                         // TODO init public key and private key
                         // mbedtls: use API in mbedtls/pk.h => mbedtls_pk_parse_public_key, mbedtls_pk_parse_keyfile
-                        // openssl/libressl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
+                        // openssl/libressl/boringssl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
                         // error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                         break;
                     }
@@ -256,7 +264,7 @@ namespace atframe {
                     }
 
 // close random engine
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                     mbedtls_ctr_drbg_free(&mbedtls_ctr_drbg_);
                     mbedtls_entropy_free(&mbedtls_entropy_);
@@ -285,7 +293,7 @@ namespace atframe {
                 bool inited_;
                 LIBATGW_ENV_AUTO_SET(std::string) available_types_;
 
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 BIO *openssl_dh_bio_;
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 // move mbedtls_ctr_drbg_context and mbedtls_entropy_context here
@@ -300,12 +308,12 @@ namespace atframe {
             };
         }
 
-        libatgw_proto_inner_v1::crypt_session_t::crypt_session_t() {}
+        libatgw_proto_inner_v1::crypt_session_t::crypt_session_t() : is_inited_(false) {}
 
         libatgw_proto_inner_v1::crypt_session_t::~crypt_session_t() { close(); }
 
         int libatgw_proto_inner_v1::crypt_session_t::setup(const std::string &t) {
-            if (!type.empty()) {
+            if (is_inited_) {
                 return error_code_t::EN_ECT_CRYPT_ALREADY_INITED;
             }
 
@@ -328,12 +336,72 @@ namespace atframe {
             }
 
             type = t;
+            is_inited_ = true;
             return 0;
         }
 
         void libatgw_proto_inner_v1::crypt_session_t::close() {
             cipher.close();
             type.clear();
+            is_inited_ = false;
+        }
+
+        int libatgw_proto_inner_v1::crypt_session_t::generate_secret(int &libres) {
+            uint32_t key_bits = cipher.get_key_bits();
+            libres = 0;
+            if (!shared_conf) {
+                return error_code_t::EN_ECT_HANDSHAKE;
+            }
+
+// generate a secret key
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
+            BIGNUM *rnd_sec = BN_new();
+            if (NULL != rnd_sec) {
+                if (1 == BN_rand(rnd_sec, static_cast<int>(key_bits), 0, 0)) {
+                    secret.resize(BN_num_bytes(rnd_sec));
+                    BN_bn2bin(rnd_sec, &secret[0]);
+                } else {
+                    libres = static_cast<int>(ERR_get_error());
+                    return error_code_t::EN_ECT_HANDSHAKE;
+                }
+                BN_free(rnd_sec);
+            }
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+            {
+                size_t secret_len = key_bits / 8;
+                secret.resize(secret_len);
+                libres = mbedtls_ctr_drbg_random(&shared_conf->mbedtls_ctr_drbg_, &secret[0], secret_len);
+                if (0 != libres) {
+                    return error_code_t::EN_ECT_HANDSHAKE;
+                }
+            }
+#endif
+            if (secret.empty()) {
+                secret.resize(shared_conf->conf_.default_key.size());
+                memcpy(secret.data(), shared_conf->conf_.default_key.data(), shared_conf->conf_.default_key.size());
+            }
+
+            return swap_secret(secret, libres);
+        }
+
+        int libatgw_proto_inner_v1::crypt_session_t::swap_secret(std::vector<unsigned char> &in, int &libres) {
+            uint32_t key_bits = cipher.get_key_bits();
+            if (in.size() != key_bits / 8) {
+                in.resize(key_bits / 8, 0);
+            }
+
+            int ret = cipher.set_key(&in[0], key_bits);
+            if (ret < 0) {
+                libres = cipher.get_last_errno();
+                return ret;
+            }
+
+            if (&in != &secret) {
+                secret.swap(in);
+            }
+
+            libres = 0;
+            return 0;
         }
 
         libatgw_proto_inner_v1::libatgw_proto_inner_v1() : session_id_(0), last_write_ptr_(NULL), close_reason_(0) {
@@ -692,7 +760,29 @@ namespace atframe {
                 crypt_type = body_handshake.crypt_type()->str();
             }
 
-            // TODO select a available crypt type
+            // select a available crypt type
+            if (!crypt_type.empty()) {
+                std::pair<const char *, const char *> res;
+                res.first = res.second = crypt_type.c_str();
+                while (NULL != res.second) {
+                    res = util::crypto::cipher::ciphertok(res.second);
+
+                    if (NULL != res.first && NULL != res.second) {
+                        std::string cipher_type;
+                        cipher_type.assign(res.first, res.second);
+                        std::transform(cipher_type.begin(), cipher_type.end(), cipher_type.begin(), ::tolower);
+                        if (global_cfg->check_type(cipher_type)) {
+                            crypt_type.swap(cipher_type);
+                            break;
+                        }
+                    }
+                }
+
+                // can not find a available crypt method, disable crypt
+                if (NULL == res.second) {
+                    crypt_type.clear();
+                }
+            }
 
             callbacks_->new_session_fn(this, session_id_);
 
@@ -760,9 +850,8 @@ namespace atframe {
             }
 
             // if not use crypt, assign crypt information and close_handshake(0)
-            int ret = 0;
-            if (crypt_type.empty()) {
-                ret = crypt_handshake_->setup(crypt_type);
+            int ret = crypt_handshake_->setup(crypt_type);
+            if (crypt_type.empty() || ret < 0) {
                 crypt_read_ = crypt_handshake_;
                 crypt_write_ = crypt_handshake_;
                 close_handshake(ret);
@@ -780,10 +869,21 @@ namespace atframe {
                 crypt_handshake_->secret.resize(body_handshake.crypt_param()->size());
                 memcpy(crypt_handshake_->secret.data(), body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size());
 
-                crypt_handshake_->setup(crypt_type);
+                int libres = 0;
+                ret = crypt_handshake_->swap_secret(crypt_handshake_->secret, libres);
+                if (ret < 0) {
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
+                    ATFRAME_GATEWAY_ON_ERROR(libres, "openssl/libressl/boringssl set secret failed");
+#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
+                    ATFRAME_GATEWAY_ON_ERROR(libres, "mbedtls set secret failed");
+#else
+                    ATFRAME_GATEWAY_ON_ERROR(libres, "set secret failed");
+#endif
+                }
+
                 crypt_read_ = crypt_handshake_;
                 crypt_write_ = crypt_handshake_;
-                close_handshake(0);
+                close_handshake(ret);
 
                 // send verify
                 ret = send_verify(NULL, 0);
@@ -917,8 +1017,7 @@ namespace atframe {
         int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_req(const ::atframe::gw::inner::v1::cs_body_handshake &peer_body) {
             // check
             int ret = 0;
-            if (handshake_.switch_secret_type != peer_body.switch_type() || !crypt_handshake_->shared_conf ||
-                crypt_handshake_->shared_conf->conf_.type != peer_body.crypt_type() || crypt_handshake_->shared_conf->conf_.keybits != peer_body.crypt_bits()) {
+            if (handshake_.switch_secret_type != peer_body.switch_type() || !crypt_handshake_->shared_conf) {
                 ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "crypt information between client and server not matched.");
                 close(error_code_t::EN_ECT_HANDSHAKE, true);
                 return error_code_t::EN_ECT_HANDSHAKE;
@@ -933,10 +1032,10 @@ namespace atframe {
             crypt_handshake_->param.clear();
 
             do {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 if (NULL == handshake_.dh.openssl_dh_ptr_ || false == handshake_.has_data) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                    ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl DH not setup");
+                    ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl DH not loaded");
                     break;
                 }
 
@@ -945,7 +1044,7 @@ namespace atframe {
                 BIGNUM *pubkey = BN_bin2bn(reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data()), peer_body.crypt_param()->size(), NULL);
                 if (NULL == pubkey) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                    ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl DH decode public key failed");
+                    ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl DH decode public key failed");
                     break;
                 };
                 crypt_handshake_->secret.resize(static_cast<size_t>(sizeof(unsigned char) * (DH_size(handshake_.dh.openssl_dh_ptr_))), 0);
@@ -953,17 +1052,21 @@ namespace atframe {
                 BN_free(pubkey);
                 if (secret_len < 0) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                    ATFRAME_GATEWAY_ON_ERROR(secret_len, "openssl/libressl DH compute key failed");
+                    ATFRAME_GATEWAY_ON_ERROR(secret_len, "openssl/libressl/boringssl DH compute key failed");
                     break;
                 }
 
-                crypt_handshake_->setup(crypt_handshake_->shared_conf->conf_.type, crypt_handshake_->shared_conf->conf_.keybits);
+                if (crypt_handshake_->swap_secret(crypt_handshake_->secret, secret_len) < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(secret_len, "openssl/libressl/boringssl DH set key failed");
+                    break;
+                }
+
                 crypt_read_ = crypt_handshake_;
                 crypt_write_ = crypt_handshake_;
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 if (false == handshake_.has_data) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                    ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls DH not setup");
+                    ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls DH not loaded");
                     break;
                 }
 
@@ -987,7 +1090,11 @@ namespace atframe {
                     break;
                 }
 
-                crypt_handshake_->setup(peer_body.crypt_type(), peer_body.crypt_bits());
+                if (crypt_handshake_->swap_secret(crypt_handshake_->secret, res) < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH set key failed");
+                    break;
+                }
+
                 crypt_read_ = crypt_handshake_;
                 crypt_write_ = crypt_handshake_;
 #endif
@@ -998,10 +1105,10 @@ namespace atframe {
             size_t outsz = 0;
             if (0 == ret) {
 // generate a verify prefix
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 BIGNUM *rnd_vfy = BN_new();
                 if (NULL != rnd_vfy) {
-                    if (1 == BN_rand(rnd_vfy, static_cast<int>(crypt_handshake_->shared_conf->conf_.keybits), 0, 0)) {
+                    if (1 == BN_rand(rnd_vfy, static_cast<int>(crypt_handshake_->shared_conf->cipher.get_key_bits()), 0, 0)) {
                         char *verify_text = BN_bn2hex(rnd_vfy);
                         size_t verify_text_len = strlen(verify_text);
                         if (NULL != verify_text) {
@@ -1011,14 +1118,14 @@ namespace atframe {
                             OPENSSL_free(verify_text);
                         }
                     } else {
-                        ATFRAME_GATEWAY_ON_ERROR(static_cast<int>(ERR_get_error()), "openssl/libressl generate verify text failed");
+                        ATFRAME_GATEWAY_ON_ERROR(static_cast<int>(ERR_get_error()), "openssl/libressl/boringssl generate verify text failed");
                     }
                     BN_free(rnd_vfy);
                 }
 
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 {
-                    size_t secret_len = crypt_handshake_->shared_conf->conf_.keybits / 8;
+                    size_t secret_len = crypt_handshake_->shared_conf->cipher.get_key_bits() / 8;
                     // 3 * secret_len, 1 for binary data, 2 for hex data
                     unsigned char *verify_text = (unsigned char *)malloc((secret_len << 1) + secret_len);
                     if (NULL != verify_text) {
@@ -1042,12 +1149,12 @@ namespace atframe {
             }
 
             if (0 == ret) {
-                pubkey_rsp_body =
-                    Createcs_body_handshake(builder, session_id_, handshake_step_t_EN_HST_DH_PUBKEY_RSP, peer_body.switch_type(), peer_body.crypt_type(),
-                                            peer_body.crypt_bits(), builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), NULL == outbuf ? 0 : outsz));
+                pubkey_rsp_body = Createcs_body_handshake(builder, session_id_, handshake_step_t_EN_HST_DH_PUBKEY_RSP, peer_body.switch_type(),
+                                                          builder.CreateString(std::string()),
+                                                          builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), NULL == outbuf ? 0 : outsz));
             } else {
-                pubkey_rsp_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_DH_PUBKEY_RSP, peer_body.switch_type(), peer_body.crypt_type(),
-                                                          peer_body.crypt_bits(), builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+                pubkey_rsp_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_DH_PUBKEY_RSP, peer_body.switch_type(),
+                                                          builder.CreateString(std::string()), builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
             }
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, pubkey_rsp_body.Union()), cs_msgIdentifier());
@@ -1071,49 +1178,16 @@ namespace atframe {
 
                 // add something and encrypt it again. and send verify message
                 std::string verify_data;
-                if (crypt_handshake_->shared_conf) {
-                    verify_data.reserve(outsz + outsz);
-                    verify_data.assign(reinterpret_cast<const char *>(outbuf), outsz);
-
-// append something, verify encrypt/decript
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-                    BIGNUM *rnd_vfy = BN_new();
-                    if (NULL != rnd_vfy) {
-                        // hex size = outsz, binary size = outsz / 2, bits = outsz / 2 * 8 = outsz * 4
-                        if (1 == BN_rand(rnd_vfy, static_cast<int>(outsz << 2), 0, 0)) {
-                            char *verify_text = BN_bn2hex(rnd_vfy);
-                            if (NULL != verify_text) {
-                                verify_data += verify_text;
-                                OPENSSL_free(verify_text);
-                            }
-                        } else {
-                            ATFRAME_GATEWAY_ON_ERROR(static_cast<int>(ERR_get_error()), "openssl/libressl generate verify text failed");
-                        }
-                        BN_free(rnd_vfy);
+                verify_data.reserve(outsz);
+                verify_data.assign(reinterpret_cast<const char *>(outbuf), outsz);
+                // set all the not checked data into 0
+                for (size_t i = 0; i < verify_data.size(); ++i) {
+                    if (!(i & 0x01)) {
+                        verify_data[i] = 0;
                     }
-
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                    {
-                        size_t secret_len = outsz >> 1;
-                        verify_data.resize(outsz + outsz);
-                        // 3 * secret_len, 1 for binary data, 2 for hex data
-                        unsigned char *verify_text = (unsigned char *)malloc(secret_len);
-                        if (NULL != verify_text) {
-                            int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_, verify_text, secret_len);
-                            if (0 == res) {
-                                util::string::dumphex(verify_text, secret_len, &verify_data[outsz]);
-                            } else {
-                                ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls generate verify text failed");
-                            }
-                            free(verify_text);
-                        }
-                    }
-#endif
-                    ret = send_verify(verify_data.data(), verify_data.size());
-                } else {
-                    ret = send_verify(outbuf, outsz);
                 }
 
+                ret = send_verify(verify_data.data(), verify_data.size());
                 close_handshake(ret);
             }
 
@@ -1132,8 +1206,7 @@ namespace atframe {
 
             // check crypt info
             int ret = 0;
-            if (handshake_.switch_secret_type != body_handshake.switch_type() || !crypt_read_ || crypt_read_->type != body_handshake.crypt_type() ||
-                crypt_read_->keybits != body_handshake.crypt_bits()) {
+            if (handshake_.switch_secret_type != body_handshake.switch_type() || !crypt_read_) {
                 ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "crypt information between client and server not matched.");
                 close(error_code_t::EN_ECT_HANDSHAKE, true);
                 return error_code_t::EN_ECT_HANDSHAKE;
@@ -1146,10 +1219,14 @@ namespace atframe {
                 ret = decrypt_data(*crypt_read_, body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size(), outbuf, outsz);
                 if (0 != ret) {
                     ATFRAME_GATEWAY_ON_ERROR(ret, "verify crypt information but decode failed.");
+                } else if (outsz < crypt_read_->param.size()) { // maybe has padding
+                    ret = error_code_t::EN_ECT_HANDSHAKE;
+                    ATFRAME_GATEWAY_ON_ERROR(ret, "verify data length error.");
                 } else {
                     const unsigned char *checked_ch = reinterpret_cast<const unsigned char *>(outbuf);
                     for (size_t i = 0; checked_ch && *checked_ch && i < crypt_read_->param.size(); ++i, ++checked_ch) {
-                        if (*checked_ch != crypt_read_->param[i]) {
+                        // just check half data
+                        if ((i & 0x01) && *checked_ch != crypt_read_->param[i]) {
                             ret = error_code_t::EN_ECT_HANDSHAKE;
                             break;
                         }
@@ -1158,7 +1235,7 @@ namespace atframe {
             }
 
             if (0 == ret) {
-                // than read key updated
+                // then read key updated
                 close_handshake(0);
             } else {
                 ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_CRYPT_VERIFY, "verify failed.");
@@ -1172,14 +1249,13 @@ namespace atframe {
                                                              flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_data) {
             using namespace ::atframe::gw::inner::v1;
 
-            int ret = 0;
+            int ret = crypt_handshake_->setup(crypt_type);
             // if not use crypt, assign crypt information and close_handshake(0)
-            if (0 == sess_id || !crypt_handshake_->shared_conf || crypt_type.empty()) {
+            if (0 == sess_id || !crypt_handshake_->shared_conf || crypt_type.empty() || ret < 0) {
                 // empty data
                 handshake_data = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_START_RSP, switch_secret_t_EN_SST_DIRECT,
                                                          builder.CreateString(crypt_type), builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
 
-                ret = crypt_handshake_->setup(crypt_type);
                 crypt_read_ = crypt_handshake_;
                 crypt_write_ = crypt_handshake_;
                 close_handshake(ret);
@@ -1190,51 +1266,33 @@ namespace atframe {
             crypt_handshake_->param.clear();
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
+                int libres = 0;
+                if (crypt_handshake_->generate_secret(libres) < 0) {
 // generate a secret key
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
-                BIGNUM *rnd_sec = BN_new();
-                if (NULL != rnd_sec) {
-                    if (1 == BN_rand(rnd_sec, static_cast<int>(crypt_handshake_->shared_conf->conf_.keybits), 0, 0)) {
-                        crypt_handshake_->secret.resize(BN_num_bytes(rnd_sec));
-                        BN_bn2bin(rnd_sec, &crypt_handshake_->secret[0]);
-                    } else {
-                        ATFRAME_GATEWAY_ON_ERROR(static_cast<int>(ERR_get_error()), "openssl/libressl generate bignumber failed");
-                    }
-                    BN_free(rnd_sec);
-                }
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
+                    ATFRAME_GATEWAY_ON_ERROR(libres, "openssl/libressl/boringssl generate bignumber failed");
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                {
-                    size_t secret_len = crypt_handshake_->shared_conf->conf_.keybits / 8;
-                    crypt_handshake_->secret.resize(secret_len);
-                    int res = mbedtls_ctr_drbg_random(&crypt_handshake_->shared_conf->mbedtls_ctr_drbg_, &crypt_handshake_->secret[0], secret_len);
-                    if (0 != res) {
-                        ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls generate bignumber failed");
-                    }
-                }
+                    ATFRAME_GATEWAY_ON_ERROR(libres, "mbedtls generate bignumber failed");
+#else
+                    ATFRAME_GATEWAY_ON_ERROR(libres, "generate bignumber failed");
 #endif
-                if (crypt_handshake_->secret.empty()) {
-                    crypt_handshake_->secret.resize(crypt_handshake_->shared_conf->conf_.default_key.size());
-                    memcpy(crypt_handshake_->secret.data(), crypt_handshake_->shared_conf->conf_.default_key.data(),
-                           crypt_handshake_->shared_conf->conf_.default_key.size());
                 }
 
-                crypt_handshake_->setup(crypt_handshake_->shared_conf->conf_.type, crypt_handshake_->shared_conf->conf_.keybits);
                 crypt_write_ = crypt_handshake_;
 
                 handshake_data = Createcs_body_handshake(
                     builder, sess_id, handshake_step_t_EN_HST_START_RSP, static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
-                    static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->type), crypt_handshake_->keybits,
+                    builder.CreateString(crypt_type),
                     builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->secret.data()), crypt_handshake_->secret.size()));
 
                 break;
             }
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
-
                 do {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                     if (NULL == handshake_.dh.openssl_dh_ptr_ || false == handshake_.has_data) {
                         ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl DH not setup");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl DH not loaded");
                         break;
                     }
 
@@ -1242,13 +1300,13 @@ namespace atframe {
                     int res = DH_generate_key(handshake_.dh.openssl_dh_ptr_);
                     if (1 != res) {
                         ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl DH generate public key failed");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl DH generate public key failed");
                         break;
                     }
                     int errcode = 0;
                     res = DH_check_pub_key(handshake_.dh.openssl_dh_ptr_, handshake_.dh.openssl_dh_ptr_->pub_key, &errcode);
                     if (res != 1) {
-                        ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl DH generate check public key failed");
+                        ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl/boringssl DH generate check public key failed");
                         ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                         break;
                     }
@@ -1264,7 +1322,7 @@ namespace atframe {
                         unsigned int nr[4] = {0};
                         for (int i = 0; i < 4 && r[i] != NULL; i++) {
                             nr[i] = BN_num_bytes(r[i]);
-                            // DHM_MPI_EXPORT in mbedtls/polarssl use 2 byte to store length, so openssl/libressl should use OPENSSL_NO_SRP
+                            // DHM_MPI_EXPORT in mbedtls/polarssl use 2 byte to store length, so openssl/libressl/boringssl should use OPENSSL_NO_SRP
                             olen += static_cast<size_t>(nr[i] + 2);
                         }
 
@@ -1280,7 +1338,7 @@ namespace atframe {
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                     if (false == handshake_.has_data) {
                         ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls DH not setup");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls DH not loaded");
                         break;
                     }
 
@@ -1311,8 +1369,7 @@ namespace atframe {
                 // send send first parameter
                 handshake_data = Createcs_body_handshake(
                     builder, sess_id, handshake_step_t_EN_HST_START_RSP, static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
-                    static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_handshake_->shared_conf->conf_.type),
-                    crypt_handshake_->shared_conf->conf_.keybits,
+                    builder.CreateString(crypt_type),
                     builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size()));
 
                 break;
@@ -1348,7 +1405,7 @@ namespace atframe {
             if (0 == peer_body.session_id() || NULL == peer_body.crypt_param() || !crypt_handshake_->shared_conf) {
                 // empty data
                 handshake_data = Createcs_body_handshake(builder, peer_body.session_id(), handshake_step_t_EN_HST_DH_PUBKEY_REQ, switch_secret_t_EN_SST_DIRECT,
-                                                         crypt_type_t_EN_ET_NONE, 0, builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+                                                         builder.CreateString(std::string()), builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
 
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
             }
@@ -1356,14 +1413,14 @@ namespace atframe {
             handshake_.switch_secret_type = peer_body.switch_type();
             crypt_handshake_->param.clear();
 
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
             BIGNUM *pubkey = NULL;
 #endif
             do {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 if (NULL == handshake_.dh.openssl_dh_ptr_ || false == handshake_.has_data) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                    ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl DH not setup");
+                    ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl DH not loaded");
                     break;
                 }
 
@@ -1376,28 +1433,28 @@ namespace atframe {
 
                     // P
                     if (param_len > n) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: P SSL_R_LENGTH_TOO_SHORT");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: P SSL_R_LENGTH_TOO_SHORT");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
                     n2s(p, i);
 
                     if (i > n - param_len) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: P SSL_R_BAD_DH_P_LENGTH");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: P SSL_R_BAD_DH_P_LENGTH");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
 
                     param_len += i;
                     if (!(handshake_.dh.openssl_dh_ptr_->p = BN_bin2bn(p, i, NULL))) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: P ERR_R_BN_LIB");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: P ERR_R_BN_LIB");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
                     p += i;
 
                     if (BN_is_zero(handshake_.dh.openssl_dh_ptr_->p)) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: P SSL_R_BAD_DH_P_VALUE");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: P SSL_R_BAD_DH_P_VALUE");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
@@ -1405,28 +1462,28 @@ namespace atframe {
                     // G
                     param_len += 2;
                     if (param_len > n) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: G SSL_R_LENGTH_TOO_SHORT");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: G SSL_R_LENGTH_TOO_SHORT");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
                     n2s(p, i);
 
                     if (i > n - param_len) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: G SSL_R_BAD_DH_G_LENGTH");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: G SSL_R_BAD_DH_G_LENGTH");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
 
                     param_len += i;
                     if (!(handshake_.dh.openssl_dh_ptr_->g = BN_bin2bn(p, i, NULL))) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: G ERR_R_BN_LIB");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: G ERR_R_BN_LIB");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
                     p += i;
 
                     if (BN_is_zero(handshake_.dh.openssl_dh_ptr_->g)) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: G SSL_R_BAD_DH_G_VALUE");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: G SSL_R_BAD_DH_G_VALUE");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
@@ -1434,28 +1491,28 @@ namespace atframe {
                     // GY
                     param_len += 2;
                     if (param_len > n) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: GY SSL_R_LENGTH_TOO_SHORT");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: GY SSL_R_LENGTH_TOO_SHORT");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
                     n2s(p, i);
 
                     if (i > n - param_len) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: GY SSL_R_BAD_DH_PUB_KEY_LENGTH");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: GY SSL_R_BAD_DH_PUB_KEY_LENGTH");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
 
                     // param_len += i; // do not use **param_len** any more, it will cause static analysis to report a warning
                     if (!(pubkey = BN_bin2bn(p, i, NULL))) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: GY ERR_R_BN_LIB");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: GY ERR_R_BN_LIB");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
                     // p += i; // do not use **p** any more, it will cause static analysis to report a warning
 
                     if (BN_is_zero(pubkey)) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl read DH parameter: GY SSL_R_BAD_DH_PUB_KEY_VALUE");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: GY SSL_R_BAD_DH_PUB_KEY_VALUE");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
@@ -1464,13 +1521,13 @@ namespace atframe {
                 int res = DH_generate_key(handshake_.dh.openssl_dh_ptr_);
                 if (1 != res) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                    ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl DH generate public key failed");
+                    ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl DH generate public key failed");
                     break;
                 }
                 int errcode = 0;
                 res = DH_check_pub_key(handshake_.dh.openssl_dh_ptr_, handshake_.dh.openssl_dh_ptr_->pub_key, &errcode);
                 if (res != 1) {
-                    ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl DH generate check public key failed");
+                    ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl/boringssl DH generate check public key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                     break;
                 }
@@ -1486,16 +1543,19 @@ namespace atframe {
                 errcode = DH_compute_key(reinterpret_cast<unsigned char *>(&crypt_handshake_->secret[0]), pubkey, handshake_.dh.openssl_dh_ptr_);
                 if (errcode < 0) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                    ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl DH compute key failed");
+                    ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl/boringssl DH compute key failed");
                     break;
                 }
-                crypt_handshake_->setup(peer_body.crypt_type(), peer_body.crypt_bits());
+                if (crypt_handshake_->swap_secret(crypt_handshake_->secret, errcode) < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl/boringssl DH set key failed");
+                    break;
+                }
                 crypt_write_ = crypt_handshake_;
 
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 if (false == handshake_.has_data) {
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                    ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls DH not setup");
+                    ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls DH not loaded");
                     break;
                 }
 
@@ -1528,12 +1588,15 @@ namespace atframe {
                     break;
                 }
 
-                crypt_handshake_->setup(peer_body.crypt_type(), peer_body.crypt_bits());
+                if (crypt_handshake_->swap_secret(crypt_handshake_->secret, res) < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(res, "mbedtls DH set key failed");
+                    break;
+                }
                 crypt_write_ = crypt_handshake_;
 #endif
             } while (false);
 
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
             if (NULL != pubkey) {
                 BN_free(pubkey);
                 pubkey = NULL;
@@ -1542,7 +1605,7 @@ namespace atframe {
             // send send first parameter
             handshake_data = Createcs_body_handshake(
                 builder, peer_body.session_id(), handshake_step_t_EN_HST_DH_PUBKEY_REQ,
-                static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type), peer_body.crypt_type(), peer_body.crypt_bits(),
+                static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type), builder.CreateString(std::string()),
                 builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size()));
 
             // TODO if switch type is RSA
@@ -1573,7 +1636,7 @@ namespace atframe {
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
 // init DH param file
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 handshake_.dh.openssl_dh_ptr_ = NULL;
                 do {
                     // client mode, just init , do not read PEM file
@@ -1585,13 +1648,13 @@ namespace atframe {
                     }
                     if (!handshake_.dh.openssl_dh_ptr_) {
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl parse dhm failed");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl parse dhm failed");
                         break;
                     }
 
                     if (!crypt_handshake_->shared_conf->conf_.client_mode && 1 != DH_generate_key(handshake_.dh.openssl_dh_ptr_)) {
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl generate key failed");
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl generate key failed");
                         break;
                     }
                 } while (false);
@@ -1630,7 +1693,7 @@ namespace atframe {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
                 // TODO init public key and private key
                 // mbedtls: use API in mbedtls/pk.h => mbedtls_pk_parse_public_key, mbedtls_pk_parse_keyfile
-                // openssl/libressl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
+                // openssl/libressl/boringssl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
                 ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                 break;
             }
@@ -1663,7 +1726,7 @@ namespace atframe {
             switch (handshake_.switch_secret_type) {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
 // free DH param file
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 if (NULL != handshake_.dh.openssl_dh_ptr_) {
                     DH_free(handshake_.dh.openssl_dh_ptr_);
                     handshake_.dh.openssl_dh_ptr_ = NULL;
@@ -1678,7 +1741,7 @@ namespace atframe {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
                 // TODO init public key and private key
                 // mbedtls: use API in mbedtls/pk.h => mbedtls_pk_parse_public_key, mbedtls_pk_parse_keyfile
-                // openssl/libressl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
+                // openssl/libressl/boringssl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
                 status = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                 break;
             }
@@ -2342,8 +2405,7 @@ namespace atframe {
 
             flatbuffers::Offset<cs_body_handshake> verify_body = Createcs_body_handshake(
                 builder, sess_id, handshake_step_t_EN_HST_VERIFY, static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
-                static_cast< ::atframe::gw::inner::v1::crypt_type_t>(crypt_write_->type), crypt_write_->keybits,
-                builder.CreateVector<int8_t>(reinterpret_cast<const int8_t *>(outbuf), outsz));
+                builder.CreateString(std::string()), builder.CreateVector<int8_t>(reinterpret_cast<const int8_t *>(outbuf), outsz));
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, verify_body.Union()), cs_msgIdentifier());
             return write_msg(builder);
@@ -2450,7 +2512,7 @@ namespace atframe {
                     memset(reinterpret_cast<char *>(buffer) + insz, 0, outsz - insz);
                 }
 
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 AES_cbc_encrypt(reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer), outsz,
                                 &crypt_info.aes_key.openssl_encrypt_key, iv, AES_ENCRYPT);
 
@@ -2522,7 +2584,7 @@ namespace atframe {
                     memset(reinterpret_cast<char *>(buffer) + insz, 0, outsz - insz);
                 }
 
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 AES_cbc_encrypt(reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer), outsz,
                                 &crypt_info.aes_key.openssl_decrypt_key, iv, AES_DECRYPT);
 
