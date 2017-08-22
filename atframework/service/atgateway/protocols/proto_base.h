@@ -38,6 +38,7 @@ namespace atframe {
                 EN_ECT_MALLOC = -1024,
                 EN_ECT_CRYPT_ALREADY_INITED = -1101,
                 EN_ECT_CRYPT_VERIFY = -1102,
+                EN_ECT_CRYPT_OPERATION = -1103,
                 EN_ECT_CRYPT_READ_DHPARAM_FILE = -1211,
                 EN_ECT_CRYPT_INIT_DHPARAM = -1212,
                 EN_ECT_CRYPT_READ_RSA_PUBKEY = -1221,
@@ -61,8 +62,8 @@ namespace atframe {
                 EN_CRT_HANDSHAKE = 0x10005,
                 EN_CRT_LOGOUT = 0x10006,
                 EN_CRT_ADMINISTRATOR = 0x10007, // kickoff by administrator
-                EN_CRT_MAINTENANCE = 0x10008, // closed to maintenance
-                EN_CRT_EOF = 0x10009, // EOF means everything is finished and no more need this connection
+                EN_CRT_MAINTENANCE = 0x10008,   // closed to maintenance
+                EN_CRT_EOF = 0x10009,           // EOF means everything is finished and no more need this connection
                 EN_CRT_NO_RECONNECT_INNER_BOUND = 0x10100,
             };
         };

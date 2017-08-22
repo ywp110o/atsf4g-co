@@ -2053,8 +2053,7 @@ namespace atframe {
 
             do {
                 std::vector<unsigned char> handshake_secret;
-                int crypt_type = 0;
-                uint32_t crypt_keybits = 128;
+                std::string crypt_type;
                 if (NULL == handshake_.ext_data) {
                     ret = false;
                     break;
@@ -2067,34 +2066,53 @@ namespace atframe {
                         memcpy(handshake_secret.data(), secret->data(), secret->size());
                     }
 
-                    crypt_type = body_handshake->crypt_type();
-                    crypt_keybits = body_handshake->crypt_bits();
+                    if (NULL != body_handshake->crypt_type()) {
+                        crypt_type = body_handshake->crypt_type()->str();
+                    }
                 }
 
 
                 // check crypt type and keybits
-                if (crypt_type != other_crypt_handshake->type || crypt_keybits != other_crypt_handshake->keybits) {
+                if (crypt_type != other_crypt_handshake->type) {
                     ret = false;
                     break;
                 }
 
-                if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == other_crypt_handshake->type) {
+                if (other_crypt_handshake->type.empty()) {
                     ret = true;
                     break;
+                }
+
+                // using new cipher, old iv or block will be ignored
+                int res = crypt_handshake_->setup(crypt_type);
+                if (res < 0) {
+                    ATFRAME_GATEWAY_ON_ERROR(res, "reconnect to old session failed on setup type.");
+                    ret = false;
+                    break;
+                }
+                {
+                    std::vector<unsigned char> sec_swp = other_crypt_handshake->secret;
+                    int libres = 0;
+                    res = crypt_handshake_->swap_secret(sec_swp, libres);
+                    if (res < 0) {
+                        ATFRAME_GATEWAY_ON_ERROR(res, "reconnect to old session failed on setup secret.");
+                        ret = false;
+                        break;
+                    }
                 }
 
                 // decrypt secret
                 const void *outbuf = NULL;
                 size_t outsz = 0;
-                if (0 != decrypt_data(*other_crypt_handshake, handshake_secret.data(), handshake_secret.size(), outbuf, outsz)) {
+                if (0 != decrypt_data(*crypt_handshake_, handshake_secret.data(), handshake_secret.size(), outbuf, outsz)) {
                     ret = false;
                     break;
                 }
 
                 // compare secret and encrypted secret
                 // decrypt will padding data, so outsz should always equal or greater than secret.size()
-                if (NULL == outbuf || outsz < other_crypt_handshake->secret.size() ||
-                    0 != memcmp(outbuf, other_crypt_handshake->secret.data(), other_crypt_handshake->secret.size())) {
+                if (NULL == outbuf || outsz < crypt_handshake_->secret.size() ||
+                    0 != memcmp(outbuf, crypt_handshake_->secret.data(), crypt_handshake_->secret.size())) {
                     ret = false;
                 }
             } while (false);
@@ -2102,7 +2120,6 @@ namespace atframe {
             // if success, copy crypt information
             if (ret) {
                 session_id_ = other_proto->session_id_;
-                crypt_handshake_ = other_crypt_handshake;
                 // setup handshake
                 setup_handshake(other_crypt_handshake->shared_conf);
                 crypt_read_ = crypt_handshake_;
@@ -2141,17 +2158,19 @@ namespace atframe {
                 ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=unlimited" << std::endl;
             }
 
-#define DUMP_INFO(name, h)                                                                                                      \
-    if (h) {                                                                                                                    \
-        if (&h != &crypt_handshake_ && h == crypt_handshake_) {                                                                 \
-            ss << "    " << name << " handle: == handshake handle" << std::endl;                                                \
-        } else {                                                                                                                \
-            ss << "    " << name << " handle: crypt type=" << h->type << ", crypt keybits=" << h->keybits << ", crypt secret="; \
-            util::string::dumphex(h->secret.data(), h->secret.size(), ss);                                                      \
-            ss << std::endl;                                                                                                    \
-        }                                                                                                                       \
-    } else {                                                                                                                    \
-        ss << "    " << name << " handle: unset" << std::endl;                                                                  \
+#define DUMP_INFO(name, h)                                                       \
+    if (h) {                                                                     \
+        if (&h != &crypt_handshake_ && h == crypt_handshake_) {                  \
+            ss << "    " << name << " handle: == handshake handle" << std::endl; \
+        } else {                                                                 \
+            ss << "    " << name << " handle: crypt type=";                      \
+            util::string::dumphex(h->type.data(), h->type.size(), ss);           \
+            ss << ", crypt keybits=" << h->keybits << ", crypt secret=";         \
+            util::string::dumphex(h->secret.data(), h->secret.size(), ss);       \
+            ss << std::endl;                                                     \
+        }                                                                        \
+    } else {                                                                     \
+        ss << "    " << name << " handle: unset" << std::endl;                   \
     }
 
             DUMP_INFO("read", crypt_read_);
@@ -2199,10 +2218,17 @@ namespace atframe {
             }
 
             // encrypt secrets
-            crypt_handshake_->secret = secret;
             int ret = crypt_handshake_->setup(crypt_type);
             if (ret < 0) {
                 return ret;
+            }
+            {
+                std::vector<unsigned char> sec_swp = secret;
+                int libres = 0;
+                ret = crypt_handshake_->swap_secret(sec_swp, libres);
+                if (ret < 0) {
+                    return ret;
+                }
             }
 
             const void *secret_buffer = NULL;
@@ -2470,71 +2496,30 @@ namespace atframe {
                 return error_code_t::EN_ECT_CLOSING;
             }
 
+            if (false == crypt_info.is_inited_) {
+                return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+            }
+
             if (0 == insz || NULL == in) {
                 out = in;
                 outsz = insz;
                 return error_code_t::EN_ECT_PARAM;
             }
 
-            int ret = 0;
             void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
             size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
 
-            switch (crypt_info.type) {
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
-                outsz = ((insz - 1) | 0x03) + 1;
-
-                if (len < outsz) {
-                    return error_code_t::EN_ECT_MSG_TOO_LARGE;
-                }
-
-                memcpy(buffer, in, insz);
-                if (outsz > insz) {
-                    memset(reinterpret_cast<char *>(buffer) + insz, 0, outsz - insz);
-                }
-
-                ::util::xxtea_encrypt(&crypt_info.xtea_key.util_xxtea_ctx, buffer, outsz);
-                out = buffer;
-                break;
-            }
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
-                unsigned char iv[AES_BLOCK_SIZE];
-                memset(iv, 0, sizeof(iv));
-
-                outsz = ((insz - 1) | (AES_BLOCK_SIZE - 1)) + 1;
-
-                if (len < outsz) {
-                    return error_code_t::EN_ECT_MSG_TOO_LARGE;
-                }
-
-                memcpy(buffer, in, insz);
-                if (outsz > insz) {
-                    memset(reinterpret_cast<char *>(buffer) + insz, 0, outsz - insz);
-                }
-
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
-                AES_cbc_encrypt(reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer), outsz,
-                                &crypt_info.aes_key.openssl_encrypt_key, iv, AES_ENCRYPT);
-
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                ret = mbedtls_aes_crypt_cbc(&crypt_info.aes_key.mbedtls_aes_encrypt_ctx, MBEDTLS_AES_ENCRYPT, outsz, iv,
-                                            reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer));
-                if (ret < 0) {
-                    ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls AES encrypt failed");
-                    return ret;
-                }
-#endif
-                out = buffer;
-                break;
-            }
-            default: {
-                out = in;
-                outsz = insz;
-                break;
-            }
+            int res = crypt_info.cipher.encrypt(reinterpret_cast<const unsigned char *>(in), insz, reinterpret_cast<const unsigned char *>(buffer), &len);
+            if (res < 0) {
+                out = NULL;
+                outsz = 0;
+                ATFRAME_GATEWAY_ON_ERROR(res, "encrypt data failed");
+                return error_code_t::EN_ECT_CRYPT_OPERATION;
             }
 
-            return ret;
+            out = buffer;
+            outsz = len;
+            return error_code_t::EN_ECT_SUCCESS;
         }
 
         int libatgw_proto_inner_v1::decrypt_data(crypt_session_t &crypt_info, const void *in, size_t insz, const void *&out, size_t &outsz) {
@@ -2542,71 +2527,29 @@ namespace atframe {
                 return error_code_t::EN_ECT_CLOSING;
             }
 
+            if (false == crypt_info.is_inited_) {
+                return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+            }
+
             if (0 == insz || NULL == in) {
                 out = in;
                 outsz = insz;
                 return error_code_t::EN_ECT_PARAM;
             }
 
-            int ret = 0;
             void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
             size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
-
-            switch (crypt_info.type) {
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_XXTEA: {
-                outsz = ((insz - 1) | 0x03) + 1;
-
-                if (len < outsz) {
-                    return error_code_t::EN_ECT_MSG_TOO_LARGE;
-                }
-
-                memcpy(buffer, in, insz);
-                if (outsz > insz) {
-                    memset(reinterpret_cast<char *>(buffer) + insz, 0, outsz - insz);
-                }
-
-                ::util::xxtea_decrypt(&crypt_info.xtea_key.util_xxtea_ctx, buffer, outsz);
-                out = buffer;
-                break;
-            }
-            case ::atframe::gw::inner::v1::crypt_type_t_EN_ET_AES: {
-                unsigned char iv[AES_BLOCK_SIZE];
-                memset(iv, 0, sizeof(iv));
-
-                outsz = ((insz - 1) | (AES_BLOCK_SIZE - 1)) + 1;
-
-                if (len < outsz) {
-                    return error_code_t::EN_ECT_MSG_TOO_LARGE;
-                }
-
-                memcpy(buffer, in, insz);
-                if (outsz > insz) {
-                    memset(reinterpret_cast<char *>(buffer) + insz, 0, outsz - insz);
-                }
-
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
-                AES_cbc_encrypt(reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer), outsz,
-                                &crypt_info.aes_key.openssl_decrypt_key, iv, AES_DECRYPT);
-
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                ret = mbedtls_aes_crypt_cbc(&crypt_info.aes_key.mbedtls_aes_decrypt_ctx, MBEDTLS_AES_DECRYPT, outsz, iv,
-                                            reinterpret_cast<const unsigned char *>(buffer), reinterpret_cast<unsigned char *>(buffer));
-                if (ret < 0) {
-                    ATFRAME_GATEWAY_ON_ERROR(ret, "mbedtls AES decrypt failed");
-                    return ret;
-                }
-#endif
-                out = buffer;
-                break;
-            }
-            default: {
-                out = in;
-                outsz = insz;
-                break;
-            }
+            int res = crypt_info.cipher.decrypt(reinterpret_cast<const unsigned char *>(in), insz, reinterpret_cast<const unsigned char *>(buffer), &len);
+            if (res < 0) {
+                out = NULL;
+                outsz = 0;
+                ATFRAME_GATEWAY_ON_ERROR(res, "decrypt data failed");
+                return error_code_t::EN_ECT_CRYPT_OPERATION;
             }
 
-            return ret;
+            out = buffer;
+            outsz = len;
+            return error_code_t::EN_ECT_SUCCESS;
         }
 
         int libatgw_proto_inner_v1::global_reload(crypt_conf_t &crypt_conf) {
