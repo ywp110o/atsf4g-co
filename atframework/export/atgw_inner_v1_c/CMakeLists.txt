@@ -13,6 +13,7 @@ include_directories("${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols" ${ATFR
 list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols/proto_base.cpp)
 list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols/inner_v1/libatgw_proto_inner.cpp)
 list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/xxtea.cpp)
+list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/crypto_cipher.cpp)
 list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/murmur_hash.cpp)
 list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_ATBUS_SRC_DIR}/detail/buffer.cpp)
 

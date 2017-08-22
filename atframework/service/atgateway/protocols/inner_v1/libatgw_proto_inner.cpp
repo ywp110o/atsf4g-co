@@ -101,7 +101,7 @@ namespace atframe {
                     }
 #endif
 
-                    if (::atframe::gw::inner::v1::crypt_type_t_EN_ET_NONE == conf_.type) {
+                    if (conf_.type.empty()) {
                         inited_ = true;
                         return ret;
                     }
@@ -1108,7 +1108,7 @@ namespace atframe {
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 BIGNUM *rnd_vfy = BN_new();
                 if (NULL != rnd_vfy) {
-                    if (1 == BN_rand(rnd_vfy, static_cast<int>(crypt_handshake_->shared_conf->cipher.get_key_bits()), 0, 0)) {
+                    if (1 == BN_rand(rnd_vfy, static_cast<int>(crypt_handshake_->cipher.get_key_bits()), 0, 0)) {
                         char *verify_text = BN_bn2hex(rnd_vfy);
                         size_t verify_text_len = strlen(verify_text);
                         if (NULL != verify_text) {
@@ -2158,19 +2158,19 @@ namespace atframe {
                 ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=unlimited" << std::endl;
             }
 
-#define DUMP_INFO(name, h)                                                       \
-    if (h) {                                                                     \
-        if (&h != &crypt_handshake_ && h == crypt_handshake_) {                  \
-            ss << "    " << name << " handle: == handshake handle" << std::endl; \
-        } else {                                                                 \
-            ss << "    " << name << " handle: crypt type=";                      \
-            util::string::dumphex(h->type.data(), h->type.size(), ss);           \
-            ss << ", crypt keybits=" << h->keybits << ", crypt secret=";         \
-            util::string::dumphex(h->secret.data(), h->secret.size(), ss);       \
-            ss << std::endl;                                                     \
-        }                                                                        \
-    } else {                                                                     \
-        ss << "    " << name << " handle: unset" << std::endl;                   \
+#define DUMP_INFO(name, h)                                                             \
+    if (h) {                                                                           \
+        if (&h != &crypt_handshake_ && h == crypt_handshake_) {                        \
+            ss << "    " << name << " handle: == handshake handle" << std::endl;       \
+        } else {                                                                       \
+            ss << "    " << name << " handle: crypt type=";                            \
+            util::string::dumphex(h->type.data(), h->type.size(), ss);                 \
+            ss << ", crypt keybits=" << h->cipher.get_key_bits() << ", crypt secret="; \
+            util::string::dumphex(h->secret.data(), h->secret.size(), ss);             \
+            ss << std::endl;                                                           \
+        }                                                                              \
+    } else {                                                                           \
+        ss << "    " << name << " handle: unset" << std::endl;                         \
     }
 
             DUMP_INFO("read", crypt_read_);
@@ -2509,7 +2509,7 @@ namespace atframe {
             void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
             size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
 
-            int res = crypt_info.cipher.encrypt(reinterpret_cast<const unsigned char *>(in), insz, reinterpret_cast<const unsigned char *>(buffer), &len);
+            int res = crypt_info.cipher.encrypt(reinterpret_cast<const unsigned char *>(in), insz, reinterpret_cast<unsigned char *>(buffer), &len);
             if (res < 0) {
                 out = NULL;
                 outsz = 0;
@@ -2539,7 +2539,7 @@ namespace atframe {
 
             void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
             size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
-            int res = crypt_info.cipher.decrypt(reinterpret_cast<const unsigned char *>(in), insz, reinterpret_cast<const unsigned char *>(buffer), &len);
+            int res = crypt_info.cipher.decrypt(reinterpret_cast<const unsigned char *>(in), insz, reinterpret_cast<unsigned char *>(buffer), &len);
             if (res < 0) {
                 out = NULL;
                 outsz = 0;

@@ -149,7 +149,6 @@ public:
             std::string val;
             cfg.dump_to("atgateway.client.crypt.key", crypt_conf.default_key);
             cfg.dump_to("atgateway.client.crypt.update_interval", crypt_conf.update_interval);
-            cfg.dump_to("atgateway.client.crypt.keybits", crypt_conf.keybits);
             cfg.dump_to("atgateway.client.crypt.type", crypt_conf.type);
 
             // rsa

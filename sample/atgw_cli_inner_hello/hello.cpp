@@ -118,12 +118,11 @@ static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
         std::vector<unsigned char> secret;
         uint64_t secret_len = libatgw_inner_v1_c_get_crypt_secret_size(g_client_sess.proto->ctx);
         secret.resize(secret_len);
-        int32_t crypt_type = libatgw_inner_v1_c_get_crypt_type(g_client_sess.proto->ctx);
-        uint32_t crypt_keybits = libatgw_inner_v1_c_get_crypt_keybits(g_client_sess.proto->ctx);
+        std::string crypt_type = libatgw_inner_v1_c_get_crypt_type(g_client_sess.proto->ctx);
         libatgw_inner_v1_c_copy_crypt_secret(g_client_sess.proto->ctx, &secret[0], secret_len);
 
         g_client_sess.proto = sess_proto;
-        ret = libatgw_inner_v1_c_reconnect_session(sess_proto->ctx, g_client_sess.session_id, crypt_type, &secret[0], secret_len, crypt_keybits);
+        ret = libatgw_inner_v1_c_reconnect_session(sess_proto->ctx, g_client_sess.session_id, crypt_type.c_str(), &secret[0], secret_len);
     } else {
         g_client_sess.proto = sess_proto;
 

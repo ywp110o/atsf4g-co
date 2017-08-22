@@ -296,12 +296,12 @@ ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_session_id(libatgw
     return ATGW_CONTEXT(context)->get_session_id();
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_get_crypt_type(libatgw_inner_v1_c_context context) {
+ATFRAME_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_get_crypt_type(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
 
-    return ATGW_CONTEXT(context)->get_crypt_handshake()->type;
+    return ATGW_CONTEXT(context)->get_crypt_handshake()->type.c_str();
 }
 
 ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_crypt_secret_size(libatgw_inner_v1_c_context context) {
@@ -332,7 +332,7 @@ ATFRAME_SYMBOL_EXPORT uint32_t __cdecl libatgw_inner_v1_c_get_crypt_keybits(liba
         return 0;
     }
 
-    return ATGW_CONTEXT(context)->get_crypt_handshake()->cipher->get_key_bits();
+    return ATGW_CONTEXT(context)->get_crypt_handshake()->cipher.get_key_bits();
 }
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read_alloc(libatgw_inner_v1_c_context context, uint64_t suggested_size, char **out_buf,
