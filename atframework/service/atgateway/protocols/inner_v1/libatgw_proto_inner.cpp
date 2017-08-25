@@ -205,6 +205,13 @@ namespace atframe {
                     if (!conf_.type.empty()) {
                         std::pair<const char *, const char *> res;
                         res.first = res.second = conf_.type.c_str();
+
+                        LIBATGW_ENV_AUTO_SET(std::string) all_supported_type_set;
+                        const std::vector<std::string> & all_supported_type_list = util::crypto::cipher::get_all_cipher_names();
+                        for (size_t i = 0; i < all_supported_type_list.size(); ++ i) {
+                            all_supported_type_set.insert(all_supported_type_list[i]);
+                        }
+
                         while (NULL != res.second) {
                             res = util::crypto::cipher::ciphertok(res.second);
 
@@ -212,7 +219,7 @@ namespace atframe {
                                 std::string cipher_type;
                                 cipher_type.assign(res.first, res.second);
                                 std::transform(cipher_type.begin(), cipher_type.end(), cipher_type.begin(), ::tolower);
-                                if (NULL != util::crypto::cipher::get_cipher_by_name(cipher_type.c_str())) {
+                                if (all_supported_type_set.find(cipher_type) != all_supported_type_set.end()) {
                                     available_types_.insert(cipher_type);
                                 }
                             }
@@ -770,7 +777,6 @@ namespace atframe {
                     if (NULL != res.first && NULL != res.second) {
                         std::string cipher_type;
                         cipher_type.assign(res.first, res.second);
-                        std::transform(cipher_type.begin(), cipher_type.end(), cipher_type.begin(), ::tolower);
                         if (global_cfg->check_type(cipher_type)) {
                             crypt_type.swap(cipher_type);
                             break;

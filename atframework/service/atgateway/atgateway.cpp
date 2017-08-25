@@ -691,6 +691,9 @@ int main(int argc, char *argv[]) {
         util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
     }
 
+    // setup crypt algorithms
+    util::crypto::cipher::init_global_algorithm();
+
     // setup module
     app.add_module(gw_mod);
 

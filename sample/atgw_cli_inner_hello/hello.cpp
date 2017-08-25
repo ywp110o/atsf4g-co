@@ -361,6 +361,9 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // setup crypt algorithms
+    libatgw_inner_v1_c_global_init_algorithms();
+
     // init
     libatgw_inner_v1_c_gset_on_write_start_fn(proto_inner_callback_on_write);
     libatgw_inner_v1_c_gset_on_message_fn(proto_inner_callback_on_message);

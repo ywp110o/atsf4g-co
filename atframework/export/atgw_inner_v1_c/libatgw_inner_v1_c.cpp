@@ -170,6 +170,10 @@ static ::atframe::gateway::proto_base::proto_callbacks_t *libatgw_inner_v1_c_get
 extern "C" {
 #endif
 
+ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_init_algorithms() {
+    util::crypto::cipher::init_global_algorithm();
+}
+
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_write_start_fn(libatgw_inner_v1_c_on_write_start_fn_t fn) {
     libatgw_inner_v1_c_get_c_callbacks()->write_start_fn = fn;
 }

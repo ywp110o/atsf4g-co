@@ -64,6 +64,7 @@ typedef int32_t (*libatgw_inner_v1_c_on_close_fn_t)(libatgw_inner_v1_c_context, 
 typedef int32_t (*libatgw_inner_v1_c_on_handshake_done_fn_t)(libatgw_inner_v1_c_context, int32_t);
 typedef int32_t (*libatgw_inner_v1_c_on_error_fn_t)(libatgw_inner_v1_c_context, const char *, int32_t, int32_t, const char *);
 
+ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_init_algorithms();
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_write_start_fn(libatgw_inner_v1_c_on_write_start_fn_t fn);
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_message_fn(libatgw_inner_v1_c_on_message_fn_t fn);
