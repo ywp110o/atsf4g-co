@@ -953,9 +953,6 @@ namespace atframe {
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, reconn_body.Union()), cs_msgIdentifier());
 
-            crypt_read_ = crypt_handshake_;
-            crypt_write_ = crypt_handshake_;
-
             if (0 != ret) {
                 write_msg(builder);
                 close_handshake(ret);
@@ -2078,11 +2075,6 @@ namespace atframe {
                     break;
                 }
 
-                if (other_crypt_handshake->type.empty()) {
-                    ret = true;
-                    break;
-                }
-
                 // using new cipher, old iv or block will be ignored
                 int res = crypt_handshake_->setup(crypt_type);
                 if (res < 0) {
@@ -2090,6 +2082,12 @@ namespace atframe {
                     ret = false;
                     break;
                 }
+
+                if (crypt_type.empty()) {
+                    ret = true;
+                    break;
+                }
+
                 {
                     std::vector<unsigned char> sec_swp = other_crypt_handshake->secret;
                     int libres = 0;
@@ -2164,7 +2162,7 @@ namespace atframe {
             ss << "    " << name << " handle: == handshake handle" << std::endl;       \
         } else {                                                                       \
             ss << "    " << name << " handle: crypt type=";                            \
-            util::string::dumphex(h->type.data(), h->type.size(), ss);                 \
+            ss << (h->type.empty() ? "NONE" : h->type.c_str());                        \
             ss << ", crypt keybits=" << h->cipher.get_key_bits() << ", crypt secret="; \
             util::string::dumphex(h->secret.data(), h->secret.size(), ss);             \
             ss << std::endl;                                                           \
@@ -2222,7 +2220,7 @@ namespace atframe {
             if (ret < 0) {
                 return ret;
             }
-            {
+            if (!crypt_type.empty()) {
                 std::vector<unsigned char> sec_swp = secret;
                 int libres = 0;
                 ret = crypt_handshake_->swap_secret(sec_swp, libres);
@@ -2506,6 +2504,12 @@ namespace atframe {
                 return error_code_t::EN_ECT_PARAM;
             }
 
+            if (crypt_info.type.empty()) {
+                out = in;
+                outsz = insz;
+                return error_code_t::EN_ECT_SUCCESS;
+            }
+
             void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
             size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
 
@@ -2535,6 +2539,12 @@ namespace atframe {
                 out = in;
                 outsz = insz;
                 return error_code_t::EN_ECT_PARAM;
+            }
+
+            if (crypt_info.type.empty()) {
+                out = in;
+                outsz = insz;
+                return error_code_t::EN_ECT_SUCCESS;
             }
 
             void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);

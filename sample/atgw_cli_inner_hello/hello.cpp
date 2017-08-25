@@ -273,7 +273,9 @@ static int proto_inner_callback_on_close(libatgw_inner_v1_c_context ctx, int32_t
     }
 
     printf("close socket start, reason: %d\n", reason);
-    uv_close((uv_handle_t *)&g_client.tcp_sock, libuv_close_sock_callback);
+    if (0 == uv_is_closing((uv_handle_t *)&g_client.tcp_sock)) {
+        uv_close((uv_handle_t *)&g_client.tcp_sock, libuv_close_sock_callback);
+    }
 
     g_client_sess.allow_reconnect = 1000 > reason;
     return 0;

@@ -394,6 +394,7 @@ namespace atframe {
 
             session *self = reinterpret_cast<session *>(handle->data);
             assert(self);
+            self->set_flag(flag_t::EN_FT_CLOSING_FD, false);
 
             // free session object
             ptr_t *holder = reinterpret_cast<ptr_t *>(self->shutdown_req_.data);
