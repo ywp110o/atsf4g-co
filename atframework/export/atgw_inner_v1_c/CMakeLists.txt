@@ -1,6 +1,11 @@
 ﻿# ============ export - [...] ============
 get_filename_component(EXPORT_SRC_BIN_NAME ${CMAKE_CURRENT_LIST_DIR} NAME_WE)
-set(EXPORT_SRC_BIN_NAME "lib${EXPORT_SRC_BIN_NAME}")
+if(WIN32 AND NOT MINGW AND NOT CYGWIN)
+    set(EXPORT_SRC_BIN_NAME ${EXPORT_LIBATGW_INNER_V1_C_BIN_NAME})
+else()
+    set(EXPORT_SRC_BIN_NAME ${EXPORT_LIBATGW_INNER_V1_C_BIN_NAME})
+endif()
+
 EchoWithColor(COLOR GREEN "-- Configure ${EXPORT_SRC_BIN_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR} EXPORT_SRC_LIST)

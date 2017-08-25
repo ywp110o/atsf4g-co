@@ -1128,7 +1128,7 @@ namespace atframe {
 
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                 {
-                    size_t secret_len = crypt_handshake_->shared_conf->cipher.get_key_bits() / 8;
+                    size_t secret_len = crypt_handshake_->cipher.get_key_bits() / 8;
                     // 3 * secret_len, 1 for binary data, 2 for hex data
                     unsigned char *verify_text = (unsigned char *)malloc((secret_len << 1) + secret_len);
                     if (NULL != verify_text) {

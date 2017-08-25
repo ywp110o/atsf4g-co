@@ -52,7 +52,7 @@ endif()
 
 add_executable(${SAMPLE_SRC_BIN_NAME} ${SAMPLE_SRC_LIST})
 target_link_libraries(${SAMPLE_SRC_BIN_NAME}
-    libatgw_inner_v1_c
+    ${EXPORT_LIBATGW_INNER_V1_C_BIN_NAME}
     ${3RD_PARTY_LIBUV_LINK_NAME}
     ${3RD_PARTY_CRYPT_LINK_NAME}
     ${EXTENTION_LINK_LIB}
