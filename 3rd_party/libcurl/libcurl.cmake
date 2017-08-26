@@ -21,6 +21,10 @@ if (LIBCURL_ROOT)
     list(APPEND CMAKE_INCLUDE_PATH "${LIBCURL_ROOT}/include")
 endif()
 
+if (NOT EXISTS ${3RD_PARTY_LIBCURL_PKG_DIR})
+    file(MAKE_DIRECTORY ${3RD_PARTY_LIBCURL_PKG_DIR})
+endif()
+
 FindConfigurePackage(
     PACKAGE CURL
     BUILD_WITH_CMAKE
