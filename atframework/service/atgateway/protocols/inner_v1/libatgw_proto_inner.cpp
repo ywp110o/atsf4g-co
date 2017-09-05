@@ -67,6 +67,12 @@
 #undef max
 #endif
 
+// DEBUG CIPHER PROGRESS
+#ifdef LIBATFRAME_ATGATEWAY_ENABLE_CIPHER_DEBUG
+#include <fstream>
+std::fstream debuger_fout = std::fstream("debug.log", std::ios::out);
+#endif
+
 namespace atframe {
     namespace gateway {
         namespace detail {
@@ -207,8 +213,8 @@ namespace atframe {
                         res.first = res.second = conf_.type.c_str();
 
                         LIBATGW_ENV_AUTO_SET(std::string) all_supported_type_set;
-                        const std::vector<std::string> & all_supported_type_list = util::crypto::cipher::get_all_cipher_names();
-                        for (size_t i = 0; i < all_supported_type_list.size(); ++ i) {
+                        const std::vector<std::string> &all_supported_type_list = util::crypto::cipher::get_all_cipher_names();
+                        for (size_t i = 0; i < all_supported_type_list.size(); ++i) {
                             all_supported_type_set.insert(all_supported_type_list[i]);
                         }
 
@@ -355,6 +361,7 @@ namespace atframe {
 
         int libatgw_proto_inner_v1::crypt_session_t::generate_secret(int &libres) {
             uint32_t key_bits = cipher.get_key_bits();
+            uint32_t iv_size = cipher.get_iv_size();
             libres = 0;
             if (!shared_conf) {
                 return error_code_t::EN_ECT_HANDSHAKE;
@@ -364,7 +371,7 @@ namespace atframe {
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
             BIGNUM *rnd_sec = BN_new();
             if (NULL != rnd_sec) {
-                if (1 == BN_rand(rnd_sec, static_cast<int>(key_bits), 0, 0)) {
+                if (1 == BN_rand(rnd_sec, static_cast<int>(key_bits + iv_size * 8), 0, 0)) {
                     secret.resize(BN_num_bytes(rnd_sec));
                     BN_bn2bin(rnd_sec, &secret[0]);
                 } else {
@@ -375,7 +382,7 @@ namespace atframe {
             }
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
             {
-                size_t secret_len = key_bits / 8;
+                size_t secret_len = key_bits / 8 + iv_size;
                 secret.resize(secret_len);
                 libres = mbedtls_ctr_drbg_random(&shared_conf->mbedtls_ctr_drbg_, &secret[0], secret_len);
                 if (0 != libres) {
@@ -393,11 +400,28 @@ namespace atframe {
 
         int libatgw_proto_inner_v1::crypt_session_t::swap_secret(std::vector<unsigned char> &in, int &libres) {
             uint32_t key_bits = cipher.get_key_bits();
-            if (in.size() != key_bits / 8) {
+            uint32_t iv_size = cipher.get_iv_size();
+            if (in.size() < key_bits / 8) {
                 in.resize(key_bits / 8, 0);
             }
 
-            int ret = cipher.set_key(&in[0], key_bits);
+            int ret = 0;
+            if (iv_size > 0 && in.size() >= iv_size + key_bits / 8) {
+                // iv should be just after key
+                ret = cipher.set_iv(&in[key_bits / 8], iv_size);
+                if (ret < 0) {
+                    libres = cipher.get_last_errno();
+                    return ret;
+                }
+            }
+
+            ret = cipher.set_key(&in[0], key_bits);
+// DEBUG CIPHER PROGRESS
+#ifdef LIBATFRAME_ATGATEWAY_ENABLE_CIPHER_DEBUG
+            debuger_fout << &cipher << " => swap_secret: ";
+            util::string::dumphex(&in[0], in.size(), debuger_fout);
+            debuger_fout << " , res: " << cipher.get_last_errno() << std::endl;
+#endif
             if (ret < 0) {
                 libres = cipher.get_last_errno();
                 return ret;
@@ -1722,6 +1746,11 @@ namespace atframe {
 
             if (!handshake_.has_data) {
                 handshake_done(status);
+
+// DEBUG CIPHER PROGRESS
+#ifdef LIBATFRAME_ATGATEWAY_ENABLE_CIPHER_DEBUG
+                debuger_fout << &crypt_handshake_->cipher << " => close_handshake - status: " << status << std::endl;
+#endif
                 return;
             }
             handshake_.has_data = false;
@@ -1758,6 +1787,11 @@ namespace atframe {
             }
 
             handshake_done(status);
+
+// DEBUG CIPHER PROGRESS
+#ifdef LIBATFRAME_ATGATEWAY_ENABLE_CIPHER_DEBUG
+            debuger_fout << &crypt_handshake_->cipher << " => close_handshake - status: " << status << std::endl;
+#endif
         }
 
         int libatgw_proto_inner_v1::try_write() {
@@ -2520,6 +2554,16 @@ namespace atframe {
             size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
 
             int res = crypt_info.cipher.encrypt(reinterpret_cast<const unsigned char *>(in), insz, reinterpret_cast<unsigned char *>(buffer), &len);
+
+// DEBUG CIPHER PROGRESS
+#ifdef LIBATFRAME_ATGATEWAY_ENABLE_CIPHER_DEBUG
+            debuger_fout << &crypt_info.cipher << " => encrypt_data - before: ";
+            util::string::dumphex(in, insz, debuger_fout);
+            debuger_fout << std::endl;
+            debuger_fout << &crypt_info.cipher << " => encrypt_data - after: ";
+            util::string::dumphex(buffer, len, debuger_fout);
+            debuger_fout << std::endl;
+#endif
             if (res < 0) {
                 out = NULL;
                 outsz = 0;
@@ -2556,6 +2600,16 @@ namespace atframe {
             void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
             size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
             int res = crypt_info.cipher.decrypt(reinterpret_cast<const unsigned char *>(in), insz, reinterpret_cast<unsigned char *>(buffer), &len);
+
+// DEBUG CIPHER PROGRESS
+#ifdef LIBATFRAME_ATGATEWAY_ENABLE_CIPHER_DEBUG
+            debuger_fout << &crypt_info.cipher << " => decrypt_data - before: ";
+            util::string::dumphex(in, insz, debuger_fout);
+            debuger_fout << std::endl;
+            debuger_fout << &crypt_info.cipher << " => decrypt_data - after: ";
+            util::string::dumphex(buffer, len, debuger_fout);
+            debuger_fout << std::endl;
+#endif
             if (res < 0) {
                 out = NULL;
                 outsz = 0;
