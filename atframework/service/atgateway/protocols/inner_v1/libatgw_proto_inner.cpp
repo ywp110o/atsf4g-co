@@ -97,6 +97,7 @@ namespace atframe {
 
 // init random engine
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
+                    openssl_dh_bio_ = NULL;
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
                     mbedtls_ctr_drbg_init(&mbedtls_ctr_drbg_);
                     mbedtls_entropy_init(&mbedtls_entropy_);
@@ -131,8 +132,6 @@ namespace atframe {
                         fseek(pem, 0, SEEK_SET);
 // init DH param file
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
-                        openssl_dh_bio_ = NULL;
-
                         do {
                             unsigned char *pem_buf = reinterpret_cast<unsigned char *>(calloc(pem_sz, sizeof(unsigned char)));
                             if (!pem_buf) {
@@ -166,14 +165,14 @@ namespace atframe {
                         }
 // PEM_read_DHparams
 #elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                        // mbedtls_dhm_read_params
-                        mbedtls_dh_param_.resize(pem_sz * sizeof(unsigned char), 0);
+                        // mbedtls_dhm_read_params must has last character to be zero, so add one zero to the end
+                        mbedtls_dh_param_.resize(pem_sz * sizeof(unsigned char) + 1, 0);
                         fread(&mbedtls_dh_param_[0], sizeof(unsigned char), pem_sz, pem);
 
                         // test
                         mbedtls_dhm_context test_dh_ctx;
                         mbedtls_dhm_init(&test_dh_ctx);
-                        if (0 != mbedtls_dhm_parse_dhm(&test_dh_ctx, reinterpret_cast<const unsigned char *>(mbedtls_dh_param_.data()), pem_sz)) {
+                        if (0 != mbedtls_dhm_parse_dhm(&test_dh_ctx, reinterpret_cast<const unsigned char *>(mbedtls_dh_param_.data()), pem_sz + 1)) {
                             ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         } else {
                             mbedtls_dhm_free(&test_dh_ctx);

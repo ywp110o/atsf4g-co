@@ -39,7 +39,6 @@ extern "C" {
 #include "mbedtls/dhm.h"
 #include "mbedtls/ecdh.h"
 #include "mbedtls/entropy.h"
-#include "mbedtls/net_sockets.h"
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha1.h"
 
