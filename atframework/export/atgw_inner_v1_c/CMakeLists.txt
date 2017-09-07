@@ -1,6 +1,11 @@
 ﻿# ============ export - [...] ============
 get_filename_component(EXPORT_SRC_BIN_NAME ${CMAKE_CURRENT_LIST_DIR} NAME_WE)
-set(EXPORT_SRC_BIN_NAME "lib${EXPORT_SRC_BIN_NAME}")
+if(WIN32 AND NOT MINGW AND NOT CYGWIN)
+    set(EXPORT_SRC_BIN_NAME ${EXPORT_LIBATGW_INNER_V1_C_BIN_NAME})
+else()
+    set(EXPORT_SRC_BIN_NAME ${EXPORT_LIBATGW_INNER_V1_C_BIN_NAME})
+endif()
+
 EchoWithColor(COLOR GREEN "-- Configure ${EXPORT_SRC_BIN_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR} EXPORT_SRC_LIST)
@@ -13,6 +18,7 @@ include_directories("${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols" ${ATFR
 list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols/proto_base.cpp)
 list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols/inner_v1/libatgw_proto_inner.cpp)
 list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/xxtea.cpp)
+list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/crypto_cipher.cpp)
 list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/murmur_hash.cpp)
 list(APPEND EXPORT_SRC_LIST ${ATFRAMEWORK_ATBUS_SRC_DIR}/detail/buffer.cpp)
 
@@ -117,15 +123,6 @@ file(RENAME "${EXPORT_SOURCE_DIR}/CMakeLists.export.txt" "${EXPORT_SOURCE_DIR}/C
 # ----- copy script files -----
 file(COPY "${CMAKE_CURRENT_LIST_DIR}/build_ios.sh" DESTINATION ${EXPORT_SOURCE_DIR} USE_SOURCE_PERMISSIONS)
 file(COPY "${CMAKE_CURRENT_LIST_DIR}/build_android.sh" DESTINATION ${EXPORT_SOURCE_DIR} USE_SOURCE_PERMISSIONS)
-
-# crypt library check
-if (OPENSSL_FOUND)
-    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL=1)
-elseif(LIBRESSL_FOUND)
-    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL=1)
-elseif(MBEDTLS_FOUND)
-    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS=1)
-endif()
 
 add_library(${EXPORT_SRC_BIN_NAME} SHARED ${EXPORT_SRC_LIST})
 target_link_libraries(${EXPORT_SRC_BIN_NAME}

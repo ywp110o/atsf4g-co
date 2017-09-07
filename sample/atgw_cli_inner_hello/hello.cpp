@@ -46,6 +46,7 @@ client_session_data_t g_client_sess;
 
 std::string g_host;
 int g_port;
+std::string crypt_types;
 
 // ======================== 以下为网络处理及回调 ========================
 static int close_sock();
@@ -117,16 +118,15 @@ static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
         std::vector<unsigned char> secret;
         uint64_t secret_len = libatgw_inner_v1_c_get_crypt_secret_size(g_client_sess.proto->ctx);
         secret.resize(secret_len);
-        int32_t crypt_type = libatgw_inner_v1_c_get_crypt_type(g_client_sess.proto->ctx);
-        uint32_t crypt_keybits = libatgw_inner_v1_c_get_crypt_keybits(g_client_sess.proto->ctx);
+        std::string crypt_type = libatgw_inner_v1_c_get_crypt_type(g_client_sess.proto->ctx);
         libatgw_inner_v1_c_copy_crypt_secret(g_client_sess.proto->ctx, &secret[0], secret_len);
 
         g_client_sess.proto = sess_proto;
-        ret = libatgw_inner_v1_c_reconnect_session(sess_proto->ctx, g_client_sess.session_id, crypt_type, &secret[0], secret_len, crypt_keybits);
+        ret = libatgw_inner_v1_c_reconnect_session(sess_proto->ctx, g_client_sess.session_id, crypt_type.c_str(), &secret[0], secret_len);
     } else {
         g_client_sess.proto = sess_proto;
 
-        ret = libatgw_inner_v1_c_start_session(sess_proto->ctx);
+        ret = libatgw_inner_v1_c_start_session(sess_proto->ctx, crypt_types.c_str());
     }
     if (0 != ret) {
         fprintf(stderr, "start session failed, res: %d\n", ret);
@@ -242,7 +242,7 @@ static int32_t proto_inner_callback_on_write(libatgw_inner_v1_c_context ctx, voi
 
     if (NULL != is_done) {
         // if not writting, notify write finished
-        *is_done = (0 != ret)? 1: 0;
+        *is_done = (0 != ret) ? 1 : 0;
     }
 
     return ret;
@@ -257,7 +257,7 @@ static int proto_inner_callback_on_message(libatgw_inner_v1_c_context ctx, const
 
 // useless
 static int proto_inner_callback_on_new_session(libatgw_inner_v1_c_context ctx, uint64_t *sess_id) {
-    printf("create session 0x%llx\n", NULL == sess_id? 0: static_cast<unsigned long long>(*sess_id));
+    printf("create session 0x%llx\n", NULL == sess_id ? 0 : static_cast<unsigned long long>(*sess_id));
     return 0;
 }
 
@@ -273,7 +273,9 @@ static int proto_inner_callback_on_close(libatgw_inner_v1_c_context ctx, int32_t
     }
 
     printf("close socket start, reason: %d\n", reason);
-    uv_close((uv_handle_t *)&g_client.tcp_sock, libuv_close_sock_callback);
+    if (0 == uv_is_closing((uv_handle_t *)&g_client.tcp_sock)) {
+        uv_close((uv_handle_t *)&g_client.tcp_sock, libuv_close_sock_callback);
+    }
 
     g_client_sess.allow_reconnect = 1000 > reason;
     return 0;
@@ -355,9 +357,12 @@ static void libuv_tick_timer_callback(uv_timer_t *handle) {
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s <ip> <port> [mode]\n\tmode can only be tick\n", argv[0]);
+        fprintf(stderr, "usage: %s <ip> <port> [crypt types] [mode]\n\tmode can only be tick\n", argv[0]);
         return -1;
     }
+
+    // setup crypt algorithms
+    libatgw_inner_v1_c_global_init_algorithms();
 
     // init
     libatgw_inner_v1_c_gset_on_write_start_fn(proto_inner_callback_on_write);
@@ -380,7 +385,13 @@ int main(int argc, char *argv[]) {
     memset(&g_client, 0, sizeof(g_client));
 
     if (argc > 3) {
-        mode = argv[3];
+        crypt_types = argv[3];
+    } else {
+        crypt_types = "xxtea:aes-128-cfb:aes-256-cfb";
+    }
+
+    if (argc > 4) {
+        mode = argv[4];
         std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
     }
 

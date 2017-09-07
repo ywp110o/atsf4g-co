@@ -11,11 +11,6 @@
 #include "common/compiler_message.h"
 #include "common/string_oprs.h"
 
-
-#if !defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) && !defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL) && !defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-COMPILER_MSG_ERROR(at least one of LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS must be defined)
-#endif
-
 #include <inner_v1/libatgw_proto_inner.h>
 
 #define ATGW_CONTEXT(x) ((::atframe::gateway::libatgw_proto_inner_v1 *)(x).pa)
@@ -170,6 +165,21 @@ static ::atframe::gateway::proto_base::proto_callbacks_t *libatgw_inner_v1_c_get
 extern "C" {
 #endif
 
+ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_init_algorithms() { util::crypto::cipher::init_global_algorithm(); }
+
+ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_global_get_crypt_size() {
+    return static_cast<uint64_t>(util::crypto::cipher::get_all_cipher_names().size());
+}
+
+ATFRAME_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_global_get_crypt_name(uint64_t idx) {
+    const std::vector<std::string> &res = util::crypto::cipher::get_all_cipher_names();
+    if (idx >= res.size()) {
+        return NULL;
+    }
+
+    return res[idx].c_str();
+}
+
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_write_start_fn(libatgw_inner_v1_c_on_write_start_fn_t fn) {
     libatgw_inner_v1_c_get_c_callbacks()->write_start_fn = fn;
 }
@@ -233,23 +243,23 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_send_buffer_limit(liba
     ATGW_CONTEXT(context)->set_send_buffer_limit((size_t)max_size, (size_t)max_number);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_start_session(libatgw_inner_v1_c_context context) {
+ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_start_session(libatgw_inner_v1_c_context context, const char *crypt_type) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
 
-    return ATGW_CONTEXT(context)->start_session();
+    return ATGW_CONTEXT(context)->start_session(crypt_type);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_inner_v1_c_context context, uint64_t sessios_id, int32_t crypt_type,
-                                                                           const unsigned char *secret_buf, uint64_t secret_len, uint32_t keybits) {
+ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_inner_v1_c_context context, uint64_t sessios_id, const char *crypt_type,
+                                                                           const unsigned char *secret_buf, uint64_t secret_len) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
 
     std::vector<unsigned char> secret;
     secret.assign(secret_buf, secret_buf + secret_len);
-    return ATGW_CONTEXT(context)->reconnect_session(sessios_id, crypt_type, secret, keybits);
+    return ATGW_CONTEXT(context)->reconnect_session(sessios_id, crypt_type, secret);
 }
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_get_info(libatgw_inner_v1_c_context context, char *info_str, uint64_t info_len) {
@@ -296,12 +306,12 @@ ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_session_id(libatgw
     return ATGW_CONTEXT(context)->get_session_id();
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_get_crypt_type(libatgw_inner_v1_c_context context) {
+ATFRAME_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_get_crypt_type(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
 
-    return ATGW_CONTEXT(context)->get_crypt_handshake()->type;
+    return ATGW_CONTEXT(context)->get_crypt_handshake()->type.c_str();
 }
 
 ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_crypt_secret_size(libatgw_inner_v1_c_context context) {
@@ -332,7 +342,7 @@ ATFRAME_SYMBOL_EXPORT uint32_t __cdecl libatgw_inner_v1_c_get_crypt_keybits(liba
         return 0;
     }
 
-    return ATGW_CONTEXT(context)->get_crypt_handshake()->keybits;
+    return ATGW_CONTEXT(context)->get_crypt_handshake()->cipher.get_key_bits();
 }
 
 ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read_alloc(libatgw_inner_v1_c_context context, uint64_t suggested_size, char **out_buf,

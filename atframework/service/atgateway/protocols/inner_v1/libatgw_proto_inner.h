@@ -15,8 +15,14 @@
 
 #include "../proto_base.h"
 
+#if defined(CRYPTO_USE_OPENSSL) || defined(CRYPTO_USE_LIBRESSL) || defined(CRYPTO_USE_BORINGSSL)
+#define LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL 1
+#elif defined(CRYPTO_USE_MBEDTLS)
+#define LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS 1
+#endif
+
 extern "C" {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <openssl/dh.h>
@@ -33,7 +39,6 @@ extern "C" {
 #include "mbedtls/dhm.h"
 #include "mbedtls/ecdh.h"
 #include "mbedtls/entropy.h"
-#include "mbedtls/net.h"
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha1.h"
 
@@ -98,10 +103,13 @@ namespace atframe {
                 crypt_session_t();
                 ~crypt_session_t();
 
-                int setup(std::string type);
+                int setup(const std::string &t);
                 void close();
+                int generate_secret(int &libres);
+                int swap_secret(std::vector<unsigned char> &in, int &libres);
 
                 util::crypto::cipher cipher;
+                bool is_inited_;
             };
             typedef std::shared_ptr<crypt_session_t> crypt_session_ptr_t;
 
@@ -132,7 +140,7 @@ namespace atframe {
             int dispatch_handshake_rsa_secret_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
             int dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
 
-            int pack_handshake_start_rsp(flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id,
+            int pack_handshake_start_rsp(flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id, std::string &crypt_type,
                                          flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_body);
             int pack_handshake_dh_pubkey_req(flatbuffers::FlatBufferBuilder &builder, const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
                                              flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_body);
@@ -157,7 +165,7 @@ namespace atframe {
 
             virtual std::string get_info() const;
 
-            int start_session();
+            int start_session(const std::string &crypt_type);
             int reconnect_session(uint64_t sess_id, const std::string &crypt_type, const std::vector<unsigned char> &secret);
 
             int send_post(::atframe::gw::inner::v1::cs_msg_type_t msg_type, const void *buffer, size_t len);
@@ -216,7 +224,7 @@ namespace atframe {
                 int switch_secret_type;
                 bool has_data;
                 const void *ext_data;
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL) || defined(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL)
+#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
                 struct dh_t {
                     DH *openssl_dh_ptr_;
                 };

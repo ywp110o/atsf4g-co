@@ -37,22 +37,13 @@ include_directories("${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols"
 # ${ATFRAMEWORK_ATFRAME_UTILS_SRC_DIR}/algorithm/murmur_hash.cpp
 # ${ATFRAMEWORK_ATBUS_SRC_DIR}/detail/buffer.cpp
 
-# crypt library check
-if (OPENSSL_FOUND)
-    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL=1)
-elseif(LIBRESSL_FOUND)
-    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_LIBRESSL=1)
-elseif(MBEDTLS_FOUND)
-    add_compiler_define(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS=1)
-endif()
-
 if (MINGW)
     list(APPEND EXTENTION_LINK_LIB stdc++)
 endif()
 
 add_executable(${SAMPLE_SRC_BIN_NAME} ${SAMPLE_SRC_LIST})
 target_link_libraries(${SAMPLE_SRC_BIN_NAME}
-    libatgw_inner_v1_c
+    ${EXPORT_LIBATGW_INNER_V1_C_BIN_NAME}
     ${3RD_PARTY_LIBUV_LINK_NAME}
     ${3RD_PARTY_CRYPT_LINK_NAME}
     ${EXTENTION_LINK_LIB}

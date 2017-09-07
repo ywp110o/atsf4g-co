@@ -250,7 +250,11 @@ namespace atframe {
 
                 if (reconnect_timeout_.front().s) {
                     session::ptr_t s = reconnect_timeout_.front().s;
-                    WLOGINFO("session 0x%llx(%p) reconnect timeout, cleanup", static_cast<unsigned long long>(s->get_id()), s.get());
+                    if (s->check_flag(session::flag_t::EN_FT_RECONNECTED)) {
+                        WLOGINFO("session 0x%llx(%p) reconnected, cleanup", static_cast<unsigned long long>(s->get_id()), s.get());
+                    } else {
+                        WLOGINFO("session 0x%llx(%p) reconnect timeout, close and cleanup", static_cast<unsigned long long>(s->get_id()), s.get());
+                    }
                     reconnect_cache_.erase(s->get_id());
 
                     // timeout and unset EN_FT_WAIT_RECONNECT to send remove notify
@@ -290,7 +294,11 @@ namespace atframe {
                         iter->second->close(reason);
                         iter->second->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, false);
                         reconnect_cache_.erase(iter);
+                    } else {
+                        return error_code_t::EN_ECT_SESSION_NOT_FOUND;
                     }
+                } else {
+                    return error_code_t::EN_ECT_SESSION_NOT_FOUND;
                 }
 
                 return 0;
@@ -304,8 +312,10 @@ namespace atframe {
                 sess_timer.timeout = util::time::time_utility::get_now() + conf_.reconnect_timeout;
 
                 reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
-                WLOGINFO("session 0x%llx(%p) closed and setup reconnect timeout %lld", static_cast<unsigned long long>(sess_timer.s->get_id()),
-                         sess_timer.s.get(), static_cast<unsigned long long>(sess_timer.timeout));
+                WLOGINFO("session 0x%llx(%p) closed and setup reconnect timeout %lld(+%lld)", static_cast<unsigned long long>(sess_timer.s->get_id()),
+                         sess_timer.s.get(), static_cast<long long>(sess_timer.timeout),
+                         static_cast<long long>(conf_.reconnect_timeout)
+                );
 
                 // maybe transfer reconnecting session, old session still keep EN_FT_WAIT_RECONNECT flag
                 sess_timer.s->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, true);
@@ -390,11 +400,10 @@ namespace atframe {
             if (iter == reconnect_cache_.end()) {
                 iter = actived_sessions_.find(old_sess_id);
                 if (iter != actived_sessions_.end() && NULL != new_sess.get_protocol_handle() && NULL != iter->second->get_protocol_handle()) {
+                    has_reconnect_checked = true;
                     if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
                         WLOGDEBUG("session %s:%d try to reconnect 0x%llx and need to close old connection %p", new_sess.get_peer_host().c_str(),
                                   new_sess.get_peer_port(), static_cast<unsigned long long>(old_sess_id), iter->second.get());
-
-                        has_reconnect_checked = true;
                         close(old_sess_id, close_reason_t::EN_CRT_LOGOUT, true);
                     } else {
                         WLOGDEBUG("session %s:%d try to reconnect 0x%llx to old connection %p, but check_reconnect failed", new_sess.get_peer_host().c_str(),

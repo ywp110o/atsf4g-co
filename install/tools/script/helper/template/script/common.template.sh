@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 <%!
     import common.project_utils as project
 %>

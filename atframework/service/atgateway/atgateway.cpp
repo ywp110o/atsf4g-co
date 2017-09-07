@@ -149,7 +149,6 @@ public:
             std::string val;
             cfg.dump_to("atgateway.client.crypt.key", crypt_conf.default_key);
             cfg.dump_to("atgateway.client.crypt.update_interval", crypt_conf.update_interval);
-            cfg.dump_to("atgateway.client.crypt.keybits", crypt_conf.keybits);
             cfg.dump_to("atgateway.client.crypt.type", crypt_conf.type);
 
             // rsa
@@ -440,12 +439,19 @@ private:
 
         if (!sess_holder->check_flag(::atframe::gateway::session::flag_t::EN_FT_CLOSING)) {
             // if network EOF or network error, do not close session, but wait for reconnect
-            if (::atframe::gateway::close_reason_t::EN_CRT_RECONNECT_BOUND < reason) {
-                WLOGINFO("session 0x%llx(%p) closed disable reconnect", static_cast<unsigned long long>(sess_holder->get_id()), sess);
-            } else {
+            bool enable_reconnect = reason <= ::atframe::gateway::close_reason_t::EN_CRT_RECONNECT_BOUND;
+            if (enable_reconnect) {
                 WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess_holder->get_id()), sess);
+            } else {
+                WLOGINFO("session 0x%llx(%p) closed disable reconnect", static_cast<unsigned long long>(sess_holder->get_id()), sess);
             }
-            sess_holder->close(reason);
+            if (NULL != sess_holder->get_manager()) {
+                if (sess_holder->get_manager()->close(sess_holder->get_id(), reason, enable_reconnect) < 0) {
+                    sess_holder->close(reason);
+                }
+            } else {
+                sess_holder->close(reason);
+            }
         } else {
             if (sess_holder->check_flag(::atframe::gateway::session::flag_t::EN_FT_RECONNECTED)) {
                 WLOGINFO("session 0x%llx(%p) reconnected and release old connection", static_cast<unsigned long long>(sess_holder->get_id()), sess);
@@ -453,6 +459,8 @@ private:
                 WLOGINFO("session 0x%llx(%p) closed", static_cast<unsigned long long>(sess_holder->get_id()), sess);
             }
         }
+
+        // TODO if it's closed manually, remove it from manager
         return 0;
     }
 
@@ -682,6 +690,9 @@ int main(int argc, char *argv[]) {
         util::file_system::dirname(__FILE__, 0, proj_dir, 4);
         util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
     }
+
+    // setup crypt algorithms
+    util::crypto::cipher::init_global_algorithm();
 
     // setup module
     app.add_module(gw_mod);
