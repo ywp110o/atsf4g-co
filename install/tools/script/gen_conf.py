@@ -5,15 +5,23 @@ import sys
 import os, platform, locale, stat
 import shutil, re, string, shutil
 from optparse import OptionParser
-import configparser
+
 import glob
-import common.print_color
-import common.project_utils as project
 
 console_encoding = sys.getfilesystemencoding()
 script_dir = os.path.dirname(os.path.realpath(__file__))
 
 if __name__ == '__main__':
+    sys.path.append(script_dir)
+    python3_mode = sys.version_info[0] >= 3
+    if python3_mode:
+        import configparser
+    else:
+        import ConfigParser as configparser
+
+    import common.print_color
+    import common.project_utils as project
+
     os.chdir(script_dir)
     from mako.template import Template
     from mako.lookup import TemplateLookup
@@ -29,8 +37,12 @@ if __name__ == '__main__':
     parser.add_option("-i", "--id-offset", action='store' , dest="server_id_offset", default=0, type='int', help="set server id offset(default: 0)")
 
     (opts, args) = parser.parse_args()
-    config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
-    config.read(opts.config)
+    if python3_mode:
+        config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
+        config.read(opts.config, encoding="UTF-8")
+    else:
+        config = configparser.ConfigParser()
+        config.read(opts.config)
     
     project.set_global_opts(config, opts.server_id_offset)
 
@@ -73,7 +85,7 @@ if __name__ == '__main__':
     stop_all_content = []
     
     def generate_service(svr_name, svr_index, install_prefix, section_name, **ext_options):
-        project.set_server_inst(config[section_name], svr_name, svr_index)
+        project.set_server_inst(config.items(section_name), svr_name, svr_index)
         common.print_color.cprintf_stdout([common.print_color.print_style.FC_YELLOW, common.print_color.print_style.FW_BOLD], 'start to generate etc and script of {0}-{1}\r\n', svr_name, svr_index)
 
         etc_in_name = '{0}.conf'.format(svr_name)
