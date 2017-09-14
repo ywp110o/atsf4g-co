@@ -93,6 +93,7 @@ if __name__ == '__main__':
         start_script_name = 'start-{0}.sh'.format(svr_index)
         stop_script_name = 'stop-{0}.sh'.format(svr_index)
         reload_script_name = 'reload-{0}.sh'.format(svr_index)
+        debug_script_name = 'debug-{0}.sh'.format(svr_index)
         install_abs_prefix = os.path.normpath(os.path.join(script_dir, '..', '..', install_prefix))
 
         if not os.path.exists(os.path.join(install_abs_prefix, 'etc')):
@@ -172,7 +173,17 @@ fi
                 os.path.relpath(gen_out_path, script_dir)
             ))
             
-    
+        # debug script
+        gen_in_path = os.path.join(script_template_dir, 'debug.sh')
+        gen_out_path = os.path.join(install_abs_prefix, 'bin', debug_script_name)
+        if os.path.exists(gen_in_path):
+            svr_tmpl = project_lookup.get_template('debug.sh')
+            open(gen_out_path, mode='w').write(svr_tmpl.render(
+                project_install_prefix=os.path.relpath('.', os.path.join(install_prefix, 'bin')),
+                **ext_options
+            ))
+            os.chmod(gen_out_path, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
+   
     # parse all services
     atgateway_index = 1 + opts.server_id_offset
     for svr_name in project.get_global_all_services():
