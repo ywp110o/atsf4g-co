@@ -25,7 +25,7 @@ if(NOT Rapidjson_FOUND)
         endif()
 
         file(RELATIVE_PATH 3RD_PARTY_RAPIDJSON_GIT_SUBMODULE_PATH ${CMAKE_SOURCE_DIR} ${3RD_PARTY_RAPIDJSON_REPO_DIR})
-        execute_process(COMMAND ${GIT_EXECUTABLE} clone -b ${3RD_PARTY_RAPIDJSON_VERSION} --depth=1 "https://github.com/miloyip/rapidjson.git" ${3RD_PARTY_RAPIDJSON_REPO_DIR}
+        execute_process(COMMAND ${GIT_EXECUTABLE} clone -b ${3RD_PARTY_RAPIDJSON_VERSION} --depth=1 "https://github.com/Tencent/rapidjson.git" ${3RD_PARTY_RAPIDJSON_REPO_DIR}
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         )
     endif()

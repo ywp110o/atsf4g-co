@@ -40,7 +40,7 @@ elseif (CRYPTO_USE_MBEDTLS)
     else()
         message(FATAL_ERROR "CRYPTO_USE_MBEDTLS is set but mbedtls not found")
     endif()
-else ()
+elseif (NOT CRYPTO_DISABLED)
     # try to find openssl or mbedtls
     find_package(OpenSSL)
     if (OPENSSL_FOUND)

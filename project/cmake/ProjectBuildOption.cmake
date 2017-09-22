@@ -11,7 +11,7 @@ option(PROJECT_ENABLE_SAMPLE "Enable build sample." OFF)
 option(PROJECT_ENABLE_UNITTEST "Enable build unit test." OFF)
 
 # project name
-set(PROJECT_BUILD_NAME "hello_project" CACHE STRING "Project name")
+set(PROJECT_BUILD_NAME "publish" CACHE STRING "Project name")
 set(PROJECT_RPC_DB_BUFFER_LENGTH 131072 CACHE STRING "DB package buffer length, used in DB TLS buffer")
 
 # just like ATBUS_MACRO_DATA_SMALL_SIZE
