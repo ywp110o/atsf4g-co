@@ -25,7 +25,7 @@ service framework for game server using libatbus, libatapp, libcopp and etc.
 # Developer
 
 ## Tools
-1. [cmake](https://cmake.org) 3.4 and above 
+1. [cmake](https://cmake.org) 3.7 and above 
 2. gcc/clang/msvc
 3. gdb/lldb/windb
 4. git
