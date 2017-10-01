@@ -91,11 +91,11 @@ file(GLOB_RECURSE SRC_LIST
 )
 
 # The same as export.macro.cmake
-if(WIN32 AND NOT MINGW AND NOT CYGWIN)
-    set(LIB_NAME "libatgw_inner_v1_c")
-else()
-    set(LIB_NAME "atgw_inner_v1_c")
-endif()
+# if(WIN32 AND NOT MINGW AND NOT CYGWIN)
+#     set(LIB_NAME "libatgw_inner_v1_c")
+# else()
+set(LIB_NAME "atgw_inner_v1_c")
+# endif()
 
 if (APPLE)
     add_library(${LIB_NAME} STATIC ${SRC_LIST})
