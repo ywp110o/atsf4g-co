@@ -4,7 +4,7 @@ set(SAMPLE_SRC_BIN_NAME "sample_${SAMPLE_SRC_BIN_NAME}")
 EchoWithColor(COLOR GREEN "-- Configure ${SAMPLE_SRC_BIN_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR} SAMPLE_SRC_LIST)
-set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/sample")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/sample")
 
 # special setting for sample
 add_compiler_define(ATBUS_MACRO_MSG_LIMIT=65536)
