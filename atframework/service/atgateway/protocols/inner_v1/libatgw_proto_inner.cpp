@@ -60,6 +60,79 @@
 #define s2n(s, c) ((c[0] = (unsigned char)(((s) >> 8) & 0xff), c[1] = (unsigned char)(((s)) & 0xff)), c += 2)
 #endif
 
+// adaptor for openssl 1.0.x -> openssl 1.1.x
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
+/**
+ * @see crypto/dh/dh_lib.c in openssl 1.1.x
+ */
+static inline void DH_get0_pqg(const DH *dh, const BIGNUM **p, const BIGNUM **q, const BIGNUM **g) {
+    if (p != NULL) *p = dh->p;
+    if (q != NULL) *q = dh->q;
+    if (g != NULL) *g = dh->g;
+}
+
+/**
+ * @see crypto/dh/dh_lib.c in openssl 1.1.x
+ */
+static inline int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
+    /* If the fields p and g in d are NULL, the corresponding input
+     * parameters MUST be non-NULL.  q may remain NULL.
+     */
+    if ((dh->p == NULL && p == NULL) || (dh->g == NULL && g == NULL)) return 0;
+
+    if (p != NULL) {
+        BN_free(dh->p);
+        dh->p = p;
+    }
+    if (q != NULL) {
+        BN_free(dh->q);
+        dh->q = q;
+    }
+    if (g != NULL) {
+        BN_free(dh->g);
+        dh->g = g;
+    }
+
+    if (q != NULL) {
+        dh->length = BN_num_bits(q);
+    }
+
+    return 1;
+}
+
+/**
+ * @see crypto/dh/dh_lib.c in openssl 1.1.x
+ */
+static inline void DH_get0_key(const DH *dh, const BIGNUM **pub_key, const BIGNUM **priv_key) {
+    if (pub_key != NULL) *pub_key = dh->pub_key;
+    if (priv_key != NULL) *priv_key = dh->priv_key;
+}
+
+/**
+ * @see crypto/dh/dh_lib.c in openssl 1.1.x
+ */
+static inline int DH_set0_key(DH *dh, BIGNUM *pub_key, BIGNUM *priv_key) {
+    /* If the field pub_key in dh is NULL, the corresponding input
+     * parameters MUST be non-NULL.  The priv_key field may
+     * be left NULL.
+     */
+    if (dh->pub_key == NULL && pub_key == NULL) return 0;
+
+    if (pub_key != NULL) {
+        BN_free(dh->pub_key);
+        dh->pub_key = pub_key;
+    }
+    if (priv_key != NULL) {
+        BN_free(dh->priv_key);
+        dh->priv_key = priv_key;
+    }
+
+    return 1;
+}
+
+#endif
+
 #endif
 
 
@@ -318,7 +391,7 @@ namespace atframe {
                     return ret;
                 }
             };
-        }
+        } // namespace detail
 
         libatgw_proto_inner_v1::crypt_session_t::crypt_session_t() : is_inited_(false) {}
 
@@ -1330,7 +1403,9 @@ namespace atframe {
                         break;
                     }
                     int errcode = 0;
-                    res = DH_check_pub_key(handshake_.dh.openssl_dh_ptr_, handshake_.dh.openssl_dh_ptr_->pub_key, &errcode);
+                    const BIGNUM *self_pubkey = NULL;
+                    DH_get0_key(handshake_.dh.openssl_dh_ptr_, &self_pubkey, NULL);
+                    res = DH_check_pub_key(handshake_.dh.openssl_dh_ptr_, self_pubkey, &errcode);
                     if (res != 1) {
                         ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl/boringssl DH generate check public key failed");
                         ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1340,9 +1415,12 @@ namespace atframe {
                     // write big number into buffer, the size must be no less than BN_num_bytes()
                     // @see https://www.openssl.org/docs/manmaster/crypto/BN_bn2bin.html
                     // dump P,G,GX
-                    // @see int ssl3_send_server_key_exchange(SSL *s) in s3_srvr.c
+                    // @see int ssl3_send_server_key_exchange(SSL *s) in s3_srvr.c          -- openssl 1.0.x
+                    // @see int tls_construct_server_key_exchange(SSL *s) in statem_srvr.c  -- openssl 1.1.x
                     {
-                        BIGNUM *r[4] = {handshake_.dh.openssl_dh_ptr_->p, handshake_.dh.openssl_dh_ptr_->g, handshake_.dh.openssl_dh_ptr_->pub_key, NULL};
+                        const BIGNUM *r[4] = {NULL, NULL, NULL, NULL};
+                        DH_get0_pqg(handshake_.dh.openssl_dh_ptr_, &r[0], NULL, &r[1]);
+                        DH_get0_key(handshake_.dh.openssl_dh_ptr_, &r[2], NULL);
 
                         size_t olen = 0;
                         unsigned int nr[4] = {0};
@@ -1441,6 +1519,8 @@ namespace atframe {
 
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
             BIGNUM *pubkey = NULL;
+            BIGNUM *DH_p = NULL;
+            BIGNUM *DH_g = NULL;
 #endif
             do {
 #if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
@@ -1452,7 +1532,8 @@ namespace atframe {
 
                 // ===============================================
                 // import P,G,GY
-                // @see int ssl3_get_key_exchange(SSL *s) in s3_clnt.c or s3_clnt.c
+                // @see int ssl3_get_key_exchange(SSL *s) in s3_clnt.c                                          -- openssl 1.0.x
+                // @see int tls_process_ske_dhe(SSL *s, PACKET *pkt, EVP_PKEY **pkey, int *al) in statem_clnt.c -- openssl 1.1.x
                 {
                     unsigned int i = 0, param_len = 2, n = static_cast<unsigned int>(peer_body.crypt_param()->size());
                     const unsigned char *p = reinterpret_cast<const unsigned char *>(peer_body.crypt_param()->data());
@@ -1472,14 +1553,10 @@ namespace atframe {
                     }
 
                     param_len += i;
-                    if (!(handshake_.dh.openssl_dh_ptr_->p = BN_bin2bn(p, i, NULL))) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: P ERR_R_BN_LIB");
-                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
-                        break;
-                    }
+                    DH_p = BN_bin2bn(p, i, NULL);
                     p += i;
 
-                    if (BN_is_zero(handshake_.dh.openssl_dh_ptr_->p)) {
+                    if (BN_is_zero(DH_p)) {
                         ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: P SSL_R_BAD_DH_P_VALUE");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
@@ -1501,18 +1578,23 @@ namespace atframe {
                     }
 
                     param_len += i;
-                    if (!(handshake_.dh.openssl_dh_ptr_->g = BN_bin2bn(p, i, NULL))) {
-                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: G ERR_R_BN_LIB");
-                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
-                        break;
-                    }
+                    DH_g = BN_bin2bn(p, i, NULL);
                     p += i;
 
-                    if (BN_is_zero(handshake_.dh.openssl_dh_ptr_->g)) {
+                    if (BN_is_zero(DH_g)) {
                         ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: G SSL_R_BAD_DH_G_VALUE");
                         ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
                         break;
                     }
+
+                    // Set P, G
+                    if (!DH_set0_pqg(handshake_.dh.openssl_dh_ptr_, DH_p, NULL, DH_g)) {
+                        ATFRAME_GATEWAY_ON_ERROR(ret, "openssl/libressl/boringssl read DH parameter: G ERR_R_BN_LIB");
+                        ret = error_code_t::EN_ECT_CRYPT_INIT_DHPARAM;
+                        break;
+                    }
+                    DH_p = NULL;
+                    DH_g = NULL;
 
                     // GY
                     param_len += 2;
@@ -1551,7 +1633,9 @@ namespace atframe {
                     break;
                 }
                 int errcode = 0;
-                res = DH_check_pub_key(handshake_.dh.openssl_dh_ptr_, handshake_.dh.openssl_dh_ptr_->pub_key, &errcode);
+                const BIGNUM *self_pubkey = NULL;
+                DH_get0_key(handshake_.dh.openssl_dh_ptr_, &self_pubkey, NULL);
+                res = DH_check_pub_key(handshake_.dh.openssl_dh_ptr_, self_pubkey, &errcode);
                 if (res != 1) {
                     ATFRAME_GATEWAY_ON_ERROR(errcode, "openssl/libressl/boringssl DH generate check public key failed");
                     ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
@@ -1560,9 +1644,9 @@ namespace atframe {
 
                 // write big number into buffer, the size must be no less than BN_num_bytes()
                 // @see https://www.openssl.org/docs/manmaster/crypto/BN_bn2bin.html
-                size_t dhparam_bnsz = BN_num_bytes(handshake_.dh.openssl_dh_ptr_->pub_key);
+                size_t dhparam_bnsz = BN_num_bytes(self_pubkey);
                 crypt_handshake_->param.resize(dhparam_bnsz, 0);
-                BN_bn2bin(handshake_.dh.openssl_dh_ptr_->pub_key, reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]));
+                BN_bn2bin(self_pubkey, reinterpret_cast<unsigned char *>(&crypt_handshake_->param[0]));
 
                 // generate next_secret
                 crypt_handshake_->secret.resize(static_cast<size_t>(sizeof(unsigned char) * (DH_size(handshake_.dh.openssl_dh_ptr_))), 0);
@@ -1626,6 +1710,16 @@ namespace atframe {
             if (NULL != pubkey) {
                 BN_free(pubkey);
                 pubkey = NULL;
+            }
+
+            if (NULL != DH_p) {
+                BN_free(DH_p);
+                DH_p = NULL;
+            }
+
+            if (NULL != DH_g) {
+                BN_free(DH_g);
+                DH_g = NULL;
             }
 #endif
             // send send first parameter
@@ -2638,5 +2732,5 @@ namespace atframe {
 
             return ret;
         }
-    }
-}
+    } // namespace gateway
+} // namespace atframe
