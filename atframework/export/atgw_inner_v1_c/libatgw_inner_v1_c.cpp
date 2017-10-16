@@ -165,13 +165,13 @@ static ::atframe::gateway::proto_base::proto_callbacks_t *libatgw_inner_v1_c_get
 extern "C" {
 #endif
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_init_algorithms() { util::crypto::cipher::init_global_algorithm(); }
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_init_algorithms() { util::crypto::cipher::init_global_algorithm(); }
 
-ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_global_get_crypt_size() {
+UTIL_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_global_get_crypt_size() {
     return static_cast<uint64_t>(util::crypto::cipher::get_all_cipher_names().size());
 }
 
-ATFRAME_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_global_get_crypt_name(uint64_t idx) {
+UTIL_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_global_get_crypt_name(uint64_t idx) {
     const std::vector<std::string> &res = util::crypto::cipher::get_all_cipher_names();
     if (idx >= res.size()) {
         return NULL;
@@ -180,39 +180,39 @@ ATFRAME_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_global_get_crypt_na
     return res[idx].c_str();
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_write_start_fn(libatgw_inner_v1_c_on_write_start_fn_t fn) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_write_start_fn(libatgw_inner_v1_c_on_write_start_fn_t fn) {
     libatgw_inner_v1_c_get_c_callbacks()->write_start_fn = fn;
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_message_fn(libatgw_inner_v1_c_on_message_fn_t fn) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_message_fn(libatgw_inner_v1_c_on_message_fn_t fn) {
     libatgw_inner_v1_c_get_c_callbacks()->on_message_fn = fn;
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_init_new_session_fn(libatgw_inner_v1_c_on_init_new_session_fn_t fn) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_init_new_session_fn(libatgw_inner_v1_c_on_init_new_session_fn_t fn) {
     libatgw_inner_v1_c_get_c_callbacks()->on_init_new_session_fn = fn;
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_init_reconnect_fn(libatgw_inner_v1_c_on_init_reconnect_fn_t fn) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_init_reconnect_fn(libatgw_inner_v1_c_on_init_reconnect_fn_t fn) {
     libatgw_inner_v1_c_get_c_callbacks()->on_init_reconnect_fn = fn;
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_close_fn(libatgw_inner_v1_c_on_close_fn_t fn) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_close_fn(libatgw_inner_v1_c_on_close_fn_t fn) {
     libatgw_inner_v1_c_get_c_callbacks()->on_close_fn = fn;
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_handshake_done_fn(libatgw_inner_v1_c_on_handshake_done_fn_t fn) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_handshake_done_fn(libatgw_inner_v1_c_on_handshake_done_fn_t fn) {
     libatgw_inner_v1_c_get_c_callbacks()->on_handshake_done_fn = fn;
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_handshake_update_fn(libatgw_inner_v1_c_on_handshake_done_fn_t fn) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_handshake_update_fn(libatgw_inner_v1_c_on_handshake_done_fn_t fn) {
     libatgw_inner_v1_c_get_c_callbacks()->on_handshake_update_fn = fn;
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_error_fn(libatgw_inner_v1_c_on_error_fn_t fn) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_gset_on_error_fn(libatgw_inner_v1_c_on_error_fn_t fn) {
     libatgw_inner_v1_c_get_c_callbacks()->on_error_fn = fn;
 }
 
-ATFRAME_SYMBOL_EXPORT libatgw_inner_v1_c_context __cdecl libatgw_inner_v1_c_create() {
+UTIL_SYMBOL_EXPORT libatgw_inner_v1_c_context __cdecl libatgw_inner_v1_c_create() {
     libatgw_inner_v1_c_context ret;
     assert(sizeof(void *) == sizeof(libatgw_inner_v1_c_context));
 
@@ -225,9 +225,9 @@ ATFRAME_SYMBOL_EXPORT libatgw_inner_v1_c_context __cdecl libatgw_inner_v1_c_crea
     return ret;
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_destroy(libatgw_inner_v1_c_context context) { delete ATGW_CONTEXT(context); }
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_destroy(libatgw_inner_v1_c_context context) { delete ATGW_CONTEXT(context); }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_recv_buffer_limit(libatgw_inner_v1_c_context context, uint64_t max_size, uint64_t max_number) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_recv_buffer_limit(libatgw_inner_v1_c_context context, uint64_t max_size, uint64_t max_number) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return;
     }
@@ -235,7 +235,7 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_recv_buffer_limit(liba
     ATGW_CONTEXT(context)->set_recv_buffer_limit((size_t)max_size, (size_t)max_number);
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_send_buffer_limit(libatgw_inner_v1_c_context context, uint64_t max_size, uint64_t max_number) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_send_buffer_limit(libatgw_inner_v1_c_context context, uint64_t max_size, uint64_t max_number) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return;
     }
@@ -243,7 +243,7 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_send_buffer_limit(liba
     ATGW_CONTEXT(context)->set_send_buffer_limit((size_t)max_size, (size_t)max_number);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_start_session(libatgw_inner_v1_c_context context, const char *crypt_type) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_start_session(libatgw_inner_v1_c_context context, const char *crypt_type) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
@@ -251,8 +251,8 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_start_session(libatgw_i
     return ATGW_CONTEXT(context)->start_session(crypt_type);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_inner_v1_c_context context, uint64_t sessios_id, const char *crypt_type,
-                                                                           const unsigned char *secret_buf, uint64_t secret_len) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_inner_v1_c_context context, uint64_t sessios_id, const char *crypt_type,
+                                                                        const unsigned char *secret_buf, uint64_t secret_len) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
@@ -262,7 +262,7 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libat
     return ATGW_CONTEXT(context)->reconnect_session(sessios_id, crypt_type, secret);
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_get_info(libatgw_inner_v1_c_context context, char *info_str, uint64_t info_len) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_get_info(libatgw_inner_v1_c_context context, char *info_str, uint64_t info_len) {
     if (NULL == info_str || 0 == info_len) {
         return;
     }
@@ -282,7 +282,7 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_get_info(libatgw_inner_v1_
     info_str[len - 1] = 0;
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_private_data(libatgw_inner_v1_c_context context, void *p) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_private_data(libatgw_inner_v1_c_context context, void *p) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return;
     }
@@ -290,7 +290,7 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_private_data(libatgw_i
     return ATGW_CONTEXT(context)->set_private_data(p);
 }
 
-ATFRAME_SYMBOL_EXPORT void *__cdecl libatgw_inner_v1_c_get_private_data(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT void *__cdecl libatgw_inner_v1_c_get_private_data(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return NULL;
     }
@@ -298,7 +298,7 @@ ATFRAME_SYMBOL_EXPORT void *__cdecl libatgw_inner_v1_c_get_private_data(libatgw_
     return ATGW_CONTEXT(context)->get_private_data();
 }
 
-ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_session_id(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_session_id(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
@@ -306,7 +306,7 @@ ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_session_id(libatgw
     return ATGW_CONTEXT(context)->get_session_id();
 }
 
-ATFRAME_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_get_crypt_type(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_get_crypt_type(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
@@ -314,7 +314,7 @@ ATFRAME_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_get_crypt_type(liba
     return ATGW_CONTEXT(context)->get_crypt_handshake()->type.c_str();
 }
 
-ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_crypt_secret_size(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_crypt_secret_size(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
@@ -322,8 +322,7 @@ ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_get_crypt_secret_size(
     return (uint64_t)(ATGW_CONTEXT(context)->get_crypt_handshake()->secret.size());
 }
 
-ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_copy_crypt_secret(libatgw_inner_v1_c_context context, unsigned char *secret,
-                                                                            uint64_t available_size) {
+UTIL_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_copy_crypt_secret(libatgw_inner_v1_c_context context, unsigned char *secret, uint64_t available_size) {
     if (ATGW_CONTEXT_IS_NULL(context) || 0 == available_size) {
         return 0;
     }
@@ -337,7 +336,7 @@ ATFRAME_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_copy_crypt_secret(liba
     return len;
 }
 
-ATFRAME_SYMBOL_EXPORT uint32_t __cdecl libatgw_inner_v1_c_get_crypt_keybits(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT uint32_t __cdecl libatgw_inner_v1_c_get_crypt_keybits(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
@@ -345,8 +344,7 @@ ATFRAME_SYMBOL_EXPORT uint32_t __cdecl libatgw_inner_v1_c_get_crypt_keybits(liba
     return ATGW_CONTEXT(context)->get_crypt_handshake()->cipher.get_key_bits();
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read_alloc(libatgw_inner_v1_c_context context, uint64_t suggested_size, char **out_buf,
-                                                                 uint64_t *out_len) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read_alloc(libatgw_inner_v1_c_context context, uint64_t suggested_size, char **out_buf, uint64_t *out_len) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return;
     }
@@ -364,7 +362,7 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read_alloc(libatgw_inner_v
     }
 }
 
-ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read(libatgw_inner_v1_c_context context, int32_t ssz, const char *buff, uint64_t len, int32_t *errcode) {
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read(libatgw_inner_v1_c_context context, int32_t ssz, const char *buff, uint64_t len, int32_t *errcode) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return;
     }
@@ -378,7 +376,7 @@ ATFRAME_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read(libatgw_inner_v1_c_co
     }
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_write_done(libatgw_inner_v1_c_context context, int32_t status) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_write_done(libatgw_inner_v1_c_context context, int32_t status) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
@@ -386,7 +384,7 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_write_done(libatgw_inne
     return ATGW_CONTEXT(context)->write_done(status);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_post_msg(libatgw_inner_v1_c_context context, const void *out_buf, uint64_t out_len) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_post_msg(libatgw_inner_v1_c_context context, const void *out_buf, uint64_t out_len) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
@@ -394,7 +392,7 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_post_msg(libatgw_inner_
     return ATGW_CONTEXT(context)->send_post(out_buf, out_len);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_send_ping(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_send_ping(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
@@ -402,7 +400,7 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_send_ping(libatgw_inner
     return ATGW_CONTEXT(context)->send_ping();
 }
 
-ATFRAME_SYMBOL_EXPORT int64_t __cdecl libatgw_inner_v1_c_get_ping_delta(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT int64_t __cdecl libatgw_inner_v1_c_get_ping_delta(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
@@ -410,7 +408,7 @@ ATFRAME_SYMBOL_EXPORT int64_t __cdecl libatgw_inner_v1_c_get_ping_delta(libatgw_
     return (int64_t)(ATGW_CONTEXT(context)->get_last_ping().last_delta);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_close(libatgw_inner_v1_c_context context, int32_t reason) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_close(libatgw_inner_v1_c_context context, int32_t reason) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
@@ -418,7 +416,7 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_close(libatgw_inner_v1_
     return ATGW_CONTEXT(context)->close(reason);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_closing(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_closing(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
@@ -426,7 +424,7 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_closing(libatgw_inne
     return ATGW_CONTEXT(context)->check_flag(::atframe::gateway::proto_base::flag_t::EN_PFT_CLOSING);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_closed(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_closed(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
@@ -434,7 +432,7 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_closed(libatgw_inner
     return ATGW_CONTEXT(context)->check_flag(::atframe::gateway::proto_base::flag_t::EN_PFT_CLOSED);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_handshake_updating(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_handshake_updating(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
@@ -442,7 +440,7 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_handshake_updating(l
     return ATGW_CONTEXT(context)->check_flag(::atframe::gateway::proto_base::flag_t::EN_PFT_HANDSHAKE_UPDATE);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_handshake_done(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_handshake_done(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
@@ -450,7 +448,7 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_handshake_done(libat
     return ATGW_CONTEXT(context)->check_flag(::atframe::gateway::proto_base::flag_t::EN_PFT_HANDSHAKE_DONE);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_writing(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_writing(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }
@@ -458,7 +456,7 @@ ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_writing(libatgw_inne
     return ATGW_CONTEXT(context)->check_flag(::atframe::gateway::proto_base::flag_t::EN_PFT_WRITING);
 }
 
-ATFRAME_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_in_callback(libatgw_inner_v1_c_context context) {
+UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_in_callback(libatgw_inner_v1_c_context context) {
     if (ATGW_CONTEXT_IS_NULL(context)) {
         return 0;
     }

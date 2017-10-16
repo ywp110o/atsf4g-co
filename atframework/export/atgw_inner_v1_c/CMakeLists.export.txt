@@ -109,7 +109,13 @@ target_link_libraries(${LIB_NAME}
 )
 
 # 安装内容
-install(FILES "${CMAKE_CURRENT_LIST_DIR}/include/libatgw_inner_v1_c.h" DESTINATION "include")
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/include
+    DESTINATION .
+	FILES_MATCHING REGEX ".+\\.h(pp)?$"
+    PATTERN ".svn" EXCLUDE
+    PATTERN ".git" EXCLUDE
+)
+
 install(TARGETS ${LIB_NAME}
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION lib
