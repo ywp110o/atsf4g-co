@@ -5,6 +5,8 @@
 #ifndef _ATFRAME_SERVICE_COMPONENT_RANDOM_ENGINE_H
 #define _ATFRAME_SERVICE_COMPONENT_RANDOM_ENGINE_H
 
+#pragma once
+
 #include <random/random_generator.h>
 
 namespace util {

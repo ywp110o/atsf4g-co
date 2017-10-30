@@ -4,6 +4,8 @@
 #ifndef FLATBUFFERS_GENERATED_LIBATGWPROTOINNER_ATFRAME_GW_INNER_V1_H_
 #define FLATBUFFERS_GENERATED_LIBATGWPROTOINNER_ATFRAME_GW_INNER_V1_H_
 
+#pragma once
+
 #include "flatbuffers/flatbuffers.h"
 
 namespace atframe {
