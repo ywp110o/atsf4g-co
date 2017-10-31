@@ -1,4 +1,4 @@
-#ifndef ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_INNER_V1_H
+﻿#ifndef ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_INNER_V1_H
 #define ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_INNER_V1_H
 
 #pragma once
@@ -7,45 +7,12 @@
 #include <std/smart_ptr.h>
 #include <vector>
 
-
 #include "algorithm/crypto_cipher.h"
+#include "algorithm/crypto_dh.h"
 #include "algorithm/xxtea.h"
 #include "detail/buffer.h"
 
-
 #include "../proto_base.h"
-
-#if defined(CRYPTO_USE_OPENSSL) || defined(CRYPTO_USE_LIBRESSL) || defined(CRYPTO_USE_BORINGSSL)
-#define LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL 1
-#elif defined(CRYPTO_USE_MBEDTLS)
-#define LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS 1
-#endif
-
-extern "C" {
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
-#include <openssl/bio.h>
-#include <openssl/bn.h>
-#include <openssl/dh.h>
-#include <openssl/ecdh.h>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/rsa.h>
-
-
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-#include "mbedtls/platform.h"
-// "mbedtls/platform.h" must be the first
-#include "mbedtls/ctr_drbg.h"
-#include "mbedtls/dhm.h"
-#include "mbedtls/ecdh.h"
-#include "mbedtls/entropy.h"
-#include "mbedtls/rsa.h"
-#include "mbedtls/sha1.h"
-
-
-#endif
-}
-
 
 // MSVC hack
 #ifdef _MSC_VER
@@ -198,9 +165,9 @@ namespace atframe {
             uint64_t session_id_;
             ::atbus::detail::buffer_manager read_buffers_;
             /**
-            * @brief 由于大多数数据包都比较小
-            *        当数据包比较小时和动态直接放在动态int的数据包一起，这样可以减少内存拷贝次数
-            */
+             * @brief 由于大多数数据包都比较小
+             *        当数据包比较小时和动态直接放在动态int的数据包一起，这样可以减少内存拷贝次数
+             */
             typedef struct {
                 char buffer[ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE]; // 小数据包存储区
                 size_t len;                                         // 小数据包存储区已使用长度
@@ -224,22 +191,11 @@ namespace atframe {
                 int switch_secret_type;
                 bool has_data;
                 const void *ext_data;
-#if defined(LIBATFRAME_ATGATEWAY_ENABLE_OPENSSL)
-                struct dh_t {
-                    DH *openssl_dh_ptr_;
-                };
-#elif defined(LIBATFRAME_ATGATEWAY_ENABLE_MBEDTLS)
-                struct dh_t {
-                    mbedtls_dhm_context mbedtls_dh_ctx_;
-                };
-#endif
-                union {
-                    dh_t dh;
-                };
+                util::crypto::dh dh_ctx;
             };
             handshake_t handshake_;
         };
-    }
-}
+    } // namespace gateway
+} // namespace atframe
 
 #endif
