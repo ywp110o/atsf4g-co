@@ -5,11 +5,16 @@ endif()
 
 set (3RD_PARTY_LIBUV_PKG_DIR "${3RD_PARTY_LIBUV_BASE_DIR}/pkg")
 
-set (3RD_PARTY_LIBUV_DEFAULT_VERSION "1.15.0")
+set (3RD_PARTY_LIBUV_DEFAULT_VERSION "1.16.0")
 set (3RD_PARTY_LIBUV_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/prebuilt/${PLATFORM_BUILD_PLATFORM_NAME}")
 
 if(NOT EXISTS ${3RD_PARTY_LIBUV_PKG_DIR})
     file(MAKE_DIRECTORY ${3RD_PARTY_LIBUV_PKG_DIR})
+endif()
+
+# force to use prebuilt when using mingw
+if (MINGW)
+    set(LIBUV_ROOT ${3RD_PARTY_LIBUV_ROOT_DIR})
 endif()
 
 FindConfigurePackage(
