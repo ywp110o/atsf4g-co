@@ -64,8 +64,8 @@ namespace atframe {
                     switch (conf_.switch_secret_type) {
                     case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
                         // do nothing in client mode
-                        if (conf_.client_mode && !conf_.dh_param.empty()) {
-                            shared_dh_context_->init(NULL);
+                        if (conf_.client_mode || conf_.dh_param.empty()) {
+                            shared_dh_context_->init(util::crypto::dh::method_t::EN_CDT_DH); // TODO ECDH
                         } else {
                             shared_dh_context_->init(conf_.dh_param.c_str());
                         }
@@ -1074,7 +1074,7 @@ namespace atframe {
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
                 do {
                     if (false == handshake_.has_data) {
-                        ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                        ret = error_code_t::EN_ECT_HANDSHAKE;
                         ATFRAME_GATEWAY_ON_ERROR(ret, "DH not loaded");
                         break;
                     }
@@ -1082,7 +1082,7 @@ namespace atframe {
                     int res = handshake_.dh_ctx.make_params(crypt_handshake_->param);
                     if (0 != res) {
                         ATFRAME_GATEWAY_ON_ERROR(res, "DH generate check public key failed");
-                        ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                        ret = error_code_t::EN_ECT_CRYPT_OPERATION;
                         break;
                     }
                 } while (false);
