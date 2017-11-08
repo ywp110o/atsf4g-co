@@ -710,5 +710,10 @@ int main(int argc, char *argv[]) {
     app.set_evt_on_recv_msg(app_handle_on_recv(*gw_mod));
 
     // run
-    return app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+    int ret = app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+
+    // cleanup crypt algorithms
+    util::crypto::cipher::cleanup_global_algorithm();
+
+    return ret;
 }

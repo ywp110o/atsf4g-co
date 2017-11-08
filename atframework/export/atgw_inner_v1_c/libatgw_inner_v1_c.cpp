@@ -166,6 +166,7 @@ extern "C" {
 #endif
 
 UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_init_algorithms() { util::crypto::cipher::init_global_algorithm(); }
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_cleanup_algorithms() { util::crypto::cipher::cleanup_global_algorithm(); }
 
 UTIL_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_global_get_crypt_size() {
     return static_cast<uint64_t>(util::crypto::cipher::get_all_cipher_names().size());

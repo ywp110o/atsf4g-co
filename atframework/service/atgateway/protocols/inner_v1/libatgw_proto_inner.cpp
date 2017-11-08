@@ -49,7 +49,7 @@ namespace atframe {
                 typedef std::shared_ptr<crypt_global_configure_t> ptr_t;
 
                 crypt_global_configure_t(const libatgw_proto_inner_v1::crypt_conf_t &conf) : conf_(conf), inited_(false) {
-                    shared_dh_context_ = std::make_shared<util::crypto::dh::shared_context>();
+                    shared_dh_context_ = util::crypto::dh::shared_context::create();
                 }
                 ~crypt_global_configure_t() { close(); }
 
