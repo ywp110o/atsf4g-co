@@ -4,8 +4,6 @@
 #ifndef FLATBUFFERS_GENERATED_LIBATGWPROTOINNER_ATFRAME_GW_INNER_V1_H_
 #define FLATBUFFERS_GENERATED_LIBATGWPROTOINNER_ATFRAME_GW_INNER_V1_H_
 
-#pragma once
-
 #include "flatbuffers/flatbuffers.h"
 
 namespace atframe {
@@ -18,8 +16,6 @@ struct cs_msg_head;
 struct cs_body_post;
 
 struct cs_body_kickoff;
-
-struct cs_body_rsa_cert;
 
 struct cs_body_handshake;
 
@@ -50,38 +46,6 @@ inline error_code_t (&EnumValueserror_code_t())[6] {
   return values;
 }
 
-enum rsa_sign_t {
-  rsa_sign_t_EN_RST_PKCS1 = 0,
-  rsa_sign_t_EN_RST_PKCS1_V15 = 1,
-  rsa_sign_t_EN_RST_PSS = 2,
-  rsa_sign_t_MIN = rsa_sign_t_EN_RST_PKCS1,
-  rsa_sign_t_MAX = rsa_sign_t_EN_RST_PSS
-};
-
-inline rsa_sign_t (&EnumValuesrsa_sign_t())[3] {
-  static rsa_sign_t values[] = {
-    rsa_sign_t_EN_RST_PKCS1,
-    rsa_sign_t_EN_RST_PKCS1_V15,
-    rsa_sign_t_EN_RST_PSS
-  };
-  return values;
-}
-
-inline const char **EnumNamesrsa_sign_t() {
-  static const char *names[] = {
-    "EN_RST_PKCS1",
-    "EN_RST_PKCS1_V15",
-    "EN_RST_PSS",
-    nullptr
-  };
-  return names;
-}
-
-inline const char *EnumNamersa_sign_t(rsa_sign_t e) {
-  const size_t index = static_cast<int>(e);
-  return EnumNamesrsa_sign_t()[index];
-}
-
 enum handshake_step_t {
   handshake_step_t_EN_HST_START_REQ = 0,
   handshake_step_t_EN_HST_START_RSP = 1,
@@ -91,14 +55,12 @@ enum handshake_step_t {
   handshake_step_t_EN_HST_DH_PUBKEY_RSP = 22,
   handshake_step_t_EN_HST_ECDH_PUBKEY_REQ = 31,
   handshake_step_t_EN_HST_ECDH_PUBKEY_RSP = 32,
-  handshake_step_t_EN_HST_RSA_SECRET_REQ = 41,
-  handshake_step_t_EN_HST_RSA_SECRET_RSP = 42,
   handshake_step_t_EN_HST_VERIFY = 101,
   handshake_step_t_MIN = handshake_step_t_EN_HST_START_REQ,
   handshake_step_t_MAX = handshake_step_t_EN_HST_VERIFY
 };
 
-inline handshake_step_t (&EnumValueshandshake_step_t())[11] {
+inline handshake_step_t (&EnumValueshandshake_step_t())[9] {
   static handshake_step_t values[] = {
     handshake_step_t_EN_HST_START_REQ,
     handshake_step_t_EN_HST_START_RSP,
@@ -108,8 +70,6 @@ inline handshake_step_t (&EnumValueshandshake_step_t())[11] {
     handshake_step_t_EN_HST_DH_PUBKEY_RSP,
     handshake_step_t_EN_HST_ECDH_PUBKEY_REQ,
     handshake_step_t_EN_HST_ECDH_PUBKEY_RSP,
-    handshake_step_t_EN_HST_RSA_SECRET_REQ,
-    handshake_step_t_EN_HST_RSA_SECRET_RSP,
     handshake_step_t_EN_HST_VERIFY
   };
   return values;
@@ -119,17 +79,15 @@ enum switch_secret_t {
   switch_secret_t_EN_SST_DIRECT = 0,
   switch_secret_t_EN_SST_DH = 1,
   switch_secret_t_EN_SST_ECDH = 2,
-  switch_secret_t_EN_SST_RSA = 3,
   switch_secret_t_MIN = switch_secret_t_EN_SST_DIRECT,
-  switch_secret_t_MAX = switch_secret_t_EN_SST_RSA
+  switch_secret_t_MAX = switch_secret_t_EN_SST_ECDH
 };
 
-inline switch_secret_t (&EnumValuesswitch_secret_t())[4] {
+inline switch_secret_t (&EnumValuesswitch_secret_t())[3] {
   static switch_secret_t values[] = {
     switch_secret_t_EN_SST_DIRECT,
     switch_secret_t_EN_SST_DH,
-    switch_secret_t_EN_SST_ECDH,
-    switch_secret_t_EN_SST_RSA
+    switch_secret_t_EN_SST_ECDH
   };
   return values;
 }
@@ -139,7 +97,6 @@ inline const char **EnumNamesswitch_secret_t() {
     "EN_SST_DIRECT",
     "EN_SST_DH",
     "EN_SST_ECDH",
-    "EN_SST_RSA",
     nullptr
   };
   return names;
@@ -410,91 +367,14 @@ inline flatbuffers::Offset<cs_body_kickoff> Createcs_body_kickoff(
   return builder_.Finish();
 }
 
-struct cs_body_rsa_cert FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
-  enum {
-    VT_RSA_SIGN = 4,
-    VT_HASH_TYPE = 6,
-    VT_PUBKEY = 8
-  };
-  rsa_sign_t rsa_sign() const {
-    return static_cast<rsa_sign_t>(GetField<uint8_t>(VT_RSA_SIGN, 0));
-  }
-  const flatbuffers::String *hash_type() const {
-    return GetPointer<const flatbuffers::String *>(VT_HASH_TYPE);
-  }
-  const flatbuffers::Vector<int8_t> *pubkey() const {
-    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_PUBKEY);
-  }
-  bool Verify(flatbuffers::Verifier &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<uint8_t>(verifier, VT_RSA_SIGN) &&
-           VerifyOffset(verifier, VT_HASH_TYPE) &&
-           verifier.Verify(hash_type()) &&
-           VerifyOffset(verifier, VT_PUBKEY) &&
-           verifier.Verify(pubkey()) &&
-           verifier.EndTable();
-  }
-};
-
-struct cs_body_rsa_certBuilder {
-  flatbuffers::FlatBufferBuilder &fbb_;
-  flatbuffers::uoffset_t start_;
-  void add_rsa_sign(rsa_sign_t rsa_sign) {
-    fbb_.AddElement<uint8_t>(cs_body_rsa_cert::VT_RSA_SIGN, static_cast<uint8_t>(rsa_sign), 0);
-  }
-  void add_hash_type(flatbuffers::Offset<flatbuffers::String> hash_type) {
-    fbb_.AddOffset(cs_body_rsa_cert::VT_HASH_TYPE, hash_type);
-  }
-  void add_pubkey(flatbuffers::Offset<flatbuffers::Vector<int8_t>> pubkey) {
-    fbb_.AddOffset(cs_body_rsa_cert::VT_PUBKEY, pubkey);
-  }
-  cs_body_rsa_certBuilder(flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  cs_body_rsa_certBuilder &operator=(const cs_body_rsa_certBuilder &);
-  flatbuffers::Offset<cs_body_rsa_cert> Finish() {
-    const auto end = fbb_.EndTable(start_, 3);
-    auto o = flatbuffers::Offset<cs_body_rsa_cert>(end);
-    return o;
-  }
-};
-
-inline flatbuffers::Offset<cs_body_rsa_cert> Createcs_body_rsa_cert(
-    flatbuffers::FlatBufferBuilder &_fbb,
-    rsa_sign_t rsa_sign = rsa_sign_t_EN_RST_PKCS1,
-    flatbuffers::Offset<flatbuffers::String> hash_type = 0,
-    flatbuffers::Offset<flatbuffers::Vector<int8_t>> pubkey = 0) {
-  cs_body_rsa_certBuilder builder_(_fbb);
-  builder_.add_pubkey(pubkey);
-  builder_.add_hash_type(hash_type);
-  builder_.add_rsa_sign(rsa_sign);
-  return builder_.Finish();
-}
-
-inline flatbuffers::Offset<cs_body_rsa_cert> Createcs_body_rsa_certDirect(
-    flatbuffers::FlatBufferBuilder &_fbb,
-    rsa_sign_t rsa_sign = rsa_sign_t_EN_RST_PKCS1,
-    const char *hash_type = nullptr,
-    const std::vector<int8_t> *pubkey = nullptr) {
-  return atframe::gw::inner::v1::Createcs_body_rsa_cert(
-      _fbb,
-      rsa_sign,
-      hash_type ? _fbb.CreateString(hash_type) : 0,
-      pubkey ? _fbb.CreateVector<int8_t>(*pubkey) : 0);
-}
-
 ///
 /// crypt_param is used for different purpose depends on step and switch_type, that's
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT        : nothing
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DH            : DH Parameters: P,G,GX (GX means G^X and pub_key in openssl). KeyExchangeData as in SSL3
-///     step=EN_HST_DH_PUBKEY_REQ, switch_type=EN_SST_DH        : DH public key of client
-///     step=EN_HST_DH_PUBKEY_RSP, switch_type=EN_SST_DH        : verify data prefix
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT        : secret
-///     step=EN_HST_START_RSP, switch_type=EN_SST_RSA           : salt
-///     step=EN_HST_RSA_SECRET_REQ, switch_type=EN_SST_RSA      : encrypted secret
-///     step=EN_HST_RSA_SECRET_RSP, switch_type=EN_SST_RSA      : nothing
-///     step=EN_HST_VERIFY, switch_type=ANY                     : verify data prefix + suffix
+///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT                        : nothing
+///     step=EN_HST_START_RSP, switch_type=EN_SST_DH                            : DH Parameters: P,G,GX (GX means G^X and pub_key in openssl). KeyExchangeData as in SSL3
+///     step=EN_HST_DH_PUBKEY_REQ|EN_HST_ECDH_PUBKEY_REQ, switch_type=EN_SST_DH : DH public key of client
+///     step=EN_HST_DH_PUBKEY_RSP|EN_HST_ECDH_PUBKEY_RSP, switch_type=EN_SST_DH : verify data prefix
+///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT                        : secret
+///     step=EN_HST_VERIFY, switch_type=ANY                                     : verify data prefix + suffix
 struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   enum {
     VT_SESSION_ID = 4,
@@ -502,7 +382,7 @@ struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     VT_SWITCH_TYPE = 8,
     VT_CRYPT_TYPE = 10,
     VT_CRYPT_PARAM = 12,
-    VT_RSA_CERT = 14
+    VT_SWITCH_PARAM = 14
   };
   uint64_t session_id() const {
     return GetField<uint64_t>(VT_SESSION_ID, 0);
@@ -519,8 +399,8 @@ struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   const flatbuffers::Vector<int8_t> *crypt_param() const {
     return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_CRYPT_PARAM);
   }
-  const cs_body_rsa_cert *rsa_cert() const {
-    return GetPointer<const cs_body_rsa_cert *>(VT_RSA_CERT);
+  const flatbuffers::Vector<int8_t> *switch_param() const {
+    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_SWITCH_PARAM);
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -531,8 +411,8 @@ struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
            verifier.Verify(crypt_type()) &&
            VerifyOffset(verifier, VT_CRYPT_PARAM) &&
            verifier.Verify(crypt_param()) &&
-           VerifyOffset(verifier, VT_RSA_CERT) &&
-           verifier.VerifyTable(rsa_cert()) &&
+           VerifyOffset(verifier, VT_SWITCH_PARAM) &&
+           verifier.Verify(switch_param()) &&
            verifier.EndTable();
   }
 };
@@ -555,8 +435,8 @@ struct cs_body_handshakeBuilder {
   void add_crypt_param(flatbuffers::Offset<flatbuffers::Vector<int8_t>> crypt_param) {
     fbb_.AddOffset(cs_body_handshake::VT_CRYPT_PARAM, crypt_param);
   }
-  void add_rsa_cert(flatbuffers::Offset<cs_body_rsa_cert> rsa_cert) {
-    fbb_.AddOffset(cs_body_handshake::VT_RSA_CERT, rsa_cert);
+  void add_switch_param(flatbuffers::Offset<flatbuffers::Vector<int8_t>> switch_param) {
+    fbb_.AddOffset(cs_body_handshake::VT_SWITCH_PARAM, switch_param);
   }
   cs_body_handshakeBuilder(flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -577,10 +457,10 @@ inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshake(
     switch_secret_t switch_type = switch_secret_t_EN_SST_DIRECT,
     flatbuffers::Offset<flatbuffers::String> crypt_type = 0,
     flatbuffers::Offset<flatbuffers::Vector<int8_t>> crypt_param = 0,
-    flatbuffers::Offset<cs_body_rsa_cert> rsa_cert = 0) {
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> switch_param = 0) {
   cs_body_handshakeBuilder builder_(_fbb);
   builder_.add_session_id(session_id);
-  builder_.add_rsa_cert(rsa_cert);
+  builder_.add_switch_param(switch_param);
   builder_.add_crypt_param(crypt_param);
   builder_.add_crypt_type(crypt_type);
   builder_.add_switch_type(switch_type);
@@ -595,7 +475,7 @@ inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshakeDirect(
     switch_secret_t switch_type = switch_secret_t_EN_SST_DIRECT,
     const char *crypt_type = nullptr,
     const std::vector<int8_t> *crypt_param = nullptr,
-    flatbuffers::Offset<cs_body_rsa_cert> rsa_cert = 0) {
+    const std::vector<int8_t> *switch_param = nullptr) {
   return atframe::gw::inner::v1::Createcs_body_handshake(
       _fbb,
       session_id,
@@ -603,7 +483,7 @@ inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshakeDirect(
       switch_type,
       crypt_type ? _fbb.CreateString(crypt_type) : 0,
       crypt_param ? _fbb.CreateVector<int8_t>(*crypt_param) : 0,
-      rsa_cert);
+      switch_param ? _fbb.CreateVector<int8_t>(*switch_param) : 0);
 }
 
 struct cs_body_ping FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {

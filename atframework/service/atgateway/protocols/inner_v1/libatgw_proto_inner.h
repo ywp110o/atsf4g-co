@@ -101,16 +101,16 @@ namespace atframe {
             int dispatch_handshake_start_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
             int dispatch_handshake_reconn_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
             int dispatch_handshake_reconn_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
-            int dispatch_handshake_dh_pubkey_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
+            int dispatch_handshake_dh_pubkey_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake,
+                                                 ::atframe::gw::inner::v1::handshake_step_t next_step);
             int dispatch_handshake_dh_pubkey_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
-            int dispatch_handshake_rsa_secret_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
-            int dispatch_handshake_rsa_secret_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
             int dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake);
 
             int pack_handshake_start_rsp(flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id, std::string &crypt_type,
                                          flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_body);
             int pack_handshake_dh_pubkey_req(flatbuffers::FlatBufferBuilder &builder, const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
-                                             flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_body);
+                                             flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_body,
+                                             ::atframe::gw::inner::v1::handshake_step_t next_step);
 
             int try_write();
             int write_msg(flatbuffers::FlatBufferBuilder &builder);
