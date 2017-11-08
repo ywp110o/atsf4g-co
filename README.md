@@ -1,6 +1,14 @@
 # atsf4g-co
 service framework for game server using libatbus, libatapp, libcopp and etc.
 
+# Inner Service
++ [atproxy](atframework/service/atproxy) : proxy for logic server to communicate with each other
+  * using [etcd][1] for service discovery and online detection.
+
++ [atgateway](atframework/service/atgateway) : gateway for client to communicate logic server
+  * Using DH/ECDH for key establishment(directly send key or no encryption are also supported)
+  * Traffic control and handshake timeout available for each client
+  * Support for routing switching
 
 # Dependency
 1. [libuv](http://libuv.org/)  -- libuv is a multi-platform support library with a focus on asynchronous I/O.
@@ -94,3 +102,5 @@ sh cmake_dev.sh [options] ...
 Such as sh cmake_dev.sh -su to enable all unit test and samples, or sh cmake_dev.sh -a to use clang-analysis.
 You can also directly run cmake [SOURCE PATH] [options...] just like in windows, use your own prebuilt libraries or not.
 It depends to you.
+
+[1]: https://coreos.com/etcd
