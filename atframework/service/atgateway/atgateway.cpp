@@ -171,7 +171,11 @@ public:
             // dh
             cfg.dump_to("atgateway.client.crypt.dhparam", crypt_conf.dh_param);
             if (!crypt_conf.dh_param.empty()) {
-                crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH;
+                if (0 == UTIL_STRFUNC_STRNCASE_CMP("ecdh:", crypt_conf.dh_param.c_str(), 5)) {
+                    crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH;
+                } else {
+                    crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_ECDH;
+                }
             }
 
             // hash id
