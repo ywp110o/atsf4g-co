@@ -409,5 +409,8 @@ int main(int argc, char *argv[]) {
         return ret;
     }
 
-    return uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+    ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+
+    libatgw_inner_v1_c_global_cleanup_algorithms();
+    return ret;
 }

@@ -97,11 +97,12 @@ file(GLOB_RECURSE SRC_LIST
 set(LIB_NAME "atgw_inner_v1_c")
 # endif()
 
-if (APPLE)
-    add_library(${LIB_NAME} STATIC ${SRC_LIST})
-else()
-    add_library(${LIB_NAME} SHARED ${SRC_LIST})
+set (EXPORT_SRC_LIB_TYPE SHARED)
+if (MINGW OR APPLE) 
+    set (EXPORT_SRC_LIB_TYPE STATIC)
 endif()
+
+add_library(${LIB_NAME} ${EXPORT_SRC_LIB_TYPE} ${SRC_LIST})
 
 target_link_libraries(${LIB_NAME}
     ${3RD_PARTY_CRYPT_LINK_NAME}

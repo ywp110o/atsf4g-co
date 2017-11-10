@@ -49,7 +49,7 @@ namespace atframe {
                 typedef std::shared_ptr<crypt_global_configure_t> ptr_t;
 
                 crypt_global_configure_t(const libatgw_proto_inner_v1::crypt_conf_t &conf) : conf_(conf), inited_(false) {
-                    shared_dh_context_ = std::make_shared<util::crypto::dh::shared_context>();
+                    shared_dh_context_ = util::crypto::dh::shared_context::create();
                 }
                 ~crypt_global_configure_t() { close(); }
 
@@ -62,21 +62,19 @@ namespace atframe {
                     }
 
                     switch (conf_.switch_secret_type) {
-                    case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
+                    case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH:
+                    case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_ECDH: {
                         // do nothing in client mode
-                        if (conf_.client_mode && !conf_.dh_param.empty()) {
-                            shared_dh_context_->init(NULL);
+                        if (conf_.client_mode || conf_.dh_param.empty()) {
+                            if (conf_.switch_secret_type == ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH) {
+                                shared_dh_context_->init(util::crypto::dh::method_t::EN_CDT_DH);
+                            } else {
+                                shared_dh_context_->init(util::crypto::dh::method_t::EN_CDT_ECDH);
+                            }
                         } else {
                             shared_dh_context_->init(conf_.dh_param.c_str());
                         }
 
-                        break;
-                    }
-                    case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
-                        // TODO init public key and private key
-                        // mbedtls: use API in mbedtls/pk.h => mbedtls_pk_parse_public_key, mbedtls_pk_parse_keyfile
-                        // openssl/libressl/boringssl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
-                        return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                         break;
                     }
                     case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
@@ -546,41 +544,42 @@ namespace atframe {
                 return error_code_t::EN_ECT_HANDSHAKE;
             }
 
+            using namespace atframe::gw::inner::v1;
             int ret = 0;
             switch (body_handshake.step()) {
-            case atframe::gw::inner::v1::handshake_step_t_EN_HST_START_REQ: {
+            case handshake_step_t_EN_HST_START_REQ: {
                 ret = dispatch_handshake_start_req(body_handshake);
                 break;
             }
-            case atframe::gw::inner::v1::handshake_step_t_EN_HST_START_RSP: {
+            case handshake_step_t_EN_HST_START_RSP: {
                 ret = dispatch_handshake_start_rsp(body_handshake);
                 break;
             }
-            case atframe::gw::inner::v1::handshake_step_t_EN_HST_RECONNECT_REQ: {
+            case handshake_step_t_EN_HST_RECONNECT_REQ: {
                 ret = dispatch_handshake_reconn_req(body_handshake);
                 break;
             }
-            case atframe::gw::inner::v1::handshake_step_t_EN_HST_RECONNECT_RSP: {
+            case handshake_step_t_EN_HST_RECONNECT_RSP: {
                 ret = dispatch_handshake_reconn_rsp(body_handshake);
                 break;
             }
-            case atframe::gw::inner::v1::handshake_step_t_EN_HST_DH_PUBKEY_REQ: {
-                ret = dispatch_handshake_dh_pubkey_req(body_handshake);
+            case handshake_step_t_EN_HST_DH_PUBKEY_REQ: {
+                ret = dispatch_handshake_dh_pubkey_req(body_handshake, handshake_step_t_EN_HST_DH_PUBKEY_RSP);
                 break;
             }
-            case atframe::gw::inner::v1::handshake_step_t_EN_HST_DH_PUBKEY_RSP: {
+            case handshake_step_t_EN_HST_DH_PUBKEY_RSP: {
                 ret = dispatch_handshake_dh_pubkey_rsp(body_handshake);
                 break;
             }
-            case atframe::gw::inner::v1::handshake_step_t_EN_HST_RSA_SECRET_REQ: {
-                ret = dispatch_handshake_rsa_secret_req(body_handshake);
+            case handshake_step_t_EN_HST_ECDH_PUBKEY_REQ: {
+                ret = dispatch_handshake_dh_pubkey_req(body_handshake, handshake_step_t_EN_HST_ECDH_PUBKEY_RSP);
                 break;
             }
-            case atframe::gw::inner::v1::handshake_step_t_EN_HST_RSA_SECRET_RSP: {
-                ret = dispatch_handshake_rsa_secret_rsp(body_handshake);
+            case handshake_step_t_EN_HST_ECDH_PUBKEY_RSP: {
+                ret = dispatch_handshake_dh_pubkey_rsp(body_handshake);
                 break;
             }
-            case atframe::gw::inner::v1::handshake_step_t_EN_HST_VERIFY: {
+            case handshake_step_t_EN_HST_VERIFY: {
                 ret = dispatch_handshake_verify_ntf(body_handshake);
                 break;
             }
@@ -737,7 +736,8 @@ namespace atframe {
                 ret = send_verify(NULL, 0);
                 break;
             }
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH:
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_ECDH: {
                 // if in DH handshake, generate and send pubkey
                 using namespace ::atframe::gw::inner::v1;
 
@@ -746,20 +746,16 @@ namespace atframe {
                     Createcs_msg_head(builder, cs_msg_type_t_EN_MTT_HANDSHAKE, ::atframe::gateway::detail::alloc_seq());
                 flatbuffers::Offset<cs_body_handshake> handshake_body;
 
-                ret = pack_handshake_dh_pubkey_req(builder, body_handshake, handshake_body);
+                ::atframe::gw::inner::v1::handshake_step_t next_step = (handshake_.switch_secret_type == ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH)
+                                                                           ? handshake_step_t_EN_HST_DH_PUBKEY_REQ
+                                                                           : handshake_step_t_EN_HST_ECDH_PUBKEY_REQ;
+                ret = pack_handshake_dh_pubkey_req(builder, body_handshake, handshake_body, next_step);
                 if (ret < 0) {
                     break;
                 }
 
                 builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()), cs_msgIdentifier());
                 ret = write_msg(builder);
-                break;
-            }
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
-                // TODO RSA not support now
-                // TODO if in RSA handshake, generate and send secret
-                ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "not support now");
-                ret = error_code_t::EN_ECT_HANDSHAKE;
                 break;
             }
             default: {
@@ -859,7 +855,8 @@ namespace atframe {
             return 0;
         }
 
-        int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_req(const ::atframe::gw::inner::v1::cs_body_handshake &peer_body) {
+        int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_req(const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
+                                                                     ::atframe::gw::inner::v1::handshake_step_t next_step) {
             // check
             int ret = 0;
             if (handshake_.switch_secret_type != peer_body.switch_type() || !crypt_handshake_->shared_conf) {
@@ -937,12 +934,11 @@ namespace atframe {
             }
 
             if (0 == ret) {
-                pubkey_rsp_body = Createcs_body_handshake(builder, session_id_, handshake_step_t_EN_HST_DH_PUBKEY_RSP, peer_body.switch_type(),
-                                                          builder.CreateString(std::string()),
+                pubkey_rsp_body = Createcs_body_handshake(builder, session_id_, next_step, peer_body.switch_type(), builder.CreateString(std::string()),
                                                           builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), NULL == outbuf ? 0 : outsz));
             } else {
-                pubkey_rsp_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_DH_PUBKEY_RSP, peer_body.switch_type(),
-                                                          builder.CreateString(std::string()), builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+                pubkey_rsp_body = Createcs_body_handshake(builder, 0, next_step, peer_body.switch_type(), builder.CreateString(std::string()),
+                                                          builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
             }
 
             builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, pubkey_rsp_body.Union()), cs_msgIdentifier());
@@ -983,10 +979,6 @@ namespace atframe {
 
             return ret;
         }
-
-        int libatgw_proto_inner_v1::dispatch_handshake_rsa_secret_req(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) { return 0; }
-
-        int libatgw_proto_inner_v1::dispatch_handshake_rsa_secret_rsp(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) { return 0; }
 
         int libatgw_proto_inner_v1::dispatch_handshake_verify_ntf(const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
             // if switch type is direct, read handle should be set here
@@ -1071,10 +1063,11 @@ namespace atframe {
 
                 break;
             }
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH:
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_ECDH: {
                 do {
                     if (false == handshake_.has_data) {
-                        ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                        ret = error_code_t::EN_ECT_HANDSHAKE;
                         ATFRAME_GATEWAY_ON_ERROR(ret, "DH not loaded");
                         break;
                     }
@@ -1082,7 +1075,7 @@ namespace atframe {
                     int res = handshake_.dh_ctx.make_params(crypt_handshake_->param);
                     if (0 != res) {
                         ATFRAME_GATEWAY_ON_ERROR(res, "DH generate check public key failed");
-                        ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
+                        ret = error_code_t::EN_ECT_CRYPT_OPERATION;
                         break;
                     }
                 } while (false);
@@ -1094,37 +1087,25 @@ namespace atframe {
 
                 break;
             }
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
-                ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                ATFRAME_GATEWAY_ON_ERROR(ret, "RSA not supported now");
-                break;
-            }
             default: {
                 ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
-                ATFRAME_GATEWAY_ON_ERROR(ret, "RSA not supported now");
+                ATFRAME_GATEWAY_ON_ERROR(ret, "Unknown switch type");
                 break;
             }
             }
-
-            // TODO if switch type is RSA
-            // ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
-            // rsa_cert.add_rsa_sign(::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1);
-            // rsa_cert.add_hash_type(::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5);
-            // rsa_cert.add_pubkey(builder.CreateVector(NULL, 0));
-            // handshake_body.add_rsa_cert(rsa_cert.Finish());
-
             return ret;
         }
 
         int libatgw_proto_inner_v1::pack_handshake_dh_pubkey_req(flatbuffers::FlatBufferBuilder &builder,
                                                                  const ::atframe::gw::inner::v1::cs_body_handshake &peer_body,
-                                                                 flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_data) {
+                                                                 flatbuffers::Offset< ::atframe::gw::inner::v1::cs_body_handshake> &handshake_data,
+                                                                 ::atframe::gw::inner::v1::handshake_step_t next_step) {
             using namespace ::atframe::gw::inner::v1;
 
             int ret = 0;
             if (0 == peer_body.session_id() || NULL == peer_body.crypt_param() || !crypt_handshake_->shared_conf) {
                 // empty data
-                handshake_data = Createcs_body_handshake(builder, peer_body.session_id(), handshake_step_t_EN_HST_DH_PUBKEY_REQ, switch_secret_t_EN_SST_DIRECT,
+                handshake_data = Createcs_body_handshake(builder, peer_body.session_id(), next_step, switch_secret_t_EN_SST_DIRECT,
                                                          builder.CreateString(std::string()), builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
 
                 return error_code_t::EN_ECT_SESSION_NOT_FOUND;
@@ -1172,16 +1153,9 @@ namespace atframe {
 
             // send send first parameter
             handshake_data = Createcs_body_handshake(
-                builder, peer_body.session_id(), handshake_step_t_EN_HST_DH_PUBKEY_REQ,
-                static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type), builder.CreateString(std::string()),
+                builder, peer_body.session_id(), next_step, static_cast< ::atframe::gw::inner::v1::switch_secret_t>(handshake_.switch_secret_type),
+                builder.CreateString(std::string()),
                 builder.CreateVector(reinterpret_cast<const int8_t *>(crypt_handshake_->param.data()), crypt_handshake_->param.size()));
-
-            // TODO if switch type is RSA
-            // ::atframe::gw::inner::v1::cs_body_rsa_certBuilder rsa_cert(builder);
-            // rsa_cert.add_rsa_sign(::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1);
-            // rsa_cert.add_hash_type(::atframe::gw::inner::v1::hash_id_t_EN_HIT_MD5);
-            // rsa_cert.add_pubkey(builder.CreateVector(NULL, 0));
-            // handshake_body.add_rsa_cert(rsa_cert.Finish());
 
             return ret;
         }
@@ -1202,15 +1176,9 @@ namespace atframe {
 
             handshake_.switch_secret_type = crypt_handshake_->shared_conf->conf_.switch_secret_type;
             switch (handshake_.switch_secret_type) {
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH:
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_ECDH: {
                 handshake_.dh_ctx.init(shared_conf->shared_dh_context_);
-                break;
-            }
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
-                // TODO init public key and private key
-                // mbedtls: use API in mbedtls/pk.h => mbedtls_pk_parse_public_key, mbedtls_pk_parse_keyfile
-                // openssl/libressl/boringssl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
-                ret = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                 break;
             }
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {
@@ -1245,15 +1213,9 @@ namespace atframe {
             handshake_.has_data = false;
 
             switch (handshake_.switch_secret_type) {
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH: {
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH:
+            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_ECDH: {
                 handshake_.dh_ctx.close();
-                break;
-            }
-            case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA: {
-                // TODO init public key and private key
-                // mbedtls: use API in mbedtls/pk.h => mbedtls_pk_parse_public_key, mbedtls_pk_parse_keyfile
-                // openssl/libressl/boringssl: use API in openssl/rsa.h,openssl/pem.h => RSA * = PEM_read_RSA_PUBKEY, PEM_read_RSAPrivateKey
-                status = error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
                 break;
             }
             case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT: {

@@ -27,6 +27,8 @@ typedef int32_t (*libatgw_inner_v1_c_on_handshake_done_fn_t)(libatgw_inner_v1_c_
 typedef int32_t (*libatgw_inner_v1_c_on_error_fn_t)(libatgw_inner_v1_c_context, const char *, int32_t, int32_t, const char *);
 
 UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_init_algorithms();
+UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_cleanup_algorithms();
+
 UTIL_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_global_get_crypt_size();
 UTIL_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_global_get_crypt_name(uint64_t idx);
 

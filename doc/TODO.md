@@ -21,7 +21,7 @@ TODO
 15. [测试] atgateway: 每小时流量过载保护
 16. [测试] atgateway: 每分钟流量过载保护
 17. ~~[测试] atgateway: 握手超时保护(DDOS)~~
-18. [测试] valgrind --leak-check=full --tool=memcheck --show-leak-kinds=all --log-file=memcheck.log --malloc-fill=0x5E
+18. ~~[测试] valgrind --leak-check=full --tool=memcheck --show-leak-kinds=all --log-file=memcheck.log --malloc-fill=0x5E~~
 19. [测试] cppcheck 无ERROR
 20. ~~[功能] atgateway: 踢出Session（允许和不允许断线重连）~~
 21. [功能] atgateway: 关闭状态，通知所有client后退出

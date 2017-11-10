@@ -171,7 +171,11 @@ public:
             // dh
             cfg.dump_to("atgateway.client.crypt.dhparam", crypt_conf.dh_param);
             if (!crypt_conf.dh_param.empty()) {
-                crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH;
+                if (0 == UTIL_STRFUNC_STRNCASE_CMP("ecdh:", crypt_conf.dh_param.c_str(), 5)) {
+                    crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_ECDH;
+                } else {
+                    crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH;
+                }
             }
 
             // hash id
@@ -710,5 +714,10 @@ int main(int argc, char *argv[]) {
     app.set_evt_on_recv_msg(app_handle_on_recv(*gw_mod));
 
     // run
-    return app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+    int ret = app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+
+    // cleanup crypt algorithms
+    util::crypto::cipher::cleanup_global_algorithm();
+
+    return ret;
 }
