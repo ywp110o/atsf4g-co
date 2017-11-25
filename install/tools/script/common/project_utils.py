@@ -153,7 +153,13 @@ def get_global_option(section, key, default_val, env_name = None):
     return default_val
 
 def get_hostname():
-    return get_global_option('atsystem', 'hostname', '', 'SYSTEM_MACRO_HOSTNAME')
+    if 'hostname' not in server_cache_ip:
+        server_cache_ip['hostname'] = get_global_option('atsystem', 'hostname', '', 'SYSTEM_MACRO_HOSTNAME')
+        if server_cache_ip['hostname'] is None or len(server_cache_ip['hostname']) == 0:
+            # using uuid module to find physic address
+            import uuid
+            server_cache_ip['hostname']  = uuid.UUID(int = uuid.getnode()).hex[-12:]
+    return server_cache_ip['hostname']
 
 def str_to_list(val):
     ret = []
@@ -323,7 +329,10 @@ def get_server_children_mask():
     return get_server_option('children_mask', 0)
 
 def get_server_recv_buffer_size():
-    return get_global_option('atsystem', 'shm_channel_size', 2 * 1024 * 1024)
+    return get_global_option('atsystem', 'shm_channel_size', 8 * 1024 * 1024)
+
+def get_server_send_buffer_size():
+    return get_global_option('atsystem', 'iostream_channel_size', 2 * 1024 * 1024)
 
 def get_server_gateway_index(server_name = None, server_index = None):
     if server_name is None:
