@@ -238,7 +238,7 @@ namespace atframe {
         }
 
         void etcd_packer::unpack_int(rapidjson::Value &json_val, const char *key, int64_t &out) {
-            rapidjson::Value::MemberIterator iter = json_val.FindMember("member_id");
+            rapidjson::Value::MemberIterator iter = json_val.FindMember(key);
             if (iter == json_val.MemberEnd()) {
                 out = 0;
             } else {
@@ -252,7 +252,7 @@ namespace atframe {
         }
 
         void etcd_packer::unpack_int(rapidjson::Value &json_val, const char *key, uint64_t &out) {
-            rapidjson::Value::MemberIterator iter = json_val.FindMember("member_id");
+            rapidjson::Value::MemberIterator iter = json_val.FindMember(key);
             if (iter == json_val.MemberEnd()) {
                 out = 0;
             } else {

@@ -24,8 +24,7 @@ namespace atframe {
      *   Delete data => curl http://localhost:2379/v3alpha/kv/deleterange -X POST -d '{"key": "KEY", "range_end": "", "prev_kv": "bool"}'
      *       # Response {"header":{...}, "deleted": "number", "prev_kvs": [{...}]}
      *
-     *   Watch => curl http://localhost:2379/v3alpha/watch -XPOST -d '{"create_request":  {"key": "WATCH KEY", "range_end": "", "start_revision": "",
-     *                                                                "prev_kv": ""} }'
+     *   Watch => curl http://localhost:2379/v3alpha/watch -XPOST -d '{"create_request":  {"key": "WATCH KEY", "range_end": "", "prev_kv": true} }'
      *       # Response {"header":{...},"watch_id":"ID","created":"bool", "canceled": "bool", "compact_revision": "REVISION", "events": [{"type":
      *                  "PUT=0|DELETE=1", "kv": {...}, prev_kv": {...}"}]}
      *
@@ -344,6 +343,9 @@ namespace atframe {
                 self->conf_.path_node = self->conf_.hosts[self->random_generator_.random_between<size_t>(0, self->conf_.hosts.size())];
             }
 
+            // 触发一次tick
+            self->tick();
+
             return 0;
         }
 
@@ -475,17 +477,37 @@ namespace atframe {
             rapidjson::Document doc;
             doc.Parse(http_content.c_str());
 
+            bool is_grant = false;
             rapidjson::Value root = doc.GetObject();
-            rapidjson::Document::MemberIterator id = root.FindMember("ID");
-            if (root.MemberEnd() == root.FindMember("TTL") || root.MemberEnd() == id) {
-                WLOGERROR("Etcd lease keepalive failed because not found, try to grant one");
-                self->create_request_lease_grant();
+            rapidjson::Value::MemberIterator result = root.FindMember("result");
+            if (result == root.MemberEnd()) {
+                is_grant = true;
+            } else {
+                root = result->value;
+            }
+
+            if (false == root.IsObject()) {
+                WLOGERROR("Etcd lease grant failed, root is not object.(%s)", http_content.c_str());
+                return 0;
+            }
+
+            if (root.MemberEnd() == root.FindMember("TTL")) {
+                if (is_grant) {
+                    WLOGERROR("Etcd lease grant failed");
+                } else {
+                    WLOGERROR("Etcd lease keepalive failed because not found, try to grant one");
+                    self->create_request_lease_grant();
+                }
                 return 0;
             }
 
             // 更新lease
             etcd_packer::unpack_int(root, "ID", self->conf_.lease);
-            WLOGDEBUG("Etcd lease %lld keepalive successed", static_cast<long long>(self->conf_.lease));
+            if (is_grant) {
+                WLOGDEBUG("Etcd lease %lld granted", static_cast<long long>(self->conf_.lease));
+            } else {
+                WLOGDEBUG("Etcd lease %lld keepalive successed", static_cast<long long>(self->conf_.lease));
+            }
             return 0;
         }
 
