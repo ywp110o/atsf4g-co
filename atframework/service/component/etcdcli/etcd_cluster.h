@@ -71,6 +71,7 @@ namespace atframe {
             time_t get_http_timeout() const;
 
         private:
+            void set_lease(int64_t v);
             bool create_request_member_update();
             static int libcurl_callback_on_member_update(util::network::http_request &req);
 

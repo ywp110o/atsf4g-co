@@ -213,6 +213,20 @@ namespace atframe {
             return ret;
         }
 
+        void etcd_cluster::set_lease(int64_t v) {
+            int64_t old_v = conf_.lease;
+            conf_.lease = v;
+            if (old_v == v) {
+                return;
+            }
+
+            if (0 == old_v && 0 != v) {
+                // TODO all keepalive object start a set request
+            } else if (0 != old_v && 0 != v) {
+                // TODO all keepalive object start a update request
+            }
+        }
+
         bool etcd_cluster::create_request_member_update() {
             if (!curl_multi_) {
                 return false;
