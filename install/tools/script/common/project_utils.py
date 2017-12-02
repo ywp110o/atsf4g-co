@@ -309,13 +309,26 @@ def get_server_atbus_tcp():
         else:
             return 'ipv4://{0}:{1}'.format(get_inner_ipv4(), get_server_atbus_port())
 
+def get_server_atbus_unix():
+    dir_path = get_global_option('atsystem', 'unix_sock_dir', './', 'SYSTEM_MACRO_CUSTOM_UNIX_SOCK_DIR')
+    return 'unix://{0}{1}-{2:x}.sock'.format(dir_path, get_server_full_name(), get_server_id())
+
 def get_server_atbus_listen():
     ret = []
     res = get_server_atbus_shm()
     if not res is None:
         ret.append(res)
-    if 0 == len(ret) or 'atproxy' == get_server_name():
+    
+    if 'support_unix_sock' not in server_cache_ip:
+        import socket
+        if 'AF_UNIX' in socket.__dict__:
+            server_cache_ip['support_unix_sock'] = True
+        else:
+            server_cache_ip['support_unix_sock'] = False
+    if 0 == len(ret) or False == server_cache_ip['support_unix_sock'] or 'atproxy' == get_server_name():
         ret.append(get_server_atbus_tcp())
+    else:
+        ret.append(get_server_atbus_unix())
     return ret
 
 def get_server_proxy():

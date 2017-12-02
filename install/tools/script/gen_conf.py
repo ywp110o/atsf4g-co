@@ -62,127 +62,73 @@ if __name__ == '__main__':
             common.print_color.cprintf_stdout([common.print_color.print_style.FC_RED, common.print_color.print_style.FW_BOLD], 'set command {0} invalid, must be SECTION.KEY=VALUE\r\n', cmd)
     
     # copy script templates
-    restart_all_script = os.path.join(script_dir, 'restart_all.sh')
-    reload_all_script = os.path.join(script_dir, 'reload_all.sh')
-    stop_all_script = os.path.join(script_dir, 'stop_all.sh')
-    shutil.copy2(
-        os.path.join(script_dir, 'helper', 'template', 'script', 'restart_all.template.sh'), 
-        restart_all_script
-    )
-    os.chmod(restart_all_script, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
-    shutil.copy2(
-        os.path.join(script_dir, 'helper', 'template', 'script', 'reload_all.template.sh'), 
-        reload_all_script
-    )
-    os.chmod(reload_all_script, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
-    shutil.copy2(
-        os.path.join(script_dir, 'helper', 'template', 'script', 'stop_all.template.sh'), 
-        stop_all_script
-    )
-    os.chmod(stop_all_script, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
-    restart_all_content = []
-    reload_all_content = []
-    stop_all_content = []
+    all_service_temps = {
+        'restart_all.sh': {
+            'in': os.path.join(script_dir, 'helper', 'template', 'script', 'restart_all.template.sh'),
+            'out': os.path.join(script_dir, 'restart_all.sh'),
+            'content': []
+        }, 
+        'reload_all.sh': {
+            'in': os.path.join(script_dir, 'helper', 'template', 'script', 'reload_all.template.sh'),
+            'out': os.path.join(script_dir, 'reload_all.sh'),
+            'content': []
+        },
+        'stop_all.sh': {
+            'in': os.path.join(script_dir, 'helper', 'template', 'script', 'stop_all.template.sh'),
+            'out': os.path.join(script_dir, 'stop_all.sh'),
+            'content': [],
+            'reverse': True
+        }
+    }
+
+    for all_svr_temp in all_service_temps:
+        all_temp_cfg = all_service_temps[all_svr_temp]
+        shutil.copy2(all_temp_cfg['in'], all_temp_cfg['out'])
+        os.chmod(all_temp_cfg['out'], stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
     
     def generate_service(svr_name, svr_index, install_prefix, section_name, **ext_options):
         project.set_server_inst(config.items(section_name), svr_name, svr_index)
         common.print_color.cprintf_stdout([common.print_color.print_style.FC_YELLOW, common.print_color.print_style.FW_BOLD], 'start to generate etc and script of {0}-{1}\r\n', svr_name, svr_index)
 
-        etc_in_name = '{0}.conf'.format(svr_name)
-        etc_out_name = '{0}-{1}.conf'.format(svr_name, svr_index)
-        start_script_name = 'start-{0}.sh'.format(svr_index)
-        stop_script_name = 'stop-{0}.sh'.format(svr_index)
-        reload_script_name = 'reload-{0}.sh'.format(svr_index)
-        debug_script_name = 'debug-{0}.sh'.format(svr_index)
         install_abs_prefix = os.path.normpath(os.path.join(script_dir, '..', '..', install_prefix))
 
         if not os.path.exists(os.path.join(install_abs_prefix, 'etc')):
             os.makedirs(os.path.join(install_abs_prefix, 'etc'))
         if not os.path.exists(os.path.join(install_abs_prefix, 'bin')):
             os.makedirs(os.path.join(install_abs_prefix, 'bin'))
+
+        def generate_template(temp_dir, temp_path, out_dir, out_path, all_content_script = None):
+            gen_in_path = os.path.join(temp_dir, temp_path)
+            gen_out_path = os.path.join(install_abs_prefix, out_dir, out_path)
+            if os.path.exists(gen_in_path):
+                svr_tmpl = project_lookup.get_template(temp_path)
+                open(gen_out_path, mode='w').write(svr_tmpl.render(
+                    project_install_prefix=os.path.relpath('.', os.path.join(install_prefix, out_dir)),
+                    **ext_options
+                ))
+                os.chmod(gen_out_path, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
+                if all_content_script is not None and all_content_script in all_service_temps:
+                    all_service_temps[all_content_script]['content'].append("""
+# ==================== {0} ==================== 
+if [ $# -eq 0 ] || [ "0" == "$(is_in_server_list {1} $*)" ]; then 
+    bash {2}
+fi
+                    """.format(
+                        project.get_server_full_name(), 
+                        project.get_server_full_name(), 
+                        os.path.relpath(gen_out_path, script_dir)
+                    ))
+
         # etc
-        gen_in_path = os.path.join(etc_template_dir, etc_in_name)
-        gen_out_path = os.path.join(install_abs_prefix, 'etc', etc_out_name)
-        if os.path.exists(gen_in_path):
-            svr_tmpl = project_lookup.get_template(etc_in_name)
-            open(gen_out_path, mode='w').write(svr_tmpl.render(
-                project_install_prefix=os.path.relpath('.', os.path.join(install_prefix, 'etc')),
-                **ext_options
-            ))
-            os.chmod(gen_out_path, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
-        # start script
-        gen_in_path = os.path.join(script_template_dir, 'start.sh')
-        gen_out_path = os.path.join(install_abs_prefix, 'bin', start_script_name)
-        if os.path.exists(gen_in_path):
-            svr_tmpl = project_lookup.get_template('start.sh')
-            open(gen_out_path, mode='w').write(svr_tmpl.render(
-                project_install_prefix=os.path.relpath('.', os.path.join(install_prefix, 'bin')),
-                **ext_options
-            ))
-            os.chmod(gen_out_path, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
-            restart_all_content.append("""
-# ==================== {0} ==================== 
-if [ $# -eq 0 ] || [ "0" == "$(is_in_server_list {1} $*)" ]; then 
-    bash {2}
-fi
-            """.format(
-                project.get_server_full_name(), 
-                project.get_server_full_name(), 
-                os.path.relpath(gen_out_path, script_dir)
-            ))
+        generate_template(etc_template_dir, '{0}.conf'.format(svr_name), 'etc', '{0}-{1}.conf'.format(svr_name, svr_index))
 
-        # stop script
-        gen_in_path = os.path.join(script_template_dir, 'stop.sh')
-        gen_out_path = os.path.join(install_abs_prefix, 'bin', stop_script_name)
-        if os.path.exists(gen_in_path):
-            svr_tmpl = project_lookup.get_template('stop.sh')
-            open(gen_out_path, mode='w').write(svr_tmpl.render(
-                project_install_prefix=os.path.relpath('.', os.path.join(install_prefix, 'bin')),
-                **ext_options
-            ))
-            os.chmod(gen_out_path, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
-            stop_all_content.append("""
-# ==================== {0} ==================== 
-if [ $# -eq 0 ] || [ "0" == "$(is_in_server_list {1} $*)" ]; then 
-    bash {2}
-fi
-            """.format(
-                project.get_server_full_name(), 
-                project.get_server_full_name(), 
-                os.path.relpath(gen_out_path, script_dir)
-            ))
-
-        # reload script
-        gen_in_path = os.path.join(script_template_dir, 'reload.sh')
-        gen_out_path = os.path.join(install_abs_prefix, 'bin', reload_script_name)
-        if os.path.exists(gen_in_path):
-            svr_tmpl = project_lookup.get_template('reload.sh')
-            open(gen_out_path, mode='w').write(svr_tmpl.render(
-                project_install_prefix=os.path.relpath('.', os.path.join(install_prefix, 'bin')),
-                **ext_options
-            ))
-            os.chmod(gen_out_path, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
-            reload_all_content.append("""
-# ==================== {0} ==================== 
-if [ $# -eq 0 ] || [ "0" == "$(is_in_server_list {1} $*)" ]; then 
-    bash {2}
-fi
-            """.format(
-                project.get_server_full_name(), 
-                project.get_server_full_name(), 
-                os.path.relpath(gen_out_path, script_dir)
-            ))
-            
-        # debug script
-        gen_in_path = os.path.join(script_template_dir, 'debug.sh')
-        gen_out_path = os.path.join(install_abs_prefix, 'bin', debug_script_name)
-        if os.path.exists(gen_in_path):
-            svr_tmpl = project_lookup.get_template('debug.sh')
-            open(gen_out_path, mode='w').write(svr_tmpl.render(
-                project_install_prefix=os.path.relpath('.', os.path.join(install_prefix, 'bin')),
-                **ext_options
-            ))
-            os.chmod(gen_out_path, stat.S_IRWXU + stat.S_IRWXG + stat.S_IROTH + stat.S_IXOTH)
+        # scripts
+        generate_template(script_template_dir, 'start.sh', 'bin', 'start-{0}.sh'.format(svr_index), 'restart_all.sh')
+        generate_template(script_template_dir, 'stop.sh', 'bin', 'stop-{0}.sh'.format(svr_index), 'stop_all.sh')
+        generate_template(script_template_dir, 'reload.sh', 'bin', 'reload-{0}.sh'.format(svr_index), 'reload_all.sh')
+        generate_template(script_template_dir, 'debug.sh', 'bin', 'debug-{0}.sh'.format(svr_index))
+        generate_template(script_template_dir, 'run.sh', 'bin', 'run-{0}.sh'.format(svr_index))
+        
    
     # parse all services
     atgateway_index = 1 + opts.server_id_offset
@@ -201,9 +147,11 @@ fi
                 )
                 atgateway_index = atgateway_index + 1
 
-    open(restart_all_script, mode='a').write(os.linesep.join(restart_all_content))
-    open(reload_all_script, mode='a').write(os.linesep.join(reload_all_content))
-    stop_all_content.reverse()
-    open(stop_all_script, mode='a').write(os.linesep.join(stop_all_content))
+    for all_svr_temp in all_service_temps:
+        all_temp_cfg = all_service_temps[all_svr_temp]
+        if 'reverse' in all_temp_cfg and all_temp_cfg['reverse']:
+            all_temp_cfg['content'].reverse()
+            open(all_temp_cfg['out'], mode='a').write(os.linesep.join(all_temp_cfg['content']))
+    
     common.print_color.cprintf_stdout([common.print_color.print_style.FC_YELLOW, common.print_color.print_style.FW_BOLD], 'all jobs done.\r\n')
         
