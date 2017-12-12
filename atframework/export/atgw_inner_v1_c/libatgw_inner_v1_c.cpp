@@ -13,8 +13,8 @@
 
 #include <inner_v1/libatgw_proto_inner.h>
 
-#define ATGW_CONTEXT(x) ((::atframe::gateway::libatgw_proto_inner_v1 *)(x).pa)
-#define ATGW_CONTEXT_IS_NULL(x) (NULL == (x).pa)
+#define ATGW_CONTEXT(x) ((::atframe::gateway::libatgw_proto_inner_v1 *)(x))
+#define ATGW_CONTEXT_IS_NULL(x) (NULL == (x))
 
 struct g_libatgw_inner_v1_c_callbacks_t {
     ::atframe::gateway::proto_base::proto_callbacks_t callbacks;
@@ -55,7 +55,7 @@ static int32_t proto_inner_callback_on_write(::atframe::gateway::proto_base *pro
 
     int32_t is_done_i = 0;
     libatgw_inner_v1_c_context context;
-    context.pa = proto;
+    context = proto;
     int32_t ret = fn(context, buffer, sz, &is_done_i);
     if (NULL != is_done) {
         *is_done = !!is_done_i;
@@ -68,7 +68,7 @@ static int32_t proto_inner_callback_on_message(::atframe::gateway::proto_base *p
     libatgw_inner_v1_c_on_message_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_message_fn;
     if (NULL != fn) {
         libatgw_inner_v1_c_context context;
-        context.pa = proto;
+        context = proto;
         fn(context, buffer, sz);
     }
 
@@ -80,7 +80,7 @@ static int32_t proto_inner_callback_on_new_session(::atframe::gateway::proto_bas
     libatgw_inner_v1_c_on_init_new_session_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_init_new_session_fn;
     if (NULL != fn) {
         libatgw_inner_v1_c_context context;
-        context.pa = proto;
+        context = proto;
         fn(context, &sess_id);
     }
 
@@ -92,7 +92,7 @@ static int32_t proto_inner_callback_on_reconnect(::atframe::gateway::proto_base 
     libatgw_inner_v1_c_on_init_reconnect_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_init_reconnect_fn;
     if (NULL != fn) {
         libatgw_inner_v1_c_context context;
-        context.pa = proto;
+        context = proto;
         fn(context, sess_id);
     }
 
@@ -104,7 +104,7 @@ static int32_t proto_inner_callback_on_close(::atframe::gateway::proto_base *pro
     libatgw_inner_v1_c_on_close_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_close_fn;
     if (NULL != fn) {
         libatgw_inner_v1_c_context context;
-        context.pa = proto;
+        context = proto;
         fn(context, reason);
     }
 
@@ -115,7 +115,7 @@ static int32_t proto_inner_callback_on_handshake(::atframe::gateway::proto_base 
     libatgw_inner_v1_c_on_handshake_done_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_handshake_done_fn;
     if (NULL != fn) {
         libatgw_inner_v1_c_context context;
-        context.pa = proto;
+        context = proto;
         fn(context, status);
     }
 
@@ -126,7 +126,7 @@ static int32_t proto_inner_callback_on_handshake_update(::atframe::gateway::prot
     libatgw_inner_v1_c_on_handshake_done_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_handshake_update_fn;
     if (NULL != fn) {
         libatgw_inner_v1_c_context context;
-        context.pa = proto;
+        context = proto;
         fn(context, status);
     }
 
@@ -137,7 +137,7 @@ static int32_t proto_inner_callback_on_error(::atframe::gateway::proto_base *pro
     libatgw_inner_v1_c_on_error_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_error_fn;
     if (NULL != fn) {
         libatgw_inner_v1_c_context context;
-        context.pa = proto;
+        context = proto;
         fn(context, filename, line, errcode, errmsg);
     }
 
@@ -222,7 +222,7 @@ UTIL_SYMBOL_EXPORT libatgw_inner_v1_c_context __cdecl libatgw_inner_v1_c_create(
         res->set_callbacks(libatgw_inner_v1_c_get_proto_callbacks());
     }
 
-    ret.pa = res;
+    ret = res;
     return ret;
 }
 
