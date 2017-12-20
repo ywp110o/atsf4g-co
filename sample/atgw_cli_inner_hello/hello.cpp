@@ -27,7 +27,7 @@ struct proto_wrapper {
     libatgw_inner_v1_c_context ctx;
     proto_wrapper() : ctx(libatgw_inner_v1_c_create()) {}
     ~proto_wrapper() {
-        if (NULL != ctx.pa) {
+        if (NULL != ctx) {
             libatgw_inner_v1_c_destroy(ctx);
         }
     }

@@ -11,6 +11,7 @@ CMAKE_CLANG_TIDY="";
 CMAKE_CLANG_ANALYZER=0;
 CMAKE_CLANG_ANALYZER_PATH="";
 BUILD_DIR=$(echo "build_$SYS_NAME" | tr '[:upper:]' '[:lower:]');
+CMAKE_BUILD_TYPE=Debug;
 
 if [ ! -z "$MSYSTEM" ]; then
     CHECK_MSYS=$(echo "${MSYSTEM:0:5}" | tr '[:upper:]' '[:lower:]');
@@ -18,7 +19,7 @@ else
     CHECK_MSYS="";
 fi
 
-while getopts "ac:e:hlm:o:tus-" OPTION; do
+while getopts "ab:c:e:hlm:o:tus-" OPTION; do
     case $OPTION in
         a)
             echo "Ready to check ccc-analyzer and c++-analyzer, please do not use -c to change the compiler when using clang-analyzer.";
@@ -55,10 +56,13 @@ while getopts "ac:e:hlm:o:tus-" OPTION; do
             CMAKE_CLANG_ANALYZER=1;
             BUILD_DIR="${BUILD_DIR}_analyzer";
         ;;
+        b)
+            CMAKE_BUILD_TYPE="$OPTARG";
+        ;;
         c)
             CC="$OPTARG";
-            CXX="${CC/clang/clang++}";
-            CXX="${CXX/gcc/g++}";
+            CXX="${CC/%clang/clang++}";
+            CXX="${CXX/%gcc/g++}";
         ;;
         e)
             CCACHE="$OPTARG";
@@ -127,9 +131,9 @@ else
 fi
 
 if [ "$CHECK_MSYS" == "mingw" ]; then
-    cmake .. -G "MSYS Makefiles" -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
+    cmake .. -G "MSYS Makefiles" -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
 else
-    cmake .. -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
+    cmake .. -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
 fi
 
 

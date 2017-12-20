@@ -1,5 +1,5 @@
 ﻿
-set (ATSF4G_APP_NAME atservice_component)
+set (ATSF4G_APP_NAME ${ATFRAMEWORK_SERVICE_COMPONENT_LINK_NAME})
 EchoWithColor(COLOR GREEN "-- Configure ${ATSF4G_APP_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
 configure_file(
@@ -20,7 +20,7 @@ file(GLOB_RECURSE ATSF4G_APP_SRC_LIST
 )
 source_group_by_dir(ATSF4G_APP_SRC_LIST)
 
-add_library(${ATSF4G_APP_NAME} ${ATSF4G_APP_SRC_LIST})
+add_library(${ATSF4G_APP_NAME} STATIC ${ATSF4G_APP_SRC_LIST})
 
 install(TARGETS ${ATSF4G_APP_NAME}
     RUNTIME DESTINATION bin

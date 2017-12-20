@@ -53,17 +53,17 @@ namespace atframe {
         public:
             void reset();
 
-            virtual int init() CLASS_OVERRIDE;
+            virtual int init() UTIL_CONFIG_OVERRIDE;
 
-            virtual int reload() CLASS_OVERRIDE;
+            virtual int reload() UTIL_CONFIG_OVERRIDE;
 
-            virtual int stop() CLASS_OVERRIDE;
+            virtual int stop() UTIL_CONFIG_OVERRIDE;
 
-            virtual int timeout() CLASS_OVERRIDE;
+            virtual int timeout() UTIL_CONFIG_OVERRIDE;
 
-            virtual const char *name() const CLASS_OVERRIDE;
+            virtual const char *name() const UTIL_CONFIG_OVERRIDE;
 
-            virtual int tick() CLASS_OVERRIDE;
+            virtual int tick() UTIL_CONFIG_OVERRIDE;
 
             int keepalive(bool refresh);
 
@@ -107,7 +107,7 @@ namespace atframe {
 
             atproxy_manager proxy_mgr_;
         };
-    }
-}
+    } // namespace proxy
+} // namespace atframe
 
 #endif

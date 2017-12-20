@@ -1614,11 +1614,18 @@ namespace atframe {
         int libatgw_proto_inner_v1::handshake_update() { return send_key_syn(); }
 
         std::string libatgw_proto_inner_v1::get_info() const {
+            using namespace ::atframe::gw::inner::v1;
+
+            const char *switch_secret_name = "Unknown";
+            if (handshake_.switch_secret_type >= switch_secret_t_MIN && handshake_.switch_secret_type <= switch_secret_t_MAX) {
+                switch_secret_name = EnumNameswitch_secret_t(static_cast<switch_secret_t>(handshake_.switch_secret_type));
+            }
+
             std::stringstream ss;
             size_t limit_sz = 0;
             ss << "atgateway inner protocol: session id=" << session_id_ << std::endl;
             ss << "    last ping delta=" << ping_.last_delta << std::endl;
-            ss << "    handshake=" << (handshake_.has_data ? "running" : "not running") << ", switch type=" << handshake_.switch_secret_type << std::endl;
+            ss << "    handshake=" << (handshake_.has_data ? "running" : "not running") << ", switch type=" << switch_secret_name << std::endl;
             ss << "    status: writing=" << check_flag(flag_t::EN_PFT_WRITING) << ",closing=" << check_flag(flag_t::EN_PFT_CLOSING)
                << ",closed=" << check_flag(flag_t::EN_PFT_CLOSED) << ",handshake done=" << check_flag(flag_t::EN_PFT_HANDSHAKE_DONE)
                << ",handshake update=" << check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE) << std::endl;

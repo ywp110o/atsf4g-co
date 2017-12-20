@@ -102,6 +102,13 @@ if (MINGW OR APPLE)
     set (EXPORT_SRC_LIB_TYPE STATIC)
 endif()
 
+# 保持和MSVC得导出行为一致
+if( ${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+    add_definitions(-fvisibility=hidden)
+elseif( ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
+    add_definitions(-fvisibility=hidden)
+endif()
+
 add_library(${LIB_NAME} ${EXPORT_SRC_LIB_TYPE} ${SRC_LIST})
 
 target_link_libraries(${LIB_NAME}
