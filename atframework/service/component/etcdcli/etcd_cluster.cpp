@@ -7,6 +7,8 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
+#include "etcd_keepalive.h"
+
 #include "etcd_cluster.h"
 
 namespace atframe {
@@ -213,6 +215,23 @@ namespace atframe {
             return ret;
         }
 
+        bool etcd_cluster::add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive) {
+            if (!keepalive) {
+                return false;
+            }
+
+            if (keepalive_actors_.end() != std::find(keepalive_actors_.begin(), keepalive_actors_.end(), keepalive)) {
+                return false;
+            }
+
+            if (this != &keepalive->get_owner()) {
+                return false;
+            }
+
+            keepalive_actors_.push_back(keepalive);
+            return true;
+        }
+
         void etcd_cluster::set_lease(int64_t v) {
             int64_t old_v = conf_.lease;
             conf_.lease = v;
@@ -221,9 +240,19 @@ namespace atframe {
             }
 
             if (0 == old_v && 0 != v) {
-                // TODO all keepalive object start a set request
+                // all keepalive object start a set request
+                for (size_t i = 0; i < keepalive_actors_.size(); ++i) {
+                    if (keepalive_actors_[i]) {
+                        keepalive_actors_[i]->active();
+                    }
+                }
             } else if (0 != old_v && 0 != v) {
-                // TODO all keepalive object start a update request
+                // all keepalive object start a update request
+                for (size_t i = 0; i < keepalive_actors_.size(); ++i) {
+                    if (keepalive_actors_[i]) {
+                        keepalive_actors_[i]->active();
+                    }
+                }
             }
         }
 

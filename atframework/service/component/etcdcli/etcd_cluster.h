@@ -28,6 +28,8 @@
 
 namespace atframe {
     namespace component {
+        class etcd_keepalive;
+
         class etcd_cluster {
         public:
             struct flag_t {
@@ -70,6 +72,8 @@ namespace atframe {
 
             time_t get_http_timeout() const;
 
+            bool add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
+
         private:
             void set_lease(int64_t v);
             bool create_request_member_update();
@@ -90,6 +94,7 @@ namespace atframe {
             util::network::http_request::curl_m_bind_ptr_t curl_multi_;
             util::network::http_request::ptr_t rpc_update_members_;
             util::network::http_request::ptr_t rpc_keepalive_;
+            std::vector<std::shared_ptr<etcd_keepalive> > keepalive_actors_;
         };
     } // namespace component
 } // namespace atframe
