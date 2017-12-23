@@ -201,15 +201,7 @@ namespace atframe {
 
         void etcd_packer::pack_base64(rapidjson::Value &json_val, const char *key, const std::string &val, rapidjson::Document &doc) {
             std::string base64_val;
-            size_t olen = 0;
-            util::base64_encode(NULL, 0, &olen, reinterpret_cast<const unsigned char *>(&val[0]), val.size());
-            base64_val.resize(olen, 0);
-            util::base64_encode(reinterpret_cast<unsigned char *>(&base64_val[0]), base64_val.size(), &olen, reinterpret_cast<const unsigned char *>(&val[0]),
-                                val.size());
-
-            while (!base64_val.empty() && base64_val[base64_val.size() - 1] == 0) {
-                base64_val.pop_back();
-            }
+            util::base64_encode(base64_val, val);
 
             rapidjson::Value k;
             rapidjson::Value v;
@@ -226,15 +218,8 @@ namespace atframe {
 
             const char *base64_val = iter->value.GetString();
             size_t base64_val_sz = strlen(base64_val);
-            size_t olen = 0;
 
-            if (-2 == util::base64_decode(NULL, 0, &olen, reinterpret_cast<const unsigned char *>(base64_val), base64_val_sz)) {
-                return false;
-            }
-
-            val.resize(olen);
-            return 0 == util::base64_decode(reinterpret_cast<unsigned char *>(&val[0]), val.size(), &olen, reinterpret_cast<const unsigned char *>(base64_val),
-                                            base64_val_sz);
+            return 0 == util::base64_decode(val, reinterpret_cast<const unsigned char *>(base64_val), base64_val_sz);
         }
 
         void etcd_packer::unpack_int(rapidjson::Value &json_val, const char *key, int64_t &out) {
