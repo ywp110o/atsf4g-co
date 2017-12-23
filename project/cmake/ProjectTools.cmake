@@ -17,6 +17,6 @@ function(project_copy_shared_lib)
     endforeach()
 endfunction()
 
-set(LOG_WRAPPER_CATEGORIZE_SIZE 16 CACHE STRING "日志分类个数限制")
+set(LOG_WRAPPER_CATEGORIZE_SIZE 16 CACHE STRING "全局日志分类个数限制")
 add_compiler_define(LOG_WRAPPER_CATEGORIZE_SIZE=${LOG_WRAPPER_CATEGORIZE_SIZE})
 
