@@ -74,6 +74,44 @@ namespace atframe {
 
             bool add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
 
+            // ================== apis of create request for key-value operation
+        public:
+            /**
+             * @brief               create request for range get key-value data
+             * @param key	        key is the first key for the range. If range_end is not given, the request only looks up key.
+             * @param range_end	    range_end is the upper bound on the requested range [key, range_end). just like etcd_packer::pack_key_range
+             * @param limit	        limit is a limit on the number of keys returned for the request. When limit is set to 0, it is treated as no limit.
+             * @param revision	    revision is the point-in-time of the key-value store to use for the range. If revision is less or equal to zero, the range
+             *                      is over the newest key-value store. If the revision has been compacted, ErrCompacted is returned as a response.
+             * @return http request
+             */
+            util::network::http_request::ptr_t create_request_kv_get(const std::string &key, const std::string &range_end = "", int64_t limit = 0,
+                                                                     int64_t revision = 0);
+
+            /**
+             * @brief               create request for set key-value data
+             * @param key	        key is the key, in bytes, to put into the key-value store.
+             * @param value	        value is the value, in bytes, to associate with the key in the key-value store.
+             * @param assign_lease	if add lease ID to associate with the key in the key-value store. A lease value of 0 indicates no lease.
+             * @param prev_kv	    If prev_kv is set, etcd gets the previous key-value pair before changing it. The previous key-value pair will be returned in
+             *                      the put response.
+             * @param ignore_value	If ignore_value is set, etcd updates the key using its current value. Returns an error if the key does not exist.
+             * @param ignore_lease	If ignore_lease is set, etcd updates the key using its current lease. Returns an error if the key does not exist.
+             * @return http request
+             */
+            util::network::http_request::ptr_t create_request_kv_set(const std::string &key, const std::string &value, bool assign_lease = false,
+                                                                     bool prev_kv = false, bool ignore_value = false, bool ignore_lease = false);
+
+            /**
+             * @brief               create request for range delete key-value data
+             * @param key	        key is the first key for the range. If range_end is not given, the request only looks up key.
+             * @param range_end	    range_end is the upper bound on the requested range [key, range_end). just like etcd_packer::pack_key_range
+             * @param prev_kv	    If prev_kv is set, etcd gets the previous key-value pairs before deleting it. The previous key-value pairs will be
+             *                      returned in the delete response.
+             * @return http request
+             */
+            util::network::http_request::ptr_t create_request_kv_del(const std::string &key, const std::string &range_end = "", bool prev_kv = false);
+
         private:
             void set_lease(int64_t v);
             bool create_request_member_update();

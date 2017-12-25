@@ -32,8 +32,10 @@ namespace atframe {
             etcd_keepalive(etcd_cluster &owner, const std::string &path, constrict_helper_t &helper);
             static ptr_t create(etcd_cluster &owner, const std::string &path);
 
+            void close();
+
             void set_checker(const std::string &checked_str);
-            void set_checker(checker_fn_t fn, bool auto_decode = true);
+            void set_checker(checker_fn_t fn);
 
             inline void set_value(const std::string &str) { value_ = str; }
 #if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
@@ -52,6 +54,10 @@ namespace atframe {
             void process();
 
         private:
+            static int libcurl_callback_on_get_data(util::network::http_request &req);
+            static int libcurl_callback_on_set_data(util::network::http_request &req);
+
+        private:
             etcd_cluster *owner_;
             std::string path_;
             std::string value_;
@@ -63,7 +69,6 @@ namespace atframe {
 
             typedef struct {
                 checker_fn_t fn;
-                bool is_auto_decode;
                 bool is_check_run;
                 bool is_check_passed;
             } checker_t;

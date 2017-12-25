@@ -43,6 +43,10 @@ namespace atframe {
 
 #define ETCD_API_V3_MEMBER_LIST "/v3alpha/cluster/member/list"
 
+#define ETCD_API_V3_KV_GET "/v3alpha/range"
+#define ETCD_API_V3_KV_SET "/v3alpha/kv/put"
+#define ETCD_API_V3_KV_DELETE "/v3alpha/kv/deleterange"
+
 #define ETCD_API_V3_LEASE_GRANT "/v3alpha/lease/grant"
 #define ETCD_API_V3_LEASE_KEEPALIVE "/v3alpha/lease/keepalive"
 #define ETCD_API_V3_LEASE_REVOKE "/v3alpha/kv/lease/revoke"
@@ -126,6 +130,13 @@ namespace atframe {
                 rpc_update_members_->stop();
                 rpc_update_members_.reset();
             }
+
+            for (size_t i = 0; i < keepalive_actors_.size(); ++ i) {
+                if (keepalive_actors_[i]) {
+                    keepalive_actors_[i]->close();
+                }
+            }
+            keepalive_actors_.clear();
 
             if (curl_multi_) {
                 if (0 != conf_.lease) {
@@ -567,6 +578,86 @@ namespace atframe {
                 rapidjson::Document doc;
                 doc.SetObject();
                 doc.AddMember("ID", conf_.lease, doc.GetAllocator());
+
+                setup_http_request(ret, doc, get_http_timeout());
+            }
+
+            return ret;
+        }
+
+        util::network::http_request::ptr_t etcd_cluster::create_request_kv_get(const std::string &key, const std::string &range_end, int64_t limit,
+                                                                               int64_t revision) {
+            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+                return util::network::http_request::ptr_t();
+            }
+
+            std::stringstream ss;
+            ss << conf_.path_node << ETCD_API_V3_KV_GET;
+            util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
+
+            if (ret) {
+                rapidjson::Document doc;
+                doc.SetObject();
+                rapidjson::Value root = doc.GetObject();
+
+                etcd_packer::pack_key_range(root, key, range_end, doc);
+                doc.AddMember("limit", limit, doc.GetAllocator());
+                doc.AddMember("revision", revision, doc.GetAllocator());
+
+                setup_http_request(ret, doc, get_http_timeout());
+            }
+
+            return ret;
+        }
+
+        util::network::http_request::ptr_t etcd_cluster::create_request_kv_set(const std::string &key, const std::string &value, bool assign_lease,
+                                                                               bool prev_kv, bool ignore_value, bool ignore_lease) {
+            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+                return util::network::http_request::ptr_t();
+            }
+
+            std::stringstream ss;
+            ss << conf_.path_node << ETCD_API_V3_KV_SET;
+            util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
+
+            if (ret) {
+                rapidjson::Document doc;
+                doc.SetObject();
+
+                rapidjson::Value root = doc.GetObject();
+
+                etcd_packer::pack_base64(root, "key", key, doc);
+                etcd_packer::pack_base64(root, "value", value, doc);
+                if (assign_lease) {
+                    doc.AddMember("lease", conf_.lease, doc.GetAllocator());    
+                }
+
+                doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
+                doc.AddMember("ignore_value", ignore_value, doc.GetAllocator());
+                doc.AddMember("ignore_lease", ignore_lease, doc.GetAllocator());
+
+                setup_http_request(ret, doc, get_http_timeout());
+            }
+
+            return ret;
+        }
+
+        util::network::http_request::ptr_t etcd_cluster::create_request_kv_del(const std::string &key, const std::string &range_end, bool prev_kv){
+            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+                return util::network::http_request::ptr_t();
+            }
+
+            std::stringstream ss;
+            ss << conf_.path_node << ETCD_API_V3_KV_DELETE;
+            util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
+
+            if (ret) {
+                rapidjson::Document doc;
+                doc.SetObject();
+                rapidjson::Value root = doc.GetObject();
+
+                etcd_packer::pack_key_range(root, key, range_end, doc);
+                doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
 
                 setup_http_request(ret, doc, get_http_timeout());
             }
