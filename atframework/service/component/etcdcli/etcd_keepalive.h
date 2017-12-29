@@ -1,3 +1,17 @@
+/**
+ * etcd_keepalive.h
+ *
+ *  Created on: 2017-12-26
+ *      Author: owent
+ *
+ *  Released under the MIT license
+ */
+
+#ifndef ATFRAME_SERVICE_COMPONENT_ETCDCLI_ETCD_KEEPALIVE_H
+#define ATFRAME_SERVICE_COMPONENT_ETCDCLI_ETCD_KEEPALIVE_H
+
+#pragma once
+
 #include <string>
 
 #include <std/functional.h>
@@ -43,7 +57,7 @@ namespace atframe {
 #endif
             inline const std::string &get_value() const { return value_; }
 
-            std::string get_path() const;
+            const std::string &get_path() const;
 
             void active();
 
@@ -76,3 +90,5 @@ namespace atframe {
         };
     } // namespace component
 } // namespace atframe
+
+#endif

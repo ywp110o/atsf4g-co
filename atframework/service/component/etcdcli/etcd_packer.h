@@ -43,6 +43,7 @@ namespace atframe {
 
             static void unpack_int(rapidjson::Value &json_val, const char *key, int64_t &out);
             static void unpack_int(rapidjson::Value &json_val, const char *key, uint64_t &out);
+            static void unpack_bool(rapidjson::Value &json_val, const char *key, bool &out);
         };
     } // namespace component
 } // namespace atframe

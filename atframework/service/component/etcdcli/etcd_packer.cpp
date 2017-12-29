@@ -249,5 +249,25 @@ namespace atframe {
                 }
             }
         }
+
+        void etcd_packer::unpack_bool(rapidjson::Value &json_val, const char *key, bool &out) {
+            rapidjson::Value::MemberIterator iter = json_val.FindMember(key);
+            if (iter == json_val.MemberEnd()) {
+                out = false;
+            } else {
+                if (iter->value.IsBool()) {
+                    out = iter->value.GetBool();
+                } else if (iter->value.IsUint64()) {
+                    out = 0 != iter->value.GetUint64();
+                } else if (iter->value.IsInt64()) {
+                    out = 0 != iter->value.GetInt64();
+                } else {
+                    const char *val = iter->value.GetString();
+                    int outint = 1;
+                    ::util::string::str2int(outint, val);
+                    out = 0 != outint;
+                }
+            }
+        }
     } // namespace component
 } // namespace atframe

@@ -29,6 +29,7 @@
 namespace atframe {
     namespace component {
         class etcd_keepalive;
+        class etcd_watcher;
 
         class etcd_cluster {
         public:
@@ -73,6 +74,7 @@ namespace atframe {
             time_t get_http_timeout() const;
 
             bool add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
+            bool add_watcher(const std::shared_ptr<etcd_watcher> &watcher);
 
             // ================== apis of create request for key-value operation
         public:
@@ -112,6 +114,20 @@ namespace atframe {
              */
             util::network::http_request::ptr_t create_request_kv_del(const std::string &key, const std::string &range_end = "", bool prev_kv = false);
 
+            /**
+             * @brief                   create request for watch
+             * @param key	            key is the first key for the range. If range_end is not given, the request only looks up key.
+             * @param range_end	        range_end is the upper bound on the requested range [key, range_end). just like etcd_packer::pack_key_range
+             * @param prev_kv	        If prev_kv is set, created watcher gets the previous KV before the event happens. If the previous KV is already
+             *                          compacted, nothing will be returned.
+             * @param progress_notify   progress_notify is set so that the etcd server will periodically send a WatchResponse with no events to the new watcher
+             *                          if there are no recent events. It is useful when clients wish to recover a disconnected watcher starting from a recent
+             *                          known revision. The etcd server may decide how often it will send notifications based on current load.
+             * @return http request
+             */
+            util::network::http_request::ptr_t create_request_watch(const std::string &key, const std::string &range_end = "", bool prev_kv = false,
+                                                                    bool progress_notify = true);
+
         private:
             void set_lease(int64_t v);
             bool create_request_member_update();
@@ -133,6 +149,7 @@ namespace atframe {
             util::network::http_request::ptr_t rpc_update_members_;
             util::network::http_request::ptr_t rpc_keepalive_;
             std::vector<std::shared_ptr<etcd_keepalive> > keepalive_actors_;
+            std::vector<std::shared_ptr<etcd_watcher> > watcher_actors_;
         };
     } // namespace component
 } // namespace atframe

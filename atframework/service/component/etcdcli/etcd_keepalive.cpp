@@ -12,12 +12,10 @@ namespace atframe {
 
         bool etcd_keepalive::default_checker_t::operator()(const std::string &checked) const { return checked.empty() || data == checked; }
 
-        etcd_keepalive::etcd_keepalive(etcd_cluster &owner, const std::string &path, constrict_helper_t &) : owner_(&owner) {
+        etcd_keepalive::etcd_keepalive(etcd_cluster &owner, const std::string &path, constrict_helper_t &) : owner_(&owner), path_(path) {
             checker_.is_check_run = false;
             checker_.is_check_passed = false;
             rpc_.is_actived = false;
-
-            util::base64_encode(path_, path);
         }
 
         etcd_keepalive::ptr_t etcd_keepalive::create(etcd_cluster &owner, const std::string &path) {
@@ -42,13 +40,7 @@ namespace atframe {
 
         void etcd_keepalive::set_checker(checker_fn_t fn) { checker_.fn = fn; }
 
-        std::string etcd_keepalive::get_path() const {
-            std::string ret;
-            util::base64_decode(ret, path_);
-
-            // these should be optimization by NRVO
-            return ret;
-        }
+        const std::string &etcd_keepalive::get_path() const { return path_; }
 
         void etcd_keepalive::active() {
             rpc_.is_actived = true;
@@ -84,7 +76,7 @@ namespace atframe {
             // if check passed, set data
             if (checker_.is_check_run && checker_.is_check_passed) {
                 // create set data rpc
-                rpc_.rpc_opr_ = owner_->create_request_kv_set(path_, value_);
+                rpc_.rpc_opr_ = owner_->create_request_kv_set(path_, value_, true);
                 if (!rpc_.rpc_opr_) {
                     WLOGERROR("Etcd keepalive create get data request to %s failed", path_.c_str());
                     return;
