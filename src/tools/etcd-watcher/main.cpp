@@ -8,6 +8,9 @@
 #include <uv.h>
 
 #include <etcdcli/etcd_cluster.h>
+#include <etcdcli/etcd_keepalive.h>
+#include <etcdcli/etcd_watcher.h>
+
 
 static bool is_run = true;
 static int wait_for_close = 0;
@@ -46,8 +49,19 @@ int main(int argc, char *argv[]) {
     hosts.push_back(argv[1]);
     ec.set_hosts(hosts);
 
-    if (argc > 3) {
-        ec.set_flag(atframe::component::etcd_cluster::flag_t::ENABLE_LEASE, true);
+    if (argc > 2) {
+        atframe::component::etcd_watcher::ptr_t p = atframe::component::etcd_watcher::create(ec, argv[2]);
+        if (p) {
+            ec.add_watcher(p);
+        }
+    }
+
+    if (argc > 4) {
+        atframe::component::etcd_keepalive::ptr_t p = atframe::component::etcd_keepalive::create(ec, argv[3]);
+        if (p) {
+            p->set_value(argv[4]);
+            ec.add_keepalive(p);
+        }
     }
 
     uv_timer_t tick_timer;

@@ -8,6 +8,7 @@
 #include "rapidjson/writer.h"
 
 #include "etcd_keepalive.h"
+#include "etcd_watcher.h"
 
 #include "etcd_cluster.h"
 
@@ -42,6 +43,12 @@ namespace atframe {
      */
 
 #define ETCD_API_V3_MEMBER_LIST "/v3alpha/cluster/member/list"
+
+#define ETCD_API_V3_KV_GET "/v3alpha/range"
+#define ETCD_API_V3_KV_SET "/v3alpha/kv/put"
+#define ETCD_API_V3_KV_DELETE "/v3alpha/kv/deleterange"
+
+#define ETCD_API_V3_WATCH "/v3alpha/watch"
 
 #define ETCD_API_V3_LEASE_GRANT "/v3alpha/lease/grant"
 #define ETCD_API_V3_LEASE_KEEPALIVE "/v3alpha/lease/keepalive"
@@ -127,6 +134,20 @@ namespace atframe {
                 rpc_update_members_.reset();
             }
 
+            for (size_t i = 0; i < keepalive_actors_.size(); ++ i) {
+                if (keepalive_actors_[i]) {
+                    keepalive_actors_[i]->close();
+                }
+            }
+            keepalive_actors_.clear();
+
+            for (size_t i = 0; i < watcher_actors_.size(); ++ i) {
+                if (watcher_actors_[i]) {
+                    watcher_actors_[i]->close();
+                }
+            }
+            watcher_actors_.clear();
+
             if (curl_multi_) {
                 if (0 != conf_.lease) {
                     util::network::http_request::ptr_t tmp_req = create_request_lease_revoke();
@@ -167,12 +188,24 @@ namespace atframe {
                 ret += create_request_member_update() ? 1 : 0;
             }
 
+            // empty other actions will be delayed
+            if (conf_.hosts.empty()) {
+                return ret;
+            }
+
             // keepalive lease
             if (check_flag(flag_t::ENABLE_LEASE)) {
                 if (0 == conf_.lease) {
                     ret += create_request_lease_grant() ? 1 : 0;
                 } else if (util::time::time_utility::now() > conf_.keepalive_next_update_time) {
                     ret += create_request_lease_keepalive() ? 1 : 0;
+                }
+            }
+
+            // reactive watcher
+            for (size_t i = 0; i < watcher_actors_.size(); ++ i) {
+                if (watcher_actors_[i]) {
+                    watcher_actors_[i]->active();
                 }
             }
 
@@ -228,7 +261,25 @@ namespace atframe {
                 return false;
             }
 
+            set_flag(flag_t::ENABLE_LEASE, true);
             keepalive_actors_.push_back(keepalive);
+            return true;
+        }
+
+        bool etcd_cluster::add_watcher(const std::shared_ptr<etcd_watcher> &watcher) {
+            if (!watcher) {
+                return false;
+            }
+
+            if (watcher_actors_.end() != std::find(watcher_actors_.begin(), watcher_actors_.end(), watcher)) {
+                return false;
+            }
+
+            if (this != &watcher->get_owner()) {
+                return false;
+            }
+
+            watcher_actors_.push_back(watcher);
             return true;
         }
 
@@ -569,6 +620,124 @@ namespace atframe {
                 doc.AddMember("ID", conf_.lease, doc.GetAllocator());
 
                 setup_http_request(ret, doc, get_http_timeout());
+            }
+
+            return ret;
+        }
+
+        util::network::http_request::ptr_t etcd_cluster::create_request_kv_get(const std::string &key, const std::string &range_end, int64_t limit,
+                                                                               int64_t revision) {
+            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+                return util::network::http_request::ptr_t();
+            }
+
+            std::stringstream ss;
+            ss << conf_.path_node << ETCD_API_V3_KV_GET;
+            util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
+
+            if (ret) {
+                rapidjson::Document doc;
+                doc.SetObject();
+                rapidjson::Value root = doc.GetObject();
+
+                etcd_packer::pack_key_range(root, key, range_end, doc);
+                doc.AddMember("limit", limit, doc.GetAllocator());
+                doc.AddMember("revision", revision, doc.GetAllocator());
+
+                setup_http_request(ret, doc, get_http_timeout());
+            }
+
+            return ret;
+        }
+
+        util::network::http_request::ptr_t etcd_cluster::create_request_kv_set(const std::string &key, const std::string &value, bool assign_lease,
+                                                                               bool prev_kv, bool ignore_value, bool ignore_lease) {
+            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+                return util::network::http_request::ptr_t();
+            }
+
+            std::stringstream ss;
+            ss << conf_.path_node << ETCD_API_V3_KV_SET;
+            util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
+
+            if (ret) {
+                rapidjson::Document doc;
+                doc.SetObject();
+
+                rapidjson::Value root = doc.GetObject();
+
+                etcd_packer::pack_base64(root, "key", key, doc);
+                etcd_packer::pack_base64(root, "value", value, doc);
+                if (assign_lease) {
+                    doc.AddMember("lease", conf_.lease, doc.GetAllocator());    
+                }
+
+                doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
+                doc.AddMember("ignore_value", ignore_value, doc.GetAllocator());
+                doc.AddMember("ignore_lease", ignore_lease, doc.GetAllocator());
+
+                setup_http_request(ret, doc, get_http_timeout());
+            }
+
+            return ret;
+        }
+
+        util::network::http_request::ptr_t etcd_cluster::create_request_kv_del(const std::string &key, const std::string &range_end, bool prev_kv){
+            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+                return util::network::http_request::ptr_t();
+            }
+
+            std::stringstream ss;
+            ss << conf_.path_node << ETCD_API_V3_KV_DELETE;
+            util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
+
+            if (ret) {
+                rapidjson::Document doc;
+                doc.SetObject();
+                rapidjson::Value root = doc.GetObject();
+
+                etcd_packer::pack_key_range(root, key, range_end, doc);
+                doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
+
+                setup_http_request(ret, doc, get_http_timeout());
+            }
+
+            return ret;
+        }
+
+        util::network::http_request::ptr_t etcd_cluster::create_request_watch(const std::string &key, const std::string &range_end, bool prev_kv,
+                                                                    bool progress_notify){
+            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+                return util::network::http_request::ptr_t();
+            }
+
+            std::stringstream ss;
+            ss << conf_.path_node << ETCD_API_V3_WATCH;
+            util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
+
+            if (ret) {
+                rapidjson::Document doc;
+                doc.SetObject();
+                rapidjson::Value root = doc.GetObject();
+
+                rapidjson::Value create_request(rapidjson::kObjectType);
+
+
+                etcd_packer::pack_key_range(create_request, key, range_end, doc);
+                if (prev_kv) {
+                    create_request.AddMember("prev_kv", prev_kv, doc.GetAllocator());
+                }
+
+                if (progress_notify) {
+                    create_request.AddMember("progress_notify", progress_notify, doc.GetAllocator());
+                }
+
+                doc.AddMember("create_request", create_request, doc.GetAllocator());
+
+                setup_http_request(ret, doc, get_http_timeout());
+                ret->set_opt_keepalive(75, 150);
+                // 不能共享socket
+                ret->set_opt_reuse_connection(false);
             }
 
             return ret;
