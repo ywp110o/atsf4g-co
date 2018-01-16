@@ -74,6 +74,7 @@ namespace atframe {
             time_t get_http_timeout() const;
 
             bool add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
+            bool add_retry_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
             bool add_watcher(const std::shared_ptr<etcd_watcher> &watcher);
 
             // ================== apis of create request for key-value operation
@@ -130,6 +131,8 @@ namespace atframe {
 
         private:
             void set_lease(int64_t v);
+            inline int64_t get_lease() const { return conf_.lease; }
+
             bool create_request_member_update();
             static int libcurl_callback_on_member_update(util::network::http_request &req);
 
@@ -149,6 +152,7 @@ namespace atframe {
             util::network::http_request::ptr_t rpc_update_members_;
             util::network::http_request::ptr_t rpc_keepalive_;
             std::vector<std::shared_ptr<etcd_keepalive> > keepalive_actors_;
+            std::vector<std::shared_ptr<etcd_keepalive> > keepalive_retry_actors_;
             std::vector<std::shared_ptr<etcd_watcher> > watcher_actors_;
         };
     } // namespace component

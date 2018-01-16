@@ -30,6 +30,13 @@ static void close_callback(uv_handle_t *handle) { --wait_for_close; }
 
 static void log_callback(const util::log::log_wrapper::caller_info_t &caller, const char *content, size_t content_size) { printf("%s\n", content); }
 
+/**
+./etcd-watcher http://127.0.0.1:2379 /atapp/proxy/services /atapp/proxy/services/123456 '{"id": 123456}'
+./etcd-watcher http://127.0.0.1:2379 /atapp/proxy/services /atapp/proxy/services/456789 '{"id": 456789}'
+curl http://127.0.0.1:2379/v3alpha/watch -XPOST -d '{"create_request":  {"key": "L2F0YXBwL3Byb3h5L3NlcnZpY2Vz", "range_end": "L2F0YXBwL3Byb3h5L3NlcnZpY2V0",
+"prev_kv": true} }'
+**/
+
 int main(int argc, char *argv[]) {
     if (argc < 3) {
         printf("Usage: %s <init host> <watch path> <keepalive path> <keepalive value>\n", argv[0]);

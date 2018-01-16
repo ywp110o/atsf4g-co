@@ -24,6 +24,7 @@ namespace atframe {
 
         void etcd_watcher::close() {
             if (rpc_.rpc_opr_) {
+                WLOGDEBUG("Etcd watcher %p cancel http request.", this);
                 rpc_.rpc_opr_->set_on_complete(NULL);
                 rpc_.rpc_opr_->stop();
                 rpc_.rpc_opr_.reset();
@@ -52,7 +53,7 @@ namespace atframe {
             // create watcher request
             rpc_.rpc_opr_ = owner_->create_request_watch(path_, range_end_, true, rpc_.enable_progress_notify);
             if (!rpc_.rpc_opr_) {
-                WLOGERROR("Etcd keepalive create get data request to %s failed", path_.c_str());
+                WLOGERROR("Etcd watcher %p create get data request to %s failed", this, path_.c_str());
                 rpc_.watcher_next_request_time = util::time::time_utility::now() + rpc_.retry_interval;
                 return;
             }
@@ -60,6 +61,16 @@ namespace atframe {
             rpc_.rpc_opr_->set_priv_data(this);
             rpc_.rpc_opr_->set_on_complete(libcurl_callback_on_changed);
             rpc_.rpc_opr_->set_opt_timeout(static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(rpc_.request_timeout).count()));
+
+            int res = rpc_.rpc_opr_->start(util::network::http_request::method_t::EN_MT_POST, false);
+            if (res != 0) {
+                rpc_.rpc_opr_->set_on_complete(NULL);
+                WLOGERROR("Etcd watcher %p start request to %s failed, res: %d", this, rpc_.rpc_opr_->get_url().c_str(), res);
+                rpc_.rpc_opr_.reset();
+            } else {
+                WLOGDEBUG("Etcd watcher %p start request to %s success.", this, rpc_.rpc_opr_->get_url().c_str());
+            }
+
             return;
         }
 
@@ -75,7 +86,7 @@ namespace atframe {
             // 服务器错误则过一段时间后重试
             if (0 != req.get_error_code() ||
                 util::network::http_request::status_code_t::EN_ECG_SUCCESS != util::network::http_request::get_status_code_group(req.get_response_code())) {
-                WLOGERROR("Etcd watcher get request failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(),
+                WLOGERROR("Etcd watcher %p get request failed, error code: %d, http code: %d\n%s", self, req.get_error_code(), req.get_response_code(),
                           req.get_error_msg());
 
                 self->rpc_.watcher_next_request_time = util::time::time_utility::now() + self->rpc_.retry_interval;

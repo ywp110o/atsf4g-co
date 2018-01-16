@@ -25,6 +25,7 @@ namespace atframe {
 
         void etcd_keepalive::close() {
             if (rpc_.rpc_opr_) {
+                WLOGDEBUG("Etcd watcher %p cancel http request.", this);
                 rpc_.rpc_opr_->set_on_complete(NULL);
                 rpc_.rpc_opr_->stop();
                 rpc_.rpc_opr_.reset();
@@ -60,30 +61,47 @@ namespace atframe {
                 checker_.is_check_passed = true;
             }
 
-            if (false == checker_.is_check_run) {
-                // create a check rpc
-                rpc_.rpc_opr_ = owner_->create_request_kv_get(path_);
-                if (!rpc_.rpc_opr_) {
-                    WLOGERROR("Etcd keepalive create get data request to %s failed", path_.c_str());
-                    return;
+            do {
+                if (false == checker_.is_check_run) {
+                    // create a check rpc
+                    rpc_.rpc_opr_ = owner_->create_request_kv_get(path_);
+                    if (!rpc_.rpc_opr_) {
+                        WLOGERROR("Etcd keepalive %p create get data request to %s failed", this, path_.c_str());
+                        break;
+                    }
+
+                    rpc_.rpc_opr_->set_priv_data(this);
+                    rpc_.rpc_opr_->set_on_complete(libcurl_callback_on_get_data);
+                    break;
                 }
 
-                rpc_.rpc_opr_->set_priv_data(this);
-                rpc_.rpc_opr_->set_on_complete(libcurl_callback_on_get_data);
-                return;
+                // if check passed, set data
+                if (checker_.is_check_run && checker_.is_check_passed) {
+                    // create set data rpc
+                    rpc_.rpc_opr_ = owner_->create_request_kv_set(path_, value_, true);
+                    if (!rpc_.rpc_opr_) {
+                        WLOGERROR("Etcd keepalive %p create set data request to %s failed", this, path_.c_str());
+                        break;
+                    }
+
+                    rpc_.rpc_opr_->set_priv_data(this);
+                    rpc_.rpc_opr_->set_on_complete(libcurl_callback_on_set_data);
+                }
+            } while (false);
+
+            if (rpc_.rpc_opr_) {
+                int res = rpc_.rpc_opr_->start(util::network::http_request::method_t::EN_MT_POST, false);
+                if (res != 0) {
+                    rpc_.rpc_opr_->set_on_complete(NULL);
+                    WLOGERROR("Etcd keepalive %p start request to %s failed, res: %d", this, rpc_.rpc_opr_->get_url().c_str(), res);
+                    rpc_.rpc_opr_.reset();
+                } else {
+                    WLOGDEBUG("Etcd keepalive %p start request to %s success.", this, rpc_.rpc_opr_->get_url().c_str());
+                }
             }
 
-            // if check passed, set data
-            if (checker_.is_check_run && checker_.is_check_passed) {
-                // create set data rpc
-                rpc_.rpc_opr_ = owner_->create_request_kv_set(path_, value_, true);
-                if (!rpc_.rpc_opr_) {
-                    WLOGERROR("Etcd keepalive create get data request to %s failed", path_.c_str());
-                    return;
-                }
-
-                rpc_.rpc_opr_->set_priv_data(this);
-                rpc_.rpc_opr_->set_on_complete(libcurl_callback_on_set_data);
+            if (!rpc_.rpc_opr_) {
+                owner_->add_retry_keepalive(shared_from_this());
             }
         }
 
@@ -99,8 +117,10 @@ namespace atframe {
             // 服务器错误则忽略
             if (0 != req.get_error_code() ||
                 util::network::http_request::status_code_t::EN_ECG_SUCCESS != util::network::http_request::get_status_code_group(req.get_response_code())) {
-                WLOGERROR("Etcd keepalive get request failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(),
+                WLOGERROR("Etcd keepalive %p get request failed, error code: %d, http code: %d\n%s", self, req.get_error_code(), req.get_response_code(),
                           req.get_error_msg());
+
+                self->owner_->add_retry_keepalive(self->shared_from_this());
                 return 0;
             }
 
@@ -122,7 +142,8 @@ namespace atframe {
             if (count > 0) {
                 rapidjson::Document::MemberIterator kvs = root.FindMember("kvs");
                 if (root.MemberEnd() == kvs) {
-                    WLOGERROR("Etcd keepalive get data count=%lld, but kvs not found", static_cast<long long>(count));
+                    WLOGERROR("Etcd keepalive %p get data count=%lld, but kvs not found", self, static_cast<long long>(count));
+                    self->owner_->add_retry_keepalive(self->shared_from_this());
                     return 0;
                 }
 
@@ -158,8 +179,10 @@ namespace atframe {
             // 服务器错误则忽略
             if (0 != req.get_error_code() ||
                 util::network::http_request::status_code_t::EN_ECG_SUCCESS != util::network::http_request::get_status_code_group(req.get_response_code())) {
-                WLOGERROR("Etcd keepalive get request failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(),
+                WLOGERROR("Etcd keepalive %p set request failed, error code: %d, http code: %d\n%s", self, req.get_error_code(), req.get_response_code(),
                           req.get_error_msg());
+
+                self->owner_->add_retry_keepalive(self->shared_from_this());
                 return 0;
             }
 
