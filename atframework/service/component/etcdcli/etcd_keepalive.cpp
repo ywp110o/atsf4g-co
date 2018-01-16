@@ -114,7 +114,7 @@ namespace atframe {
 
             self->rpc_.rpc_opr_.reset();
 
-            // 服务器错误则忽略
+            // 服务器错误则重试，预检查请求的404是正常的
             if (0 != req.get_error_code() ||
                 util::network::http_request::status_code_t::EN_ECG_SUCCESS != util::network::http_request::get_status_code_group(req.get_response_code())) {
                 WLOGERROR("Etcd keepalive %p get request failed, error code: %d, http code: %d\n%s", self, req.get_error_code(), req.get_response_code(),
@@ -125,6 +125,8 @@ namespace atframe {
             }
 
             std::string http_content;
+            std::string value_content;
+
             req.get_response_stream().str().swap(http_content);
             WLOGDEBUG("Etcd keepalive %p got http response: %s", self, http_content.c_str());
 
@@ -132,34 +134,36 @@ namespace atframe {
             rapidjson::Document doc;
             doc.Parse(http_content.c_str());
 
-            rapidjson::Value root = doc.GetObject();
+            if (doc.IsObject()) {
+                rapidjson::Value root = doc.GetObject();
 
-            self->checker_.is_check_run = true;
-            // Run check function
-            int64_t count = 0;
-            std::string content;
-            etcd_packer::unpack_int(root, "count", count);
-            if (count > 0) {
-                rapidjson::Document::MemberIterator kvs = root.FindMember("kvs");
-                if (root.MemberEnd() == kvs) {
-                    WLOGERROR("Etcd keepalive %p get data count=%lld, but kvs not found", self, static_cast<long long>(count));
-                    self->owner_->add_retry_keepalive(self->shared_from_this());
-                    return 0;
-                }
+                // Run check function
+                int64_t count = 0;
 
-                rapidjson::Document::Array all_kvs = kvs->value.GetArray();
-                for (rapidjson::Document::Array::ValueIterator iter = all_kvs.Begin(); iter != all_kvs.End(); ++iter) {
-                    etcd_key_value kv;
-                    etcd_packer::unpack(kv, *iter);
-                    content.swap(kv.value);
-                    break;
+                etcd_packer::unpack_int(root, "count", count);
+                if (count > 0) {
+                    rapidjson::Document::MemberIterator kvs = root.FindMember("kvs");
+                    if (root.MemberEnd() == kvs) {
+                        WLOGERROR("Etcd keepalive %p get data count=%lld, but kvs not found", self, static_cast<long long>(count));
+                        self->owner_->add_retry_keepalive(self->shared_from_this());
+                        return 0;
+                    }
+
+                    rapidjson::Document::Array all_kvs = kvs->value.GetArray();
+                    for (rapidjson::Document::Array::ValueIterator iter = all_kvs.Begin(); iter != all_kvs.End(); ++iter) {
+                        etcd_key_value kv;
+                        etcd_packer::unpack(kv, *iter);
+                        value_content.swap(kv.value);
+                        break;
+                    }
                 }
             }
 
+            self->checker_.is_check_run = true;
             if (!self->checker_.fn) {
                 self->checker_.is_check_passed = true;
             } else {
-                self->checker_.is_check_passed = self->checker_.fn(content);
+                self->checker_.is_check_passed = self->checker_.fn(value_content);
             }
             WLOGDEBUG("Etcd keepalive %p check data %s", self, self->checker_.is_check_passed ? "passed" : "failed");
 

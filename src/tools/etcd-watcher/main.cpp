@@ -30,9 +30,30 @@ static void close_callback(uv_handle_t *handle) { --wait_for_close; }
 
 static void log_callback(const util::log::log_wrapper::caller_info_t &caller, const char *content, size_t content_size) { printf("%s\n", content); }
 
+struct check_keepalive_data_callback {
+    check_keepalive_data_callback(const std::string &d) : data(d) {}
+
+    bool operator()(const std::string &checked) {
+        if (checked.empty()) {
+            return true;
+        }
+
+        if (checked != data) {
+            printf("Expect keepalive data is %s but real is %s, stopped\n", data.c_str(), checked.c_str());
+            is_run = false;
+            uv_stop(uv_default_loop());
+            return false;
+        }
+
+        return true;
+    }
+
+    std::string data;
+};
+
 /**
-./etcd-watcher http://127.0.0.1:2379 /atapp/proxy/services /atapp/proxy/services/123456 '{"id": 123456}'
-./etcd-watcher http://127.0.0.1:2379 /atapp/proxy/services /atapp/proxy/services/456789 '{"id": 456789}'
+./etcd-watcher http://127.0.0.1:2379 /atapp/proxy/services /atapp/proxy/services/123456 123456
+./etcd-watcher http://127.0.0.1:2379 /atapp/proxy/services /atapp/proxy/services/456789 456789
 curl http://127.0.0.1:2379/v3alpha/watch -XPOST -d '{"create_request":  {"key": "L2F0YXBwL3Byb3h5L3NlcnZpY2Vz", "range_end": "L2F0YXBwL3Byb3h5L3NlcnZpY2V0",
 "prev_kv": true} }'
 **/
@@ -46,6 +67,7 @@ int main(int argc, char *argv[]) {
 
     util::time::time_utility::update();
     WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->init();
+    WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_prefix_format("[%L][%F %T.%f][%k:%n(%C)]: ");
     WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->add_sink(log_callback);
 
     util::network::http_request::curl_m_bind_ptr_t curl_mgr;
@@ -66,6 +88,7 @@ int main(int argc, char *argv[]) {
     if (argc > 4) {
         atframe::component::etcd_keepalive::ptr_t p = atframe::component::etcd_keepalive::create(ec, argv[3]);
         if (p) {
+            p->set_checker(check_keepalive_data_callback(argv[4]));
             p->set_value(argv[4]);
             ec.add_keepalive(p);
         }

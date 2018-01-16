@@ -12,8 +12,10 @@
 
 #pragma once
 
+#include <sstream>
 #include <string>
 #include <vector>
+
 
 #include <std/chrono.h>
 #include <std/functional.h>
@@ -73,11 +75,13 @@ namespace atframe {
 
         private:
             static int libcurl_callback_on_changed(util::network::http_request &req);
+            static int libcurl_callback_on_write(util::network::http_request &req, const char *inbuf, size_t inbufsz, const char *&outbuf, size_t &outbufsz);
 
         private:
             etcd_cluster *owner_;
             std::string path_;
             std::string range_end_;
+            std::stringstream rpc_data_stream_;
             typedef struct {
                 util::network::http_request::ptr_t rpc_opr_;
                 bool is_actived;

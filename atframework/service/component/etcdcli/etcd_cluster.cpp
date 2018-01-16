@@ -44,7 +44,7 @@ namespace atframe {
 
 #define ETCD_API_V3_MEMBER_LIST "/v3alpha/cluster/member/list"
 
-#define ETCD_API_V3_KV_GET "/v3alpha/range"
+#define ETCD_API_V3_KV_GET "/v3alpha/kv/range"
 #define ETCD_API_V3_KV_SET "/v3alpha/kv/put"
 #define ETCD_API_V3_KV_DELETE "/v3alpha/kv/deleterange"
 
@@ -433,44 +433,51 @@ namespace atframe {
             req.get_response_stream().str().swap(http_content);
             WLOGDEBUG("Etcd cluster got http response: %s", http_content.c_str());
 
-            // unpack
-            rapidjson::Document doc;
-            doc.Parse(http_content.c_str());
+            do {
+                // unpack
+                rapidjson::Document doc;
+                doc.Parse(http_content.c_str());
 
-            rapidjson::Value root = doc.GetObject();
-            rapidjson::Document::MemberIterator members = root.FindMember("members");
-            if (root.MemberEnd() == members) {
-                WLOGERROR("Etcd members not found");
-                return 0;
-            }
-
-            self->conf_.hosts.clear();
-            bool need_select_node = true;
-            rapidjson::Document::Array all_members = members->value.GetArray();
-            for (rapidjson::Document::Array::ValueIterator iter = all_members.Begin(); iter != all_members.End(); ++iter) {
-                rapidjson::Document::MemberIterator client_urls = iter->FindMember("clientURLs");
-                if (client_urls == iter->MemberEnd()) {
-                    continue;
+                // ignore empty data
+                if (false == doc.IsObject()) {
+                    break;
                 }
 
-                rapidjson::Document::Array all_client_urls = client_urls->value.GetArray();
-                for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.Begin(); cli_url_iter != all_client_urls.End(); ++cli_url_iter) {
-                    if (cli_url_iter->GetStringLength() > 0) {
-                        self->conf_.hosts.push_back(cli_url_iter->GetString());
+                rapidjson::Value root = doc.GetObject();
+                rapidjson::Document::MemberIterator members = root.FindMember("members");
+                if (root.MemberEnd() == members) {
+                    WLOGERROR("Etcd members not found");
+                    return 0;
+                }
 
-                        if (self->conf_.path_node == self->conf_.hosts.back()) {
-                            need_select_node = false;
+                self->conf_.hosts.clear();
+                bool need_select_node = true;
+                rapidjson::Document::Array all_members = members->value.GetArray();
+                for (rapidjson::Document::Array::ValueIterator iter = all_members.Begin(); iter != all_members.End(); ++iter) {
+                    rapidjson::Document::MemberIterator client_urls = iter->FindMember("clientURLs");
+                    if (client_urls == iter->MemberEnd()) {
+                        continue;
+                    }
+
+                    rapidjson::Document::Array all_client_urls = client_urls->value.GetArray();
+                    for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.Begin(); cli_url_iter != all_client_urls.End(); ++cli_url_iter) {
+                        if (cli_url_iter->GetStringLength() > 0) {
+                            self->conf_.hosts.push_back(cli_url_iter->GetString());
+
+                            if (self->conf_.path_node == self->conf_.hosts.back()) {
+                                need_select_node = false;
+                            }
                         }
                     }
                 }
-            }
 
-            if (!self->conf_.hosts.empty() && need_select_node) {
-                self->conf_.path_node = self->conf_.hosts[self->random_generator_.random_between<size_t>(0, self->conf_.hosts.size())];
-            }
+                if (!self->conf_.hosts.empty() && need_select_node) {
+                    self->conf_.path_node = self->conf_.hosts[self->random_generator_.random_between<size_t>(0, self->conf_.hosts.size())];
+                }
 
-            // 触发一次tick
-            self->tick();
+                // 触发一次tick
+                self->tick();
+            } while(false);
 
             return 0;
         }
@@ -599,45 +606,53 @@ namespace atframe {
             req.get_response_stream().str().swap(http_content);
             WLOGDEBUG("Etcd cluster got http response: %s", http_content.c_str());
 
-            // 如果lease不存在（没有TTL）则启动创建流程
-            rapidjson::Document doc;
-            doc.Parse(http_content.c_str());
+            do {
+                // 如果lease不存在（没有TTL）则启动创建流程
+                rapidjson::Document doc;
+                doc.Parse(http_content.c_str());
 
-            bool is_grant = false;
-            rapidjson::Value root = doc.GetObject();
-            rapidjson::Value::MemberIterator result = root.FindMember("result");
-            if (result == root.MemberEnd()) {
-                is_grant = true;
-            } else {
-                root = result->value;
-            }
-
-            if (false == root.IsObject()) {
-                WLOGERROR("Etcd lease grant failed, root is not object.(%s)", http_content.c_str());
-                return 0;
-            }
-
-            if (root.MemberEnd() == root.FindMember("TTL")) {
-                if (is_grant) {
-                    WLOGERROR("Etcd lease grant failed");
-                } else {
-                    WLOGERROR("Etcd lease keepalive failed because not found, try to grant one");
-                    self->create_request_lease_grant();
+                // 忽略空数据
+                if (false == doc.IsObject()) {
+                    break;
                 }
-                return 0;
-            }
 
-            // 更新lease
-            int64_t new_lease = 0;
-            etcd_packer::unpack_int(root, "ID", new_lease);
+                bool is_grant = false;
+                rapidjson::Value root = doc.GetObject();
+                rapidjson::Value::MemberIterator result = root.FindMember("result");
+                if (result == root.MemberEnd()) {
+                    is_grant = true;
+                } else {
+                    root = result->value;
+                }
 
-            if (is_grant) {
-                WLOGDEBUG("Etcd lease %lld granted", static_cast<long long>(new_lease));
-            } else {
-                WLOGDEBUG("Etcd lease %lld keepalive successed", static_cast<long long>(new_lease));
-            }
+                if (false == root.IsObject()) {
+                    WLOGERROR("Etcd lease grant failed, root is not object.(%s)", http_content.c_str());
+                    return 0;
+                }
 
-            self->set_lease(new_lease);
+                if (root.MemberEnd() == root.FindMember("TTL")) {
+                    if (is_grant) {
+                        WLOGERROR("Etcd lease grant failed");
+                    } else {
+                        WLOGERROR("Etcd lease keepalive failed because not found, try to grant one");
+                        self->create_request_lease_grant();
+                    }
+                    return 0;
+                }
+
+                // 更新lease
+                int64_t new_lease = 0;
+                etcd_packer::unpack_int(root, "ID", new_lease);
+
+                if (is_grant) {
+                    WLOGDEBUG("Etcd lease %lld granted", static_cast<long long>(new_lease));
+                } else {
+                    WLOGDEBUG("Etcd lease %lld keepalive successed", static_cast<long long>(new_lease));
+                }
+
+                self->set_lease(new_lease);
+            } while (false);
+
             return 0;
         }
 
@@ -795,7 +810,7 @@ namespace atframe {
             doc.Accept(writer);
 
             req->post_data().assign(buffer.GetString(), buffer.GetSize());
-            WLOGDEBUG("=====setup request to %s, post data: %s", req->get_url().c_str(), req->post_data().c_str());
+            // WLOGDEBUG("=====setup request to %s, post data: %s", req->get_url().c_str(), req->post_data().c_str());
         }
 
     } // namespace component
