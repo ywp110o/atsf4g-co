@@ -305,10 +305,11 @@ namespace atframe {
             return true;
         }
 
-        void etcd_cluster::set_lease(int64_t v) {
+        void etcd_cluster::set_lease(int64_t v, bool force_active_keepalives) {
             int64_t old_v = get_lease();
             conf_.lease = v;
-            if (old_v == v) {
+
+            if (old_v == v && false == force_active_keepalives) {
                 // 仅重试失败项目
                 for (size_t i = 0; i < keepalive_retry_actors_.size(); ++i) {
                     if (keepalive_retry_actors_[i]) {
@@ -645,13 +646,19 @@ namespace atframe {
                 int64_t new_lease = 0;
                 etcd_packer::unpack_int(root, "ID", new_lease);
 
+                if (0 == new_lease) {
+                    WLOGERROR("Etcd cluster got a error http response for grant or keepalive lease: %s", http_content.c_str());
+                    break;
+                }
+
                 if (is_grant) {
                     WLOGDEBUG("Etcd lease %lld granted", static_cast<long long>(new_lease));
+                    // TODO force reset all lease in case of resume data
                 } else {
                     WLOGDEBUG("Etcd lease %lld keepalive successed", static_cast<long long>(new_lease));
                 }
 
-                self->set_lease(new_lease);
+                self->set_lease(new_lease, is_grant);
             } while (false);
 
             return 0;

@@ -131,7 +131,7 @@ namespace atframe {
                                                                     bool prev_kv = false, bool progress_notify = true);
 
         private:
-            void set_lease(int64_t v);
+            void set_lease(int64_t v, bool force_active_keepalives);
             inline int64_t get_lease() const { return conf_.lease; }
 
             bool create_request_member_update();
