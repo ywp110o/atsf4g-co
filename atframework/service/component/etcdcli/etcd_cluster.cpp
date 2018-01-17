@@ -134,14 +134,14 @@ namespace atframe {
                 rpc_update_members_.reset();
             }
 
-            for (size_t i = 0; i < keepalive_actors_.size(); ++ i) {
+            for (size_t i = 0; i < keepalive_actors_.size(); ++i) {
                 if (keepalive_actors_[i]) {
                     keepalive_actors_[i]->close();
                 }
             }
             keepalive_actors_.clear();
 
-            for (size_t i = 0; i < watcher_actors_.size(); ++ i) {
+            for (size_t i = 0; i < watcher_actors_.size(); ++i) {
                 if (watcher_actors_[i]) {
                     watcher_actors_[i]->close();
                 }
@@ -207,7 +207,7 @@ namespace atframe {
             }
 
             // reactive watcher
-            for (size_t i = 0; i < watcher_actors_.size(); ++ i) {
+            for (size_t i = 0; i < watcher_actors_.size(); ++i) {
                 if (watcher_actors_[i]) {
                     watcher_actors_[i]->active();
                 }
@@ -460,7 +460,8 @@ namespace atframe {
                     }
 
                     rapidjson::Document::Array all_client_urls = client_urls->value.GetArray();
-                    for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.Begin(); cli_url_iter != all_client_urls.End(); ++cli_url_iter) {
+                    for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.Begin(); cli_url_iter != all_client_urls.End();
+                         ++cli_url_iter) {
                         if (cli_url_iter->GetStringLength() > 0) {
                             self->conf_.hosts.push_back(cli_url_iter->GetString());
 
@@ -477,7 +478,7 @@ namespace atframe {
 
                 // 触发一次tick
                 self->tick();
-            } while(false);
+            } while (false);
 
             return 0;
         }
@@ -688,7 +689,7 @@ namespace atframe {
 
             if (ret) {
                 rapidjson::Document doc;
-                rapidjson::Value& root = doc.SetObject();
+                rapidjson::Value &root = doc.SetObject();
 
                 etcd_packer::pack_key_range(root, key, range_end, doc);
                 doc.AddMember("limit", limit, doc.GetAllocator());
@@ -716,12 +717,12 @@ namespace atframe {
 
             if (ret) {
                 rapidjson::Document doc;
-                rapidjson::Value& root = doc.SetObject();
+                rapidjson::Value &root = doc.SetObject();
 
                 etcd_packer::pack_base64(root, "key", key, doc);
                 etcd_packer::pack_base64(root, "value", value, doc);
                 if (assign_lease) {
-                    doc.AddMember("lease", get_lease(), doc.GetAllocator());    
+                    doc.AddMember("lease", get_lease(), doc.GetAllocator());
                 }
 
                 doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
@@ -734,7 +735,7 @@ namespace atframe {
             return ret;
         }
 
-        util::network::http_request::ptr_t etcd_cluster::create_request_kv_del(const std::string &key, const std::string &range_end, bool prev_kv){
+        util::network::http_request::ptr_t etcd_cluster::create_request_kv_del(const std::string &key, const std::string &range_end, bool prev_kv) {
             if (!curl_multi_ || conf_.path_node.empty()) {
                 return util::network::http_request::ptr_t();
             }
@@ -745,7 +746,7 @@ namespace atframe {
 
             if (ret) {
                 rapidjson::Document doc;
-                rapidjson::Value& root = doc.SetObject();
+                rapidjson::Value &root = doc.SetObject();
 
                 etcd_packer::pack_key_range(root, key, range_end, doc);
                 doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
@@ -756,8 +757,8 @@ namespace atframe {
             return ret;
         }
 
-        util::network::http_request::ptr_t etcd_cluster::create_request_watch(const std::string &key, const std::string &range_end, bool prev_kv,
-                                                                    bool progress_notify){
+        util::network::http_request::ptr_t etcd_cluster::create_request_watch(const std::string &key, const std::string &range_end, int64_t start_revision,
+                                                                              bool prev_kv, bool progress_notify) {
             if (!curl_multi_ || conf_.path_node.empty()) {
                 return util::network::http_request::ptr_t();
             }
@@ -768,7 +769,7 @@ namespace atframe {
 
             if (ret) {
                 rapidjson::Document doc;
-                rapidjson::Value& root = doc.SetObject();
+                rapidjson::Value &root = doc.SetObject();
 
                 rapidjson::Value create_request(rapidjson::kObjectType);
 
@@ -780,6 +781,10 @@ namespace atframe {
 
                 if (progress_notify) {
                     create_request.AddMember("progress_notify", progress_notify, doc.GetAllocator());
+                }
+
+                if (0 != start_revision) {
+                    create_request.AddMember("start_revision", start_revision, doc.GetAllocator());
                 }
 
                 root.AddMember("create_request", create_request, doc.GetAllocator());

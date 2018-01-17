@@ -51,9 +51,10 @@ namespace atframe {
             void set_checker(const std::string &checked_str);
             void set_checker(checker_fn_t fn);
 
-            inline void set_value(const std::string &str) { value_ = str; }
 #if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
             inline void set_value(std::string &&str) { value_.swap(str); }
+#else
+            inline void set_value(const std::string &str) { value_ = str; }
 #endif
             inline const std::string &get_value() const { return value_; }
 

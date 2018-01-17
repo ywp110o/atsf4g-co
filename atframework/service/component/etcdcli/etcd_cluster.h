@@ -119,6 +119,7 @@ namespace atframe {
              * @brief                   create request for watch
              * @param key	            key is the first key for the range. If range_end is not given, the request only looks up key.
              * @param range_end	        range_end is the upper bound on the requested range [key, range_end). just like etcd_packer::pack_key_range
+             * @param start_revision	start_revision is an optional revision to watch from (inclusive). No start_revision or 0 is "now".
              * @param prev_kv	        If prev_kv is set, created watcher gets the previous KV before the event happens. If the previous KV is already
              *                          compacted, nothing will be returned.
              * @param progress_notify   progress_notify is set so that the etcd server will periodically send a WatchResponse with no events to the new watcher
@@ -126,8 +127,8 @@ namespace atframe {
              *                          known revision. The etcd server may decide how often it will send notifications based on current load.
              * @return http request
              */
-            util::network::http_request::ptr_t create_request_watch(const std::string &key, const std::string &range_end = "", bool prev_kv = false,
-                                                                    bool progress_notify = true);
+            util::network::http_request::ptr_t create_request_watch(const std::string &key, const std::string &range_end = "", int64_t start_revision = 0,
+                                                                    bool prev_kv = false, bool progress_notify = true);
 
         private:
             void set_lease(int64_t v);

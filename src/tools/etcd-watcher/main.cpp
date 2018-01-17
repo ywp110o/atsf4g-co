@@ -28,7 +28,7 @@ static void signal_callback(uv_signal_t *handle, int signum) {
 
 static void close_callback(uv_handle_t *handle) { --wait_for_close; }
 
-static void log_callback(const util::log::log_wrapper::caller_info_t &caller, const char *content, size_t content_size) { printf("%s\n", content); }
+static void log_callback(const util::log::log_wrapper::caller_info_t &caller, const char *content, size_t content_size) { puts(content); }
 
 struct check_keepalive_data_callback {
     check_keepalive_data_callback(const std::string &d) : data(d) {}
@@ -39,7 +39,7 @@ struct check_keepalive_data_callback {
         }
 
         if (checked != data) {
-            printf("Expect keepalive data is %s but real is %s, stopped\n", data.c_str(), checked.c_str());
+            WLOGERROR("Expect keepalive data is %s but real is %s, stopped\n", data.c_str(), checked.c_str());
             is_run = false;
             uv_stop(uv_default_loop());
             return false;

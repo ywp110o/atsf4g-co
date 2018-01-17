@@ -16,7 +16,9 @@ namespace atframe {
             rpc_.request_timeout = std::chrono::hours(1);   // 一小时超时时间，相当于每小时重新拉取数据
             rpc_.watcher_next_request_time = std::chrono::system_clock::from_time_t(0);
             rpc_.enable_progress_notify = true;
+            rpc_.enable_prev_kv = false;
             rpc_.is_actived = false;
+            rpc_.last_revision = 0;
         }
 
         etcd_watcher::ptr_t etcd_watcher::create(etcd_cluster &owner, const std::string &path, const std::string &range_end) {
@@ -33,6 +35,7 @@ namespace atframe {
                 rpc_.rpc_opr_.reset();
             }
             rpc_.is_actived = false;
+            rpc_.last_revision = 0;
         }
 
         const std::string &etcd_watcher::get_path() const { return path_; }
@@ -54,7 +57,7 @@ namespace atframe {
             }
 
             // create watcher request
-            rpc_.rpc_opr_ = owner_->create_request_watch(path_, range_end_, true, rpc_.enable_progress_notify);
+            rpc_.rpc_opr_ = owner_->create_request_watch(path_, range_end_, rpc_.last_revision, rpc_.enable_prev_kv, rpc_.enable_progress_notify);
             if (!rpc_.rpc_opr_) {
                 WLOGERROR("Etcd watcher %p create watch request to %s failed", this, path_.c_str());
                 rpc_.watcher_next_request_time = util::time::time_utility::now() + rpc_.retry_interval;
@@ -62,7 +65,7 @@ namespace atframe {
             }
 
             rpc_.rpc_opr_->set_priv_data(this);
-            rpc_.rpc_opr_->set_on_complete(libcurl_callback_on_changed);
+            rpc_.rpc_opr_->set_on_complete(libcurl_callback_on_completed);
             rpc_.rpc_opr_->set_on_write(libcurl_callback_on_write);
             rpc_.rpc_opr_->set_opt_timeout(static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(rpc_.request_timeout).count()));
 
@@ -81,7 +84,7 @@ namespace atframe {
             return;
         }
 
-        int etcd_watcher::libcurl_callback_on_changed(util::network::http_request &req) {
+        int etcd_watcher::libcurl_callback_on_completed(util::network::http_request &req) {
             etcd_watcher *self = reinterpret_cast<etcd_watcher *>(req.get_priv_data());
             if (NULL == self) {
                 WLOGERROR("Etcd watcher watch request shouldn't has request without private data");
@@ -92,10 +95,19 @@ namespace atframe {
             // 服务器错误则过一段时间后重试
             if (0 != req.get_error_code() ||
                 util::network::http_request::status_code_t::EN_ECG_SUCCESS != util::network::http_request::get_status_code_group(req.get_response_code())) {
-                WLOGERROR("Etcd watcher %p watch request failed, error code: %d, http code: %d\n%s", self, req.get_error_code(), req.get_response_code(),
-                          req.get_error_msg());
 
-                self->rpc_.watcher_next_request_time = util::time::time_utility::now() + self->rpc_.retry_interval;
+                // timeout是正常的保活流程
+                if (CURLE_OPERATION_TIMEDOUT != req.get_error_code()) {
+                    WLOGERROR("Etcd watcher %p watch request failed, error code: %d, http code: %d\n%s", self, req.get_error_code(), req.get_response_code(),
+                              req.get_error_msg());
+
+                    self->rpc_.watcher_next_request_time = util::time::time_utility::now() + self->rpc_.retry_interval;
+
+                } else {
+                    WLOGDEBUG("Etcd watcher %p watch request finished, start another request later, msg: %s.", self, req.get_error_msg());
+                    self->rpc_.watcher_next_request_time = util::time::time_utility::now();
+                }
+
                 // 立刻开启下一次watch
                 self->active();
                 return 0;
@@ -171,6 +183,10 @@ namespace atframe {
                     rapidjson::Document::MemberIterator res = result->FindMember("header");
                     if (res != result->MemberEnd()) {
                         etcd_packer::unpack(header, res->value);
+                        // save revision
+                        if (0 != header.revision) {
+                            self->rpc_.last_revision = header.revision;
+                        }
                     } else {
                         WLOGERROR("Etcd watcher %p got http trunk without header", self);
                     }
@@ -244,7 +260,10 @@ namespace atframe {
                     }
                 }
 
-                // TODO trigger event
+                // trigger event
+                if (self->evt_handle_) {
+                    self->evt_handle_(header, response);
+                }
             }
 
             return 0;

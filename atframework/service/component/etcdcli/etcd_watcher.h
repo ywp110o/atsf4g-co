@@ -34,7 +34,6 @@ namespace atframe {
 
         class etcd_watcher {
         public:
-            typedef std::function<bool(const std::string &)> checker_fn_t; // the parameter will be base64 of the value
             typedef std::shared_ptr<etcd_watcher> ptr_t;
 
             struct event_t {
@@ -50,6 +49,8 @@ namespace atframe {
                 int64_t compact_revision;
                 std::vector<event_t> events;
             };
+
+            typedef std::function<void(const etcd_response_header &header, const response_t &evt_data)> watch_event_fn_t;
 
         private:
             struct constrict_helper_t {};
@@ -70,11 +71,20 @@ namespace atframe {
             inline bool is_progress_notify_enabled() const { return rpc_.enable_progress_notify; }
             inline void set_progress_notify_enabled(bool v) { rpc_.enable_progress_notify = v; }
 
+            inline bool is_prev_kv_enabled() const { return rpc_.enable_prev_kv; }
+            inline void set_prev_kv_enabled(bool v) { rpc_.enable_prev_kv = v; }
+
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+            inline void set_evt_handle(watch_event_fn_t &&fn) { evt_handle_ = std::move(fn); }
+#else
+            inline void set_evt_handle(const watch_event_fn_t &fn) { evt_handle_ = fn; }
+#endif
+
         private:
             void process();
 
         private:
-            static int libcurl_callback_on_changed(util::network::http_request &req);
+            static int libcurl_callback_on_completed(util::network::http_request &req);
             static int libcurl_callback_on_write(util::network::http_request &req, const char *inbuf, size_t inbufsz, const char *&outbuf, size_t &outbufsz);
 
         private:
@@ -86,11 +96,15 @@ namespace atframe {
                 util::network::http_request::ptr_t rpc_opr_;
                 bool is_actived;
                 bool enable_progress_notify;
+                bool enable_prev_kv;
+                int64_t last_revision;
                 std::chrono::system_clock::time_point watcher_next_request_time;
                 std::chrono::system_clock::duration retry_interval;
                 std::chrono::system_clock::duration request_timeout;
             } rpc_data_t;
             rpc_data_t rpc_;
+
+            watch_event_fn_t evt_handle_;
         };
     } // namespace component
 } // namespace atframe
