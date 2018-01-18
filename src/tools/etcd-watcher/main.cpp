@@ -69,6 +69,7 @@ int main(int argc, char *argv[]) {
     WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->init();
     WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_prefix_format("[%L][%F %T.%f][%k:%n(%C)]: ");
     WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->add_sink(log_callback);
+    WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_ERROR);
 
     util::network::http_request::curl_m_bind_ptr_t curl_mgr;
     util::network::http_request::create_curl_multi(uv_default_loop(), curl_mgr);
