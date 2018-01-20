@@ -20,6 +20,7 @@
 #include <atframe/atapp_module_impl.h>
 
 #include <etcdcli/etcd_cluster.h>
+#include <etcdcli/etcd_watcher.h>
 
 #include "atproxy_manager.h"
 
@@ -58,31 +59,21 @@ namespace atframe {
 
             virtual int tick() UTIL_CONFIG_OVERRIDE;
 
-            int keepalive(bool refresh);
-
-            int watch();
-
             int update_etcd_members(bool waiting);
 
         private:
-            void setup_http_request(util::network::http_request::ptr_t &req);
-            int select_host(const std::string &json_data);
-            void setup_update_etcd_members();
-
-            void unpack(node_info_t &out, rapidjson::Value &node, rapidjson::Value *prev_node, bool reset_data);
-            void unpack(node_list_t &out, rapidjson::Value &node, bool reset_data);
-
-            void unpack(node_info_t &out, const std::string &json);
-            void unpack(node_list_t &out, const std::string &json);
-
-            void pack(const node_info_t &out, std::string &json);
-
-            int on_keepalive_complete(util::network::http_request &req);
-            int on_watch_complete(util::network::http_request &req);
-            int on_watch_header(util::network::http_request &req, const char *key, size_t keylen, const char *val, size_t vallen);
-            int on_update_etcd_complete(util::network::http_request &req);
+            static void unpack(node_info_t &out, const std::string &json, bool reset_data);
+            static void pack(const node_info_t &out, std::string &json);
 
             static int http_callback_on_etcd_closed(util::network::http_request &req);
+
+            struct watcher_callback_t {
+                etcd_module *mod;
+
+                watcher_callback_t(etcd_module &m);
+                void operator()(const ::atframe::component::etcd_response_header &header, const ::atframe::component::etcd_watcher::response_t &evt_data);
+            };
+
 
         public:
             inline atproxy_manager &get_proxy_manager() { return proxy_mgr_; }
@@ -93,7 +84,7 @@ namespace atframe {
             util::network::http_request::curl_m_bind_ptr_t curl_multi_;
             util::network::http_request::ptr_t cleanup_request_;
             atproxy_manager proxy_mgr_;
-            etcd_cluster etcd_ctx_;
+            ::atframe::component::etcd_cluster etcd_ctx_;
         };
     } // namespace proxy
 } // namespace atframe

@@ -15,6 +15,7 @@ namespace atframe {
         etcd_keepalive::etcd_keepalive(etcd_cluster &owner, const std::string &path, constrict_helper_t &) : owner_(&owner), path_(path) {
             checker_.is_check_run = false;
             checker_.is_check_passed = false;
+            checker_.retry_times = 0;
             rpc_.is_actived = false;
         }
 
@@ -35,6 +36,7 @@ namespace atframe {
             checker_.is_check_run = false;
             checker_.is_check_passed = false;
             checker_.fn = NULL;
+            checker_.retry_times = 0;
         }
 
         void etcd_keepalive::set_checker(const std::string &checked_str) { checker_.fn = default_checker_t(checked_str); }
@@ -59,6 +61,7 @@ namespace atframe {
             if (!checker_.fn) {
                 checker_.is_check_run = true;
                 checker_.is_check_passed = true;
+                ++checker_.retry_times;
             }
 
             do {
@@ -66,6 +69,7 @@ namespace atframe {
                     // create a check rpc
                     rpc_.rpc_opr_ = owner_->create_request_kv_get(path_);
                     if (!rpc_.rpc_opr_) {
+                        ++checker_.retry_times;
                         WLOGERROR("Etcd keepalive %p create get data request to %s failed", this, path_.c_str());
                         break;
                     }
@@ -113,6 +117,7 @@ namespace atframe {
             }
 
             self->rpc_.rpc_opr_.reset();
+            ++self->checker_.retry_times;
 
             // 服务器错误则重试，预检查请求的404是正常的
             if (0 != req.get_error_code() ||

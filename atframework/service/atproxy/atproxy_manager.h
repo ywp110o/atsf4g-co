@@ -19,12 +19,8 @@ namespace atframe {
             struct node_action_t {
                 enum type {
                     EN_NAT_UNKNOWN = 0,
-                    EN_NAT_GET,
-                    EN_NAT_SET,
-                    EN_NAT_CREATE,
-                    EN_NAT_MODIFY,
-                    EN_NAT_REMOVE,
-                    EN_NAT_EXPIRE,
+                    EN_NAT_PUT,
+                    EN_NAT_DELETE,
                 };
             };
             struct node_info_t {
@@ -32,20 +28,11 @@ namespace atframe {
                 std::list<std::string> listens;
 
                 node_action_t::type action;
-                size_t created_index;
-                size_t modify_index;
-
-                int error_code;
+                time_t next_action_time;
             };
 
             struct node_list_t {
                 std::list<node_info_t> nodes;
-
-                node_action_t::type action;
-                uint64_t created_index;
-                uint64_t modify_index;
-
-                int error_code;
             };
 
         private:
@@ -72,8 +59,9 @@ namespace atframe {
 
         private:
             std::list<check_info_t> check_list_;
-            std::map< ::atapp::app::app_id_t, node_info_t> proxy_set_;
+            typedef std::map< ::atapp::app::app_id_t, node_info_t> proxy_set_t;
+            proxy_set_t proxy_set_;
         };
-    }
-}
+    } // namespace proxy
+} // namespace atframe
 #endif

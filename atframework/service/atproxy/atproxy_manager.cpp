@@ -16,7 +16,7 @@ namespace atframe {
                 }
 
                 check_info_t ci = check_list_.front();
-                if (now <= check_list_.front().timeout_sec) {
+                if (now <= ci.timeout_sec) {
                     break;
                 }
                 check_list_.pop_front();
@@ -37,7 +37,15 @@ namespace atframe {
                     continue;
                 }
 
+                // has another pending check info
+                if (iter->second.next_action_time > ci.timeout_sec) {
+                    continue;
+                }
+
                 if (app.get_bus_node()) {
+                    // set next_action_time first
+                    iter->second.next_action_time = 0;
+
                     // already connected, skip
                     if (NULL != app.get_bus_node()->get_endpoint(ci.proxy_id)) {
                         continue;
@@ -50,13 +58,16 @@ namespace atframe {
                     } else {
                         WLOGERROR("try to connect to proxy: %llx, address: %s failed, res: %d", static_cast<unsigned long long>(iter->second.id),
                                   iter->second.listens.front().c_str(), res);
-                        ci.timeout_sec = now + app.get_bus_node()->get_conf().retry_interval;
-                        if (ci.timeout_sec <= now) {
-                            ci.timeout_sec = now + 1;
-                        }
-                        // try to reconnect later
-                        check_list_.push_back(ci);
                     }
+
+                    // recheck some time later
+                    ci.timeout_sec = now + app.get_bus_node()->get_conf().retry_interval;
+                    if (ci.timeout_sec <= now) {
+                        ci.timeout_sec = now + 1;
+                    }
+                    // try to reconnect later
+                    iter->second.next_action_time = ci.timeout_sec;
+                    check_list_.push_back(ci);
 
                     // if failed and there is more than one listen address, use next address next time.
                     if (iter->second.listens.size() == 2) {
@@ -68,6 +79,7 @@ namespace atframe {
                 } else {
                     ci.timeout_sec = now + 1;
                     // try to reconnect later
+                    iter->second.next_action_time = ci.timeout_sec;
                     check_list_.push_back(ci);
                 }
 
@@ -81,11 +93,21 @@ namespace atframe {
             ci.timeout_sec = util::time::time_utility::get_now();
             ci.proxy_id = proxy_info.id;
 
-            swap(proxy_set_[proxy_info.id], proxy_info);
+            proxy_set_t::iterator iter = proxy_set_.find(proxy_info.id);
+            if (iter != proxy_set_.end()) {
+                // already has pending action, just skipped
+                if (iter->second.next_action_time >= ci.timeout_sec) {
+                    return 0;
+                } else {
+                    iter->second.next_action_time = ci.timeout_sec;
+                }
+            } else {
+                proxy_info.next_action_time = ci.timeout_sec;
+                proxy_set_[proxy_info.id] = proxy_info;
+            }
 
             // push front and check it on next loop
             check_list_.push_front(ci);
-
             return 0;
         }
 
@@ -96,6 +118,8 @@ namespace atframe {
 
         int atproxy_manager::reset(node_list_t &all_proxys) {
             proxy_set_.clear();
+            check_list_.clear();
+
             for (std::list<node_info_t>::iterator iter = all_proxys.nodes.begin(); iter != all_proxys.nodes.end(); ++iter) {
 
                 // skip all empty
@@ -104,10 +128,12 @@ namespace atframe {
                 }
 
                 check_info_t ci;
-                ci.timeout_sec = 0;
+                ci.timeout_sec = util::time::time_utility::get_now();
                 ci.proxy_id = iter->id;
+                (*iter).next_action_time = ci.timeout_sec;
 
-                swap(proxy_set_[ci.proxy_id], *iter);
+                // copy proxy info
+                proxy_set_[ci.proxy_id] = *iter;
 
                 // push front and check it on next loop
                 check_list_.push_front(ci);
@@ -119,7 +145,8 @@ namespace atframe {
         int atproxy_manager::on_connected(const ::atapp::app &app, ::atapp::app::app_id_t id) { return 0; }
 
         int atproxy_manager::on_disconnected(const ::atapp::app &app, ::atapp::app::app_id_t id) {
-            if (proxy_set_.end() != proxy_set_.find(id)) {
+            proxy_set_t::iterator iter = proxy_set_.find(id);
+            if (proxy_set_.end() != iter) {
                 check_info_t ci;
 
                 // when stoping bus noe may be unavailable
@@ -130,10 +157,14 @@ namespace atframe {
                         ci.timeout_sec = util::time::time_utility::get_now() + 1;
                     }
                 } else {
-                    ci.timeout_sec = 0;
+                    ci.timeout_sec = util::time::time_utility::get_now() - 1;
                 }
-                ci.proxy_id = id;
-                check_list_.push_back(ci);
+
+                if (iter->second.next_action_time < ci.timeout_sec) {
+                    iter->second.next_action_time = ci.timeout_sec;
+                    ci.proxy_id = id;
+                    check_list_.push_back(ci);
+                }
             }
 
             return 0;
@@ -142,11 +173,9 @@ namespace atframe {
         void atproxy_manager::swap(node_info_t &l, node_info_t &r) {
             using std::swap;
             swap(l.action, r.action);
-            swap(l.created_index, r.created_index);
-            swap(l.error_code, r.error_code);
             swap(l.id, r.id);
             swap(l.listens, r.listens);
-            swap(l.modify_index, r.modify_index);
+            swap(l.next_action_time, r.next_action_time);
         }
-    }
-}
+    } // namespace proxy
+} // namespace atframe

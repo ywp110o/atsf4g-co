@@ -168,7 +168,7 @@ namespace atframe {
             {
                 rapidjson::Document::MemberIterator res = doc.FindMember("kvs");
 
-                if (result->MemberEnd() != res) {
+                if (doc.MemberEnd() != res) {
                     size_t reverse_sz = 0;
                     etcd_packer::unpack_int(res->value, "count", reverse_sz);
                     if (0 == reverse_sz) {
