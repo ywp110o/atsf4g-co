@@ -62,22 +62,46 @@ namespace atframe {
             ~etcd_cluster();
 
             void init(const util::network::http_request::curl_m_bind_ptr_t &curl_mgr);
-            void set_hosts(const std::vector<std::string> &hosts);
 
-            void close(bool wait = false);
+            util::network::http_request::ptr_t close(bool wait = false);
             void reset();
             int tick();
 
             inline bool check_flag(uint32_t f) const { return 0 != (flags_ & f); };
             void set_flag(flag_t::type f, bool v);
 
-            time_t get_http_timeout() const;
+            // ====================== apis for configure ==================
+            inline const std::vector<std::string> &get_available_hosts() const { return conf_.hosts; }
+            inline const std::string &get_selected_host() const { return conf_.path_node; }
 
+            inline int64_t get_keepalive_lease() const { return get_lease(); }
+
+            inline void set_conf_hosts(const std::vector<std::string> &hosts) { conf_.conf_hosts = hosts; }
+            inline const std::vector<std::string> &get_conf_hosts() const { return conf_.conf_hosts; }
+
+            inline void set_conf_http_timeout(std::chrono::system_clock::duration v) { conf_.http_cmd_timeout = v; }
+            inline void set_conf_http_timeout_sec(time_t v) { set_conf_http_timeout(std::chrono::seconds(v)); }
+            inline const std::chrono::system_clock::duration &get_conf_http_timeout() const { return conf_.http_cmd_timeout; }
+            time_t get_http_timeout_ms() const;
+
+            inline void set_conf_etcd_members_update_interval(std::chrono::system_clock::duration v) { conf_.etcd_members_update_interval = v; }
+            inline void set_conf_etcd_members_update_interval_min(time_t v) { set_conf_etcd_members_update_interval(std::chrono::minutes(v)); }
+            inline const std::chrono::system_clock::duration &get_conf_etcd_members_update_interval() const { return conf_.etcd_members_update_interval; }
+
+            inline void set_conf_keepalive_timeout(std::chrono::system_clock::duration v) { conf_.keepalive_timeout = v; }
+            inline void set_conf_keepalive_timeout_sec(time_t v) { set_conf_keepalive_timeout(std::chrono::seconds(v)); }
+            inline const std::chrono::system_clock::duration &get_conf_keepalive_timeout() const { return conf_.keepalive_timeout; }
+
+            inline void set_conf_keepalive_interval(std::chrono::system_clock::duration v) { conf_.keepalive_interval = v; }
+            inline void set_conf_keepalive_interval_sec(time_t v) { set_conf_keepalive_interval(std::chrono::seconds(v)); }
+            inline const std::chrono::system_clock::duration &get_conf_keepalive_interval() const { return conf_.keepalive_interval; }
+
+            // ================== apis for sub-services ==================
             bool add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
             bool add_retry_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
             bool add_watcher(const std::shared_ptr<etcd_watcher> &watcher);
 
-            // ================== apis of create request for key-value operation
+            // ================== apis of create request for key-value operation ==================
         public:
             /**
              * @brief               create request for range get key-value data

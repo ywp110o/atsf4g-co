@@ -68,12 +68,25 @@ namespace atframe {
             etcd_cluster &get_owner() { return *owner_; }
             const etcd_cluster &get_owner() const { return *owner_; }
 
+            // ====================== apis for configure ==================
+
             inline bool is_progress_notify_enabled() const { return rpc_.enable_progress_notify; }
             inline void set_progress_notify_enabled(bool v) { rpc_.enable_progress_notify = v; }
 
             inline bool is_prev_kv_enabled() const { return rpc_.enable_prev_kv; }
             inline void set_prev_kv_enabled(bool v) { rpc_.enable_prev_kv = v; }
 
+            inline void set_conf_retry_interval(std::chrono::system_clock::duration v) { rpc_.retry_interval = v; }
+            inline void set_conf_retry_interval_sec(time_t v) { set_conf_retry_interval(std::chrono::seconds(v)); }
+            inline const std::chrono::system_clock::duration &get_conf_retry_interval() const { return rpc_.retry_interval; }
+
+            inline void set_conf_request_timeout(std::chrono::system_clock::duration v) { rpc_.request_timeout = v; }
+            inline void set_conf_request_timeout_sec(time_t v) { set_conf_request_timeout(std::chrono::seconds(v)); }
+            inline void set_conf_request_timeout_min(time_t v) { set_conf_request_timeout(std::chrono::minutes(v)); }
+            inline void set_conf_request_timeout_hour(time_t v) { set_conf_request_timeout(std::chrono::hours(v)); }
+            inline const std::chrono::system_clock::duration &get_conf_request_timeout() const { return rpc_.request_timeout; }
+
+                // ====================== apis for events ==================
 #if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
             inline void set_evt_handle(watch_event_fn_t &&fn) { evt_handle_ = std::move(fn); }
 #else
@@ -84,8 +97,11 @@ namespace atframe {
             void process();
 
         private:
-            static int libcurl_callback_on_completed(util::network::http_request &req);
-            static int libcurl_callback_on_write(util::network::http_request &req, const char *inbuf, size_t inbufsz, const char *&outbuf, size_t &outbufsz);
+            static int libcurl_callback_on_range_completed(util::network::http_request &req);
+
+            static int libcurl_callback_on_watch_completed(util::network::http_request &req);
+            static int libcurl_callback_on_watch_write(util::network::http_request &req, const char *inbuf, size_t inbufsz, const char *&outbuf,
+                                                       size_t &outbufsz);
 
         private:
             etcd_cluster *owner_;

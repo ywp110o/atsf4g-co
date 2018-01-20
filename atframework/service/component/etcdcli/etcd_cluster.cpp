@@ -115,11 +115,11 @@ namespace atframe {
         void etcd_cluster::init(const util::network::http_request::curl_m_bind_ptr_t &curl_mgr) {
             curl_multi_ = curl_mgr;
             random_generator_.init_seed(static_cast<util::random::mt19937::result_type>(util::time::time_utility::get_now()));
+
+            set_flag(flag_t::CLOSING, false);
         }
 
-        void etcd_cluster::set_hosts(const std::vector<std::string> &hosts) { conf_.conf_hosts = hosts; }
-
-        void etcd_cluster::close(bool wait) {
+        util::network::http_request::ptr_t etcd_cluster::close(bool wait) {
             set_flag(flag_t::CLOSING, true);
 
             if (rpc_keepalive_) {
@@ -148,18 +148,25 @@ namespace atframe {
             }
             watcher_actors_.clear();
 
+            util::network::http_request::ptr_t ret;
             if (curl_multi_) {
                 if (0 != conf_.lease) {
-                    util::network::http_request::ptr_t tmp_req = create_request_lease_revoke();
+                    ret = create_request_lease_revoke();
 
                     // wait to delete content
-                    if (tmp_req) {
-                        tmp_req->start(util::network::http_request::method_t::EN_MT_POST, wait);
+                    if (ret) {
+                        ret->start(util::network::http_request::method_t::EN_MT_POST, wait);
                     }
 
                     conf_.lease = 0;
                 }
             }
+
+            if (ret && false == ret->is_running()) {
+                ret.reset();
+            }
+
+            return ret;
         }
 
         void etcd_cluster::reset() {
@@ -187,13 +194,17 @@ namespace atframe {
                 return ret;
             }
 
+            if (check_flag(flag_t::CLOSING)) {
+                return 0;
+            }
+
             // update members
             if (util::time::time_utility::now() > conf_.etcd_members_next_update_time) {
                 ret += create_request_member_update() ? 1 : 0;
             }
 
             // empty other actions will be delayed
-            if (conf_.hosts.empty() || conf_.path_node.empty()) {
+            if (conf_.path_node.empty()) {
                 return ret;
             }
 
@@ -243,10 +254,10 @@ namespace atframe {
             }
         }
 
-        time_t etcd_cluster::get_http_timeout() const {
-            time_t ret = static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(conf_.keepalive_timeout).count());
+        time_t etcd_cluster::get_http_timeout_ms() const {
+            time_t ret = static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(get_conf_http_timeout()).count());
             if (ret <= 0) {
-                ret = 20000; // 20s
+                ret = 30000; // 30s
             }
 
             return ret;
@@ -254,6 +265,10 @@ namespace atframe {
 
         bool etcd_cluster::add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive) {
             if (!keepalive) {
+                return false;
+            }
+
+            if (check_flag(flag_t::CLOSING)) {
                 return false;
             }
 
@@ -275,6 +290,10 @@ namespace atframe {
                 return false;
             }
 
+            if (check_flag(flag_t::CLOSING)) {
+                return false;
+            }
+
             if (keepalive_retry_actors_.end() != std::find(keepalive_retry_actors_.begin(), keepalive_retry_actors_.end(), keepalive)) {
                 return false;
             }
@@ -290,6 +309,10 @@ namespace atframe {
 
         bool etcd_cluster::add_watcher(const std::shared_ptr<etcd_watcher> &watcher) {
             if (!watcher) {
+                return false;
+            }
+
+            if (check_flag(flag_t::CLOSING)) {
                 return false;
             }
 
@@ -378,7 +401,7 @@ namespace atframe {
                 rapidjson::Document doc;
                 doc.SetObject();
 
-                setup_http_request(req, doc, get_http_timeout());
+                setup_http_request(req, doc, get_http_timeout_ms());
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_member_update);
 
@@ -513,7 +536,7 @@ namespace atframe {
                 doc.AddMember("ID", get_lease(), doc.GetAllocator());
                 doc.AddMember("TTL", std::chrono::duration_cast<std::chrono::seconds>(conf_.keepalive_timeout).count(), doc.GetAllocator());
 
-                setup_http_request(req, doc, get_http_timeout());
+                setup_http_request(req, doc, get_http_timeout_ms());
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_lease_keepalive);
 
@@ -564,7 +587,7 @@ namespace atframe {
                 doc.SetObject();
                 doc.AddMember("ID", get_lease(), doc.GetAllocator());
 
-                setup_http_request(req, doc, get_http_timeout());
+                setup_http_request(req, doc, get_http_timeout_ms());
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_lease_keepalive);
 
@@ -665,7 +688,7 @@ namespace atframe {
         }
 
         util::network::http_request::ptr_t etcd_cluster::create_request_lease_revoke() {
-            if (!curl_multi_ || 0 == get_lease() || conf_.path_node.empty()) {
+            if (!curl_multi_ || 0 == get_lease() || conf_.path_node.empty() || check_flag(flag_t::CLOSING)) {
                 return util::network::http_request::ptr_t();
             }
 
@@ -678,7 +701,7 @@ namespace atframe {
                 doc.SetObject();
                 doc.AddMember("ID", get_lease(), doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout());
+                setup_http_request(ret, doc, get_http_timeout_ms());
             }
 
             return ret;
@@ -686,7 +709,7 @@ namespace atframe {
 
         util::network::http_request::ptr_t etcd_cluster::create_request_kv_get(const std::string &key, const std::string &range_end, int64_t limit,
                                                                                int64_t revision) {
-            if (!curl_multi_ || conf_.path_node.empty()) {
+            if (!curl_multi_ || conf_.path_node.empty() || check_flag(flag_t::CLOSING)) {
                 return util::network::http_request::ptr_t();
             }
 
@@ -702,7 +725,7 @@ namespace atframe {
                 doc.AddMember("limit", limit, doc.GetAllocator());
                 doc.AddMember("revision", revision, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout());
+                setup_http_request(ret, doc, get_http_timeout_ms());
             }
 
             return ret;
@@ -710,7 +733,7 @@ namespace atframe {
 
         util::network::http_request::ptr_t etcd_cluster::create_request_kv_set(const std::string &key, const std::string &value, bool assign_lease,
                                                                                bool prev_kv, bool ignore_value, bool ignore_lease) {
-            if (!curl_multi_ || conf_.path_node.empty()) {
+            if (!curl_multi_ || conf_.path_node.empty() || check_flag(flag_t::CLOSING)) {
                 return util::network::http_request::ptr_t();
             }
 
@@ -736,14 +759,14 @@ namespace atframe {
                 doc.AddMember("ignore_value", ignore_value, doc.GetAllocator());
                 doc.AddMember("ignore_lease", ignore_lease, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout());
+                setup_http_request(ret, doc, get_http_timeout_ms());
             }
 
             return ret;
         }
 
         util::network::http_request::ptr_t etcd_cluster::create_request_kv_del(const std::string &key, const std::string &range_end, bool prev_kv) {
-            if (!curl_multi_ || conf_.path_node.empty()) {
+            if (!curl_multi_ || conf_.path_node.empty() || check_flag(flag_t::CLOSING)) {
                 return util::network::http_request::ptr_t();
             }
 
@@ -758,7 +781,7 @@ namespace atframe {
                 etcd_packer::pack_key_range(root, key, range_end, doc);
                 doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout());
+                setup_http_request(ret, doc, get_http_timeout_ms());
             }
 
             return ret;
@@ -766,7 +789,7 @@ namespace atframe {
 
         util::network::http_request::ptr_t etcd_cluster::create_request_watch(const std::string &key, const std::string &range_end, int64_t start_revision,
                                                                               bool prev_kv, bool progress_notify) {
-            if (!curl_multi_ || conf_.path_node.empty()) {
+            if (!curl_multi_ || conf_.path_node.empty() || check_flag(flag_t::CLOSING)) {
                 return util::network::http_request::ptr_t();
             }
 
@@ -796,7 +819,7 @@ namespace atframe {
 
                 root.AddMember("create_request", create_request, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout());
+                setup_http_request(ret, doc, get_http_timeout_ms());
                 ret->set_opt_keepalive(75, 150);
                 // 不能共享socket
                 ret->set_opt_reuse_connection(false);

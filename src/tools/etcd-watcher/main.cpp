@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     ec.init(curl_mgr);
     std::vector<std::string> hosts;
     hosts.push_back(argv[1]);
-    ec.set_hosts(hosts);
+    ec.set_conf_hosts(hosts);
 
     if (argc > 2) {
         atframe::component::etcd_watcher::ptr_t p = atframe::component::etcd_watcher::create(ec, argv[2]);

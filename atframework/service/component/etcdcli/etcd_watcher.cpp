@@ -56,6 +56,31 @@ namespace atframe {
                 return;
             }
 
+            // ask for revision first
+            if (0 == rpc_.last_revision) {
+                // create range request
+                rpc_.rpc_opr_ = owner_->create_request_kv_get(path_, range_end_);
+                if (!rpc_.rpc_opr_) {
+                    WLOGERROR("Etcd watcher %p create range request to %s failed", this, path_.c_str());
+                    rpc_.watcher_next_request_time = util::time::time_utility::now() + rpc_.retry_interval;
+                    return;
+                }
+
+                rpc_.rpc_opr_->set_priv_data(this);
+                rpc_.rpc_opr_->set_on_complete(libcurl_callback_on_range_completed);
+
+                int res = rpc_.rpc_opr_->start(util::network::http_request::method_t::EN_MT_POST, false);
+                if (res != 0) {
+                    rpc_.rpc_opr_->set_on_complete(NULL);
+                    WLOGERROR("Etcd watcher %p start request to %s failed, res: %d", this, rpc_.rpc_opr_->get_url().c_str(), res);
+                    rpc_.rpc_opr_.reset();
+                } else {
+                    WLOGDEBUG("Etcd watcher %p start request to %s success.", this, rpc_.rpc_opr_->get_url().c_str());
+                }
+
+                return;
+            }
+
             // create watcher request
             rpc_.rpc_opr_ = owner_->create_request_watch(path_, range_end_, rpc_.last_revision, rpc_.enable_prev_kv, rpc_.enable_progress_notify);
             if (!rpc_.rpc_opr_) {
@@ -65,8 +90,8 @@ namespace atframe {
             }
 
             rpc_.rpc_opr_->set_priv_data(this);
-            rpc_.rpc_opr_->set_on_complete(libcurl_callback_on_completed);
-            rpc_.rpc_opr_->set_on_write(libcurl_callback_on_write);
+            rpc_.rpc_opr_->set_on_complete(libcurl_callback_on_watch_completed);
+            rpc_.rpc_opr_->set_on_write(libcurl_callback_on_watch_write);
             rpc_.rpc_opr_->set_opt_timeout(static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(rpc_.request_timeout).count()));
 
             rpc_data_stream_.str("");
@@ -84,7 +109,98 @@ namespace atframe {
             return;
         }
 
-        int etcd_watcher::libcurl_callback_on_completed(util::network::http_request &req) {
+        int etcd_watcher::libcurl_callback_on_range_completed(util::network::http_request &req) {
+            etcd_watcher *self = reinterpret_cast<etcd_watcher *>(req.get_priv_data());
+            if (NULL == self) {
+                WLOGERROR("Etcd watcher range request shouldn't has request without private data");
+                return 0;
+            }
+            self->rpc_.rpc_opr_.reset();
+
+            // 服务器错误则过一段时间后重试
+            if (0 != req.get_error_code() ||
+                util::network::http_request::status_code_t::EN_ECG_SUCCESS != util::network::http_request::get_status_code_group(req.get_response_code())) {
+
+                WLOGERROR("Etcd watcher %p range request failed, error code: %d, http code: %d\n%s", self, req.get_error_code(), req.get_response_code(),
+                          req.get_error_msg());
+
+                self->rpc_.watcher_next_request_time = util::time::time_utility::now() + self->rpc_.retry_interval;
+
+                // 立刻开启下一次watch
+                self->active();
+                return 0;
+            }
+
+            std::string http_content;
+            req.get_response_stream().str().swap(http_content);
+            WLOGDEBUG("Etcd watcher %p got range http response: %s", self, http_content.c_str());
+
+            rapidjson::Document doc;
+            doc.Parse(http_content.c_str(), http_content.size());
+
+            // unpack header
+            etcd_response_header header;
+            {
+                header.revision = 0;
+                rapidjson::Document::MemberIterator res = doc.FindMember("header");
+                if (res != doc.MemberEnd()) {
+                    etcd_packer::unpack(header, res->value);
+                }
+            }
+
+            if (0 == header.revision) {
+                WLOGERROR("Etcd watcher %p got range response without header", self);
+
+                self->rpc_.watcher_next_request_time = util::time::time_utility::now() + self->rpc_.retry_interval;
+                self->active();
+                return 0;
+            }
+
+            // save revision
+            self->rpc_.last_revision = header.revision;
+
+            // first event
+            response_t response;
+            response.watch_id = 0;
+            response.created = false;
+            response.canceled = false;
+            response.compact_revision = 0;
+            {
+                rapidjson::Document::MemberIterator res = doc.FindMember("kvs");
+
+                if (result->MemberEnd() != res) {
+                    size_t reverse_sz = 0;
+                    etcd_packer::unpack_int(res->value, "count", reverse_sz);
+                    if (0 == reverse_sz) {
+                        reverse_sz = 64;
+                    }
+                    response.events.reserve(reverse_sz);
+
+                    rapidjson::Document::Array all_events = res->value.GetArray();
+                    for (rapidjson::Document::Array::ValueIterator iter = all_events.Begin(); iter != all_events.End(); ++iter) {
+                        response.events.push_back(event_t());
+                        event_t &evt = response.events.back();
+
+                        evt.evt_type = etcd_watch_event::PUT; // 查询的结果都认为是PUT
+                        etcd_packer::unpack(evt.kv, *iter);
+                    }
+                }
+            }
+
+            // trigger event
+            if (self->evt_handle_) {
+                self->evt_handle_(header, response);
+            }
+
+            // reset request time to invoke watch request immediately
+            self->rpc_.watcher_next_request_time = util::time::time_utility::now();
+
+            // 立刻开启下一次watch
+            self->active();
+            return 0;
+        }
+
+        int etcd_watcher::libcurl_callback_on_watch_completed(util::network::http_request &req) {
             etcd_watcher *self = reinterpret_cast<etcd_watcher *>(req.get_priv_data());
             if (NULL == self) {
                 WLOGERROR("Etcd watcher watch request shouldn't has request without private data");
@@ -120,8 +236,8 @@ namespace atframe {
             return 0;
         }
 
-        int etcd_watcher::libcurl_callback_on_write(util::network::http_request &req, const char *inbuf, size_t inbufsz, const char *&outbuf,
-                                                    size_t &outbufsz) {
+        int etcd_watcher::libcurl_callback_on_watch_write(util::network::http_request &req, const char *inbuf, size_t inbufsz, const char *&outbuf,
+                                                          size_t &outbufsz) {
             // etcd_watcher 模块内消耗掉缓冲区，不需要写出到通用缓冲区了
             outbuf = NULL;
             outbufsz = 0;
@@ -247,13 +363,11 @@ namespace atframe {
                               static_cast<long long>(response.watch_id), static_cast<long long>(response.compact_revision), response.created ? "Yes" : "No",
                               response.canceled ? "Yes" : "No");
                     for (size_t i = 0; i < response.events.size(); ++i) {
-                        etcd_key_value *kv;
+                        etcd_key_value *kv = &response.events[i].kv;
                         const char *name;
                         if (etcd_watch_event::PUT == response.events[i].evt_type) {
-                            kv = &response.events[i].kv;
                             name = "PUT";
                         } else {
-                            kv = &response.events[i].prev_kv;
                             name = "DELETE";
                         }
                         WLOGDEBUG("    Evt => type: %s, key: %s, value: %s", name, kv->key.c_str(), kv->value.c_str());
