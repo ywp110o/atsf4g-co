@@ -125,7 +125,7 @@ namespace atframe {
                 uv_run(get_app()->get_bus_node()->get_evloop(), UV_RUN_ONCE);
 
                 // 重试次数过多则失败退出
-                if (keepalive_actor->get_check_times() >= 3) {
+                if (keepalive_actor->get_check_times() >= 3 || etcd_ctx_.get_stats().continue_error_requests > 3) {
                     WLOGERROR("etcd_keepalive request %s for %llu times failed.", conf_.path_node.c_str(),
                               static_cast<unsigned long long>(keepalive_actor->get_check_times()));
                     is_failed = true;
@@ -137,6 +137,7 @@ namespace atframe {
             if (is_failed) {
                 stop();
                 reset();
+                return -1;
             }
 
             return res;
@@ -335,7 +336,7 @@ namespace atframe {
                 node_info_t node;
                 unpack(node, evt_data.kv.value, true);
 
-                if (evt_data.evt_type == ::atframe::component::etcd_watch_event::DELETE) {
+                if (evt_data.evt_type == ::atframe::component::etcd_watch_event::EN_WEVT_DELETE) {
                     node.action = node_action_t::EN_NAT_DELETE;
                     // trigger manager
                     mod->get_proxy_manager().remove(node.id);

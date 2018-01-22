@@ -181,7 +181,7 @@ namespace atframe {
                         response.events.push_back(event_t());
                         event_t &evt = response.events.back();
 
-                        evt.evt_type = etcd_watch_event::PUT; // 查询的结果都认为是PUT
+                        evt.evt_type = etcd_watch_event::EN_WEVT_PUT; // 查询的结果都认为是PUT
                         etcd_packer::unpack(evt.kv, *iter);
                     }
                 }
@@ -332,21 +332,21 @@ namespace atframe {
 
                         rapidjson::Document::MemberIterator type = iter->FindMember("type");
                         if (type == iter->MemberEnd()) {
-                            evt.evt_type = etcd_watch_event::PUT; // etcd可能不会下发默认值
+                            evt.evt_type = etcd_watch_event::EN_WEVT_PUT; // etcd可能不会下发默认值
                         } else {
                             if (type->value.IsString()) {
                                 if (0 == UTIL_STRFUNC_STRCASE_CMP("DELETE", type->value.GetString())) {
-                                    evt.evt_type = etcd_watch_event::DELETE;
+                                    evt.evt_type = etcd_watch_event::EN_WEVT_DELETE;
                                 } else {
-                                    evt.evt_type = etcd_watch_event::PUT;
+                                    evt.evt_type = etcd_watch_event::EN_WEVT_PUT;
                                 }
                             } else if (type->value.IsNumber()) {
                                 uint64_t type_int = 0;
                                 etcd_packer::unpack_int(*iter, "type", type_int);
                                 if (0 == type_int) {
-                                    evt.evt_type = etcd_watch_event::PUT;
+                                    evt.evt_type = etcd_watch_event::EN_WEVT_PUT;
                                 } else {
-                                    evt.evt_type = etcd_watch_event::DELETE;
+                                    evt.evt_type = etcd_watch_event::EN_WEVT_DELETE;
                                 }
                             } else {
                                 WLOGERROR("Etcd watcher %p got unknown event type. msg: %s", self, value_json.c_str());
@@ -373,7 +373,7 @@ namespace atframe {
                     for (size_t i = 0; i < response.events.size(); ++i) {
                         etcd_key_value *kv = &response.events[i].kv;
                         const char *name;
-                        if (etcd_watch_event::PUT == response.events[i].evt_type) {
+                        if (etcd_watch_event::EN_WEVT_PUT == response.events[i].evt_type) {
                             name = "PUT";
                         } else {
                             name = "DELETE";

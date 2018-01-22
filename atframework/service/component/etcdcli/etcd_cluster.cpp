@@ -108,6 +108,8 @@ namespace atframe {
             conf_.keepalive_next_update_time = std::chrono::system_clock::from_time_t(0);
             conf_.keepalive_timeout = std::chrono::seconds(16);
             conf_.keepalive_interval = std::chrono::seconds(5);
+
+            memset(&stats_, 0, sizeof(stats_));
         }
 
         etcd_cluster::~etcd_cluster() { reset(); }
@@ -398,6 +400,8 @@ namespace atframe {
             util::network::http_request::ptr_t req = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (req) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 doc.SetObject();
 
@@ -410,11 +414,15 @@ namespace atframe {
                     req->set_on_complete(NULL);
                     WLOGERROR("Etcd start keepalive lease %lld request to %s failed, res: %d", static_cast<long long>(get_lease()), req->get_url().c_str(),
                               res);
+
+                    add_stats_error_request();
                     return false;
                 }
 
                 WLOGDEBUG("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_update_members_ = req;
+            } else {
+                add_stats_error_request();
             }
 
             return true;
@@ -438,6 +446,7 @@ namespace atframe {
                     self->create_request_member_update();
                 }
                 WLOGERROR("Etcd member list failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(), req.get_error_msg());
+                self->add_stats_error_request();
 
                 // 出错则从host里移除无效数据
                 for (size_t i = 0; i < self->conf_.hosts.size(); ++i) {
@@ -471,6 +480,7 @@ namespace atframe {
                 rapidjson::Document::MemberIterator members = root.FindMember("members");
                 if (root.MemberEnd() == members) {
                     WLOGERROR("Etcd members not found");
+                    self->add_stats_error_request();
                     return 0;
                 }
 
@@ -499,6 +509,8 @@ namespace atframe {
                 if (!self->conf_.hosts.empty() && need_select_node) {
                     self->conf_.path_node = self->conf_.hosts[self->random_generator_.random_between<size_t>(0, self->conf_.hosts.size())];
                 }
+
+                self->add_stats_success_request();
 
                 // 触发一次tick
                 self->tick();
@@ -531,6 +543,8 @@ namespace atframe {
             util::network::http_request::ptr_t req = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (req) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 doc.SetObject();
                 doc.AddMember("ID", get_lease(), doc.GetAllocator());
@@ -545,11 +559,14 @@ namespace atframe {
                     req->set_on_complete(NULL);
                     WLOGERROR("Etcd start keepalive lease %lld request to %s failed, res: %d", static_cast<long long>(get_lease()), req->get_url().c_str(),
                               res);
+                    add_stats_error_request();
                     return false;
                 }
 
                 WLOGDEBUG("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_keepalive_ = req;
+            } else {
+                add_stats_error_request();
             }
 
             return true;
@@ -583,6 +600,8 @@ namespace atframe {
             util::network::http_request::ptr_t req = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (req) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 doc.SetObject();
                 doc.AddMember("ID", get_lease(), doc.GetAllocator());
@@ -596,11 +615,14 @@ namespace atframe {
                     req->set_on_complete(NULL);
                     WLOGERROR("Etcd start keepalive lease %lld request to %s failed, res: %d", static_cast<long long>(get_lease()), req->get_url().c_str(),
                               res);
+                    add_stats_error_request();
                     return false;
                 }
 
                 WLOGDEBUG("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_keepalive_ = req;
+            } else {
+                add_stats_error_request();
             }
 
             return true;
@@ -623,6 +645,8 @@ namespace atframe {
                 if (0 != req.get_error_code()) {
                     self->create_request_member_update();
                 }
+                self->add_stats_error_request();
+
                 WLOGERROR("Etcd lease keepalive failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(), req.get_error_msg());
                 return 0;
             }
@@ -652,6 +676,7 @@ namespace atframe {
 
                 if (false == root.IsObject()) {
                     WLOGERROR("Etcd lease grant failed, root is not object.(%s)", http_content.c_str());
+                    self->add_stats_error_request();
                     return 0;
                 }
 
@@ -662,6 +687,8 @@ namespace atframe {
                         WLOGERROR("Etcd lease keepalive failed because not found, try to grant one");
                         self->create_request_lease_grant();
                     }
+
+                    self->add_stats_error_request();
                     return 0;
                 }
 
@@ -671,6 +698,7 @@ namespace atframe {
 
                 if (0 == new_lease) {
                     WLOGERROR("Etcd cluster got a error http response for grant or keepalive lease: %s", http_content.c_str());
+                    self->add_stats_error_request();
                     break;
                 }
 
@@ -681,6 +709,7 @@ namespace atframe {
                     WLOGDEBUG("Etcd lease %lld keepalive successed", static_cast<long long>(new_lease));
                 }
 
+                self->add_stats_success_request();
                 self->set_lease(new_lease, is_grant);
             } while (false);
 
@@ -697,11 +726,15 @@ namespace atframe {
             util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (ret) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 doc.SetObject();
                 doc.AddMember("ID", get_lease(), doc.GetAllocator());
 
                 setup_http_request(ret, doc, get_http_timeout_ms());
+            } else {
+                add_stats_error_request();
             }
 
             return ret;
@@ -718,6 +751,8 @@ namespace atframe {
             util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (ret) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 rapidjson::Value &root = doc.SetObject();
 
@@ -726,6 +761,8 @@ namespace atframe {
                 doc.AddMember("revision", revision, doc.GetAllocator());
 
                 setup_http_request(ret, doc, get_http_timeout_ms());
+            } else {
+                add_stats_error_request();
             }
 
             return ret;
@@ -746,6 +783,8 @@ namespace atframe {
             util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (ret) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 rapidjson::Value &root = doc.SetObject();
 
@@ -760,6 +799,8 @@ namespace atframe {
                 doc.AddMember("ignore_lease", ignore_lease, doc.GetAllocator());
 
                 setup_http_request(ret, doc, get_http_timeout_ms());
+            } else {
+                add_stats_error_request();
             }
 
             return ret;
@@ -775,6 +816,8 @@ namespace atframe {
             util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (ret) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 rapidjson::Value &root = doc.SetObject();
 
@@ -782,6 +825,8 @@ namespace atframe {
                 doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
 
                 setup_http_request(ret, doc, get_http_timeout_ms());
+            } else {
+                add_stats_error_request();
             }
 
             return ret;
@@ -798,6 +843,8 @@ namespace atframe {
             util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (ret) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 rapidjson::Value &root = doc.SetObject();
 
@@ -823,9 +870,27 @@ namespace atframe {
                 ret->set_opt_keepalive(75, 150);
                 // 不能共享socket
                 ret->set_opt_reuse_connection(false);
+            } else {
+                add_stats_error_request();
             }
 
             return ret;
+        }
+
+        void etcd_cluster::add_stats_error_request() {
+            ++ stats_.sum_error_requests;
+            ++ stats_.continue_error_requests;
+            stats_.continue_success_requests = 0;
+        }
+
+        void etcd_cluster::add_stats_success_request() {
+            ++ stats_.sum_success_requests;
+            ++ stats_.continue_success_requests;
+            stats_.continue_error_requests = 0;
+        }
+
+        void etcd_cluster::add_stats_create_request() {
+            stats_.sum_create_requests = 0;
         }
 
         void etcd_cluster::setup_http_request(util::network::http_request::ptr_t &req, rapidjson::Document &doc, time_t timeout) {

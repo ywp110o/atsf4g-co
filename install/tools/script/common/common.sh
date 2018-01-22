@@ -260,15 +260,9 @@ function WaitProcessStarted() {
 	if [ "${MSYSTEM:0:5}" == "MINGW" ] || [ "${MSYSTEM:0:4}" == "MSYS" ]; then
 		SYSFLAGS="-W";
 	fi
-	while [ -z "$(ps -p $PROC_PID $SYSFLAGS 2>&1 | grep $PROC_PID)" ]; do
-		if [ $WAIT_TIME -gt 0 ]; then
-			WaitForMS 100;
-			let WAIT_TIME=$WAIT_TIME-1;
-			PROC_PID=$(cat "$PROC_NAME");
-		else
-			return 2;
-		fi
-	done
+	if [ -z "$(ps -p $PROC_PID $SYSFLAGS 2>&1 | grep $PROC_PID)" ]; then
+		return 2;
+	fi
 
 	return 0;
 }

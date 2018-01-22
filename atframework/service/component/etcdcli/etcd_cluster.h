@@ -57,6 +57,15 @@ namespace atframe {
                 std::chrono::system_clock::duration keepalive_interval;
             };
 
+            struct stats_t {
+                size_t sum_error_requests;
+                size_t continue_error_requests;
+                size_t sum_success_requests;
+                size_t continue_success_requests;
+
+                size_t sum_create_requests;
+            };
+
         public:
             etcd_cluster();
             ~etcd_cluster();
@@ -70,6 +79,7 @@ namespace atframe {
             inline bool check_flag(uint32_t f) const { return 0 != (flags_ & f); };
             void set_flag(flag_t::type f, bool v);
 
+            inline const stats_t &get_stats() const { return stats_; };
             // ====================== apis for configure ==================
             inline const std::vector<std::string> &get_available_hosts() const { return conf_.hosts; }
             inline const std::string &get_selected_host() const { return conf_.path_node; }
@@ -166,6 +176,10 @@ namespace atframe {
             static int libcurl_callback_on_lease_keepalive(util::network::http_request &req);
             util::network::http_request::ptr_t create_request_lease_revoke();
 
+            void add_stats_error_request();
+            void add_stats_success_request();
+            void add_stats_create_request();
+
         public:
             static void setup_http_request(util::network::http_request::ptr_t &req, rapidjson::Document &doc, time_t timeout);
 
@@ -173,6 +187,7 @@ namespace atframe {
             uint32_t flags_;
             util::random::mt19937 random_generator_;
             conf_t conf_;
+            stats_t stats_;
             util::network::http_request::curl_m_bind_ptr_t curl_multi_;
             util::network::http_request::ptr_t rpc_update_members_;
             util::network::http_request::ptr_t rpc_keepalive_;
