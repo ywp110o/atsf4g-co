@@ -688,7 +688,7 @@ namespace atframe {
         }
 
         util::network::http_request::ptr_t etcd_cluster::create_request_lease_revoke() {
-            if (!curl_multi_ || 0 == get_lease() || conf_.path_node.empty() || check_flag(flag_t::CLOSING)) {
+            if (!curl_multi_ || 0 == get_lease() || conf_.path_node.empty()) {
                 return util::network::http_request::ptr_t();
             }
 

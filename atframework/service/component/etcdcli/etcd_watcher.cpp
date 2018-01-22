@@ -81,8 +81,8 @@ namespace atframe {
                 return;
             }
 
-            // create watcher request
-            rpc_.rpc_opr_ = owner_->create_request_watch(path_, range_end_, rpc_.last_revision, rpc_.enable_prev_kv, rpc_.enable_progress_notify);
+            // create watcher request for next resision
+            rpc_.rpc_opr_ = owner_->create_request_watch(path_, range_end_, rpc_.last_revision + 1, rpc_.enable_prev_kv, rpc_.enable_progress_notify);
             if (!rpc_.rpc_opr_) {
                 WLOGERROR("Etcd watcher %p create watch request to %s failed", this, path_.c_str());
                 rpc_.watcher_next_request_time = util::time::time_utility::now() + rpc_.retry_interval;
@@ -170,7 +170,7 @@ namespace atframe {
 
                 if (doc.MemberEnd() != res) {
                     size_t reverse_sz = 0;
-                    etcd_packer::unpack_int(res->value, "count", reverse_sz);
+                    etcd_packer::unpack_int(doc, "count", reverse_sz);
                     if (0 == reverse_sz) {
                         reverse_sz = 64;
                     }
@@ -184,6 +184,14 @@ namespace atframe {
                         evt.evt_type = etcd_watch_event::PUT; // 查询的结果都认为是PUT
                         etcd_packer::unpack(evt.kv, *iter);
                     }
+                }
+            }
+
+            if (util::log::log_wrapper::check(WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT), util::log::log_wrapper::level_t::LOG_LW_DEBUG)) {
+                WLOGDEBUG("Etcd watcher %p got range response", self);
+                for (size_t i = 0; i < response.events.size(); ++i) {
+                    etcd_key_value *kv = &response.events[i].kv;
+                    WLOGDEBUG("    InitEvt => type: PUT, key: %s, value: %s", kv->key.c_str(), kv->value.c_str());
                 }
             }
 
