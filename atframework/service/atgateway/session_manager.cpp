@@ -39,7 +39,7 @@ namespace atframe {
                 stream_conn->data = NULL;
                 return real_conn;
             }
-        }
+        } // namespace detail
 
         session_manager::session_manager() : evloop_(NULL), app_node_(NULL), last_tick_time_(0), private_data_(NULL) {}
 
@@ -80,6 +80,7 @@ namespace atframe {
             listen_handle_ptr_t res;
             do {
                 // libuv listen and setup callbacks
+                int libuv_res;
                 if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv4", addr.scheme.c_str(), 4) || 0 == UTIL_STRFUNC_STRNCASE_CMP("ipv6", addr.scheme.c_str(), 4)) {
                     uv_tcp_t *tcp_handle = ::atframe::gateway::detail::session_manager_make_stream_ptr<uv_tcp_t>(res);
                     if (res) {
@@ -91,8 +92,9 @@ namespace atframe {
                         break;
                     }
 
-                    if (0 != uv_tcp_init(evloop_, tcp_handle)) {
-                        WLOGERROR("init listen to %s failed", address);
+                    libuv_res = uv_tcp_init(evloop_, tcp_handle);
+                    if (0 != libuv_res) {
+                        WLOGERROR("init listen to %s failed, libuv_res: %d(%s)", address, libuv_res, uv_strerror(libuv_res));
                         ret = error_code_t::EN_ECT_NETWORK;
                         break;
                     }
@@ -100,14 +102,17 @@ namespace atframe {
                     if ('4' == addr.scheme[3]) {
                         sockaddr_in sock_addr;
                         uv_ip4_addr(addr.host.c_str(), addr.port, &sock_addr);
-                        if (0 != uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0)) {
-                            WLOGERROR("bind sock to %s failed", address);
+                        libuv_res = uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0);
+                        if (0 != libuv_res) {
+                            WLOGERROR("bind sock to tcp/ip v4 %s:%d failed, libuv_res: %d(%s)", addr.host.c_str(), addr.port, libuv_res,
+                                      uv_strerror(libuv_res));
                             ret = error_code_t::EN_ECT_NETWORK;
                             break;
                         }
 
-                        if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp)) {
-                            WLOGERROR("listen to %s failed", address);
+                        libuv_res = uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp);
+                        if (0 != libuv_res) {
+                            WLOGERROR("listen to tcp/ip v4 %s:%d failed, libuv_res: %d(%s)", addr.host.c_str(), addr.port, libuv_res, uv_strerror(libuv_res));
                             ret = error_code_t::EN_ECT_NETWORK;
                             break;
                         }
@@ -116,14 +121,17 @@ namespace atframe {
                     } else {
                         sockaddr_in6 sock_addr;
                         uv_ip6_addr(addr.host.c_str(), addr.port, &sock_addr);
-                        if (0 != uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0)) {
-                            WLOGERROR("bind sock to %s failed", address);
+                        libuv_res = uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0);
+                        if (0 != libuv_res) {
+                            WLOGERROR("bind sock to tcp/ip v6 %s:%d failed, libuv_res: %d(%s)", addr.host.c_str(), addr.port, libuv_res,
+                                      uv_strerror(libuv_res));
                             ret = error_code_t::EN_ECT_NETWORK;
                             break;
                         }
 
-                        if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp)) {
-                            WLOGERROR("listen to %s failed", address);
+                        libuv_res = uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp);
+                        if (0 != libuv_res) {
+                            WLOGERROR("listen to tcp/ip v6 %s:%d failed, libuv_res: %d(%s)", addr.host.c_str(), addr.port, libuv_res, uv_strerror(libuv_res));
                             ret = error_code_t::EN_ECT_NETWORK;
                             break;
                         }
@@ -141,20 +149,23 @@ namespace atframe {
                         break;
                     }
 
-                    if (0 != uv_pipe_init(evloop_, pipe_handle, 1)) {
-                        WLOGERROR("init listen to %s failed", address);
+                    libuv_res = uv_pipe_init(evloop_, pipe_handle, 1);
+                    if (0 != libuv_res) {
+                        WLOGERROR("init listen to unix sock %s failed, libuv_res: %d(%s)", addr.host.c_str(), libuv_res, uv_strerror(libuv_res));
                         ret = error_code_t::EN_ECT_NETWORK;
                         break;
                     }
 
-                    if (0 != uv_pipe_bind(pipe_handle, addr.host.c_str())) {
-                        WLOGERROR("bind pipe to %s failed", address);
+                    libuv_res = uv_pipe_bind(pipe_handle, addr.host.c_str());
+                    if (0 != libuv_res) {
+                        WLOGERROR("bind pipe to unix sock %s failed, libuv_res: %d(%s)", addr.host.c_str(), libuv_res, uv_strerror(libuv_res));
                         ret = error_code_t::EN_ECT_NETWORK;
                         break;
                     }
 
-                    if (0 != uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_pipe)) {
-                        WLOGERROR("listen to %s failed", address);
+                    libuv_res = uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_pipe);
+                    if (0 != libuv_res) {
+                        WLOGERROR("listen to unix sock %s failed, libuv_res: %d(%s)", addr.host.c_str(), libuv_res, uv_strerror(libuv_res));
                         ret = error_code_t::EN_ECT_NETWORK;
                         break;
                     }
@@ -313,9 +324,7 @@ namespace atframe {
 
                 reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
                 WLOGINFO("session 0x%llx(%p) closed and setup reconnect timeout %lld(+%lld)", static_cast<unsigned long long>(sess_timer.s->get_id()),
-                         sess_timer.s.get(), static_cast<long long>(sess_timer.timeout),
-                         static_cast<long long>(conf_.reconnect_timeout)
-                );
+                         sess_timer.s.get(), static_cast<long long>(sess_timer.timeout), static_cast<long long>(conf_.reconnect_timeout));
 
                 // maybe transfer reconnecting session, old session still keep EN_FT_WAIT_RECONNECT flag
                 sess_timer.s->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, true);
@@ -633,5 +642,5 @@ namespace atframe {
             listen_handle_ptr_t *ptr = reinterpret_cast<listen_handle_ptr_t *>(handle->data);
             delete ptr;
         }
-    }
-}
+    } // namespace gateway
+} // namespace atframe

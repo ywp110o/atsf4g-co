@@ -133,7 +133,7 @@ namespace atframe {
 
             std::string http_content;
             req.get_response_stream().str().swap(http_content);
-            WLOGDEBUG("Etcd watcher %p got range http response: %s", self, http_content.c_str());
+            WLOGTRACE("Etcd watcher %p got range http response: %s", self, http_content.c_str());
 
             rapidjson::Document doc;
             doc.Parse(http_content.c_str(), http_content.size());
@@ -237,7 +237,7 @@ namespace atframe {
                 return 0;
             }
 
-            WLOGDEBUG("Etcd watcher %p got watch http response", self);
+            WLOGTRACE("Etcd watcher %p got watch http response", self);
 
             // 立刻开启下一次watch
             self->active();
@@ -284,7 +284,7 @@ namespace atframe {
                 self->rpc_data_stream_.str().swap(value_json);
                 self->rpc_data_stream_.str("");
 
-                WLOGDEBUG("Etcd watcher %p got http trunk: %s", self, value_json.c_str());
+                WLOGTRACE("Etcd watcher %p got http trunk: %s", self, value_json.c_str());
                 doc.Parse(value_json.c_str(), value_json.size());
 
                 // 忽略空数据

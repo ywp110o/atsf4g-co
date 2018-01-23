@@ -239,7 +239,7 @@ function WaitProcessStarted() {
 		return 1;
 	fi
 
-	WAIT_TIME=200;
+	WAIT_TIME=5000;
 	PROC_NAME="$1"
 
 	if [ $# -gt 1 ]; then
@@ -291,7 +291,7 @@ function WaitProcessStoped() {
 		return 1;
 	fi
 
-	WAIT_TIME=200;
+	WAIT_TIME=5000;
 	PROC_NAME="$1"
 
 	if [ $# -gt 1 ]; then

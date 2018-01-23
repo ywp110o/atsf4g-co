@@ -419,7 +419,7 @@ namespace atframe {
                     return false;
                 }
 
-                WLOGDEBUG("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
+                WLOGTRACE("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_update_members_ = req;
             } else {
                 add_stats_error_request();
@@ -464,7 +464,7 @@ namespace atframe {
 
             std::string http_content;
             req.get_response_stream().str().swap(http_content);
-            WLOGDEBUG("Etcd cluster got http response: %s", http_content.c_str());
+            WLOGTRACE("Etcd cluster got http response: %s", http_content.c_str());
 
             do {
                 // unpack
@@ -563,7 +563,7 @@ namespace atframe {
                     return false;
                 }
 
-                WLOGDEBUG("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
+                WLOGTRACE("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_keepalive_ = req;
             } else {
                 add_stats_error_request();
@@ -619,7 +619,7 @@ namespace atframe {
                     return false;
                 }
 
-                WLOGDEBUG("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
+                WLOGTRACE("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_keepalive_ = req;
             } else {
                 add_stats_error_request();
@@ -653,7 +653,7 @@ namespace atframe {
 
             std::string http_content;
             req.get_response_stream().str().swap(http_content);
-            WLOGDEBUG("Etcd cluster got http response: %s", http_content.c_str());
+            WLOGTRACE("Etcd cluster got http response: %s", http_content.c_str());
 
             do {
                 // 如果lease不存在（没有TTL）则启动创建流程
@@ -704,7 +704,6 @@ namespace atframe {
 
                 if (is_grant) {
                     WLOGDEBUG("Etcd lease %lld granted", static_cast<long long>(new_lease));
-                    // TODO force reset all lease in case of resume data
                 } else {
                     WLOGDEBUG("Etcd lease %lld keepalive successed", static_cast<long long>(new_lease));
                 }
@@ -910,7 +909,7 @@ namespace atframe {
             doc.Accept(writer);
 
             req->post_data().assign(buffer.GetString(), buffer.GetSize());
-            // WLOGDEBUG("=====setup request to %s, post data: %s", req->get_url().c_str(), req->post_data().c_str());
+            WLOGTRACE("Etcd cluster setup request %p to %s, post data: %s", req.get(), req->get_url().c_str(), req->post_data().c_str());
         }
 
     } // namespace component

@@ -133,7 +133,7 @@ namespace atframe {
             std::string value_content;
 
             req.get_response_stream().str().swap(http_content);
-            WLOGDEBUG("Etcd keepalive %p got http response: %s", self, http_content.c_str());
+            WLOGTRACE("Etcd keepalive %p got http response: %s", self, http_content.c_str());
 
             // 如果lease不存在（没有TTL）则启动创建流程
             rapidjson::Document doc;
@@ -195,7 +195,7 @@ namespace atframe {
                 return 0;
             }
 
-            WLOGDEBUG("Etcd keepalive %p set data http response: %s", self, req.get_response_stream().str().c_str());
+            WLOGTRACE("Etcd keepalive %p set data http response: %s", self, req.get_response_stream().str().c_str());
             return 0;
         }
 

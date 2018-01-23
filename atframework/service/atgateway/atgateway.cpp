@@ -64,14 +64,14 @@ public:
 
 
         } else {
-            fprintf(stderr, "listen type %s not supported\n", gw_mgr_.get_conf().listen.type.c_str());
+            PSTDERROR("listen type %s not supported.\n", gw_mgr_.get_conf().listen.type.c_str());
             return -1;
         }
 
         // init limits
         res = gw_mgr_.listen_all();
         if (res <= 0) {
-            fprintf(stderr, "nothing listened for client\n");
+            PSTDERROR("nothing listened for client, please see log for more details.\n");
             return -1;
         }
 

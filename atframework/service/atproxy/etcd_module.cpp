@@ -129,8 +129,11 @@ namespace atframe {
                 // 重试次数过多则失败退出
                 if (keepalive_actor->get_check_times() >= ETCD_MODULE_STARTUP_RETRY_TIMES ||
                     etcd_ctx_.get_stats().continue_error_requests > ETCD_MODULE_STARTUP_RETRY_TIMES) {
-                    WLOGERROR("etcd_keepalive request %s for %llu times failed.", conf_.path_node.c_str(),
-                              static_cast<unsigned long long>(keepalive_actor->get_check_times()));
+                    size_t retry_times = keepalive_actor->get_check_times();
+                    if (etcd_ctx_.get_stats().continue_error_requests > retry_times) {
+                        retry_times = etcd_ctx_.get_stats().continue_error_requests > retry_times;
+                    }
+                    WLOGERROR("etcd_keepalive request %s for %llu times failed.", conf_.path_node.c_str(), static_cast<unsigned long long>(retry_times));
                     is_failed = true;
                     break;
                 }
