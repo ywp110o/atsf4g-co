@@ -387,14 +387,15 @@ def get_calc_listen_port(server_name=None, server_index=None, base_port='port'):
 
     ret = int(get_global_option(
         'server.{0}'.format(server_name), base_port, 0))
-    if 0 == ret:
+    port_offset = int(get_global_option('global', 'port_offset', 0, 'SYSTEM_MACRO_GLOBAL_PORT_OFFSET'))
+    if ret == 0:
         base_port = int(get_global_option(
             'atsystem', 'listen_port', 23000, 'SYSTEM_MACRO_CUSTOM_BASE_PORT'))
         type_step = int(get_global_option('global', 'type_step', 0x100))
         type_id = int(get_global_option('atservice', server_name, 0))
-        return base_port + type_step * server_index + type_id
+        return base_port + type_step * server_index + type_id + port_offset
     else:
-        return ret + server_index
+        return ret + server_index + port_offset
 
 
 def get_server_atbus_port():
@@ -491,7 +492,8 @@ def get_server_gateway_port(server_name=None, server_index=None, base_port='atga
         server_index = get_server_index()
     ret = int(get_global_option(
         'server.{0}'.format(server_name), base_port, 0))
+    port_offset = int(get_global_option('global', 'port_offset', 0, 'SYSTEM_MACRO_GLOBAL_PORT_OFFSET'))
     if 0 != ret:
-        return ret + server_index
+        return ret + server_index + port_offset
     ret = int(get_global_option('server.atgateway', 'default_port', 8000))
-    return ret + get_server_gateway_index(server_name, server_index)
+    return ret + get_server_gateway_index(server_name, server_index) + port_offset
