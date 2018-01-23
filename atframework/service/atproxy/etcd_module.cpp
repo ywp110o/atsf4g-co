@@ -283,12 +283,27 @@ namespace atframe {
             return proxy_mgr_.tick(*get_app());
         }
 
-        void etcd_module::unpack(node_info_t &out, const std::string &json, bool reset_data) {
+        void etcd_module::unpack(node_info_t &out, const std::string &path, const std::string &json, bool reset_data) {
             if (reset_data) {
                 out.action = node_action_t::EN_NAT_UNKNOWN;
                 out.id = 0;
                 out.next_action_time = 0;
                 out.listens.clear();
+            }
+
+            if (json.empty()) {
+                size_t start_idx = 0;
+                for (size_t i = 0; i < path.size(); ++i) {
+                    if (path[i] == '/' || path[i] == '\\' || path[i] == ' ' || path[i] == '\t' || path[i] == '\r' || path[i] == '\n') {
+                        start_idx = i + 1;
+                    }
+                }
+
+                // parse id from key
+                if (start_idx < path.size()) {
+                    util::string::str2int(out.id, &path[start_idx]);
+                }
+                return;
             }
 
             rapidjson::Document doc;
@@ -340,7 +355,7 @@ namespace atframe {
             for (size_t i = 0; i < body.events.size(); ++i) {
                 const ::atframe::component::etcd_watcher::event_t &evt_data = body.events[i];
                 node_info_t node;
-                unpack(node, evt_data.kv.value, true);
+                unpack(node, evt_data.kv.key, evt_data.kv.value, true);
 
                 if (evt_data.evt_type == ::atframe::component::etcd_watch_event::EN_WEVT_DELETE) {
                     node.action = node_action_t::EN_NAT_DELETE;

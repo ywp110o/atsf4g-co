@@ -62,7 +62,7 @@ namespace atframe {
             int update_etcd_members(bool waiting);
 
         private:
-            static void unpack(node_info_t &out, const std::string &json, bool reset_data);
+            static void unpack(node_info_t &out, const std::string &path, const std::string &json, bool reset_data);
             static void pack(const node_info_t &out, std::string &json);
 
             static int http_callback_on_etcd_closed(util::network::http_request &req);
