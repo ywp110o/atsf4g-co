@@ -22,7 +22,15 @@
 
 
 static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
-    WLOGERROR("send data from 0x%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
+    atapp::app::app_id_t stop_at = m.head.src_bus_id;
+
+    // 一般会原路返回，所以中间的路由节点就是转发失败的节点
+    if (NULL != m.body.forward && !m.body.forward->router.empty()) {
+        stop_at = m.body.forward->router.back();
+    }
+
+    WLOGERROR("send data from 0x%llx to 0x%llx failed, stop at 0x%llx, msg sequence: %u", static_cast<unsigned long long>(src_pd),
+              static_cast<unsigned long long>(dst_pd), static_cast<unsigned long long>(stop_at), m.head.sequence);
     return 0;
 }
 
