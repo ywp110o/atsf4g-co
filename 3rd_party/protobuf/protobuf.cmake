@@ -2,7 +2,7 @@
 # =========== 3rdparty protobuf ==================
 set (3RD_PARTY_PROTOBUF_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 set (3RD_PARTY_PROTOBUF_PKG_DIR "${CMAKE_CURRENT_LIST_DIR}/pkg")
-set (3RD_PARTY_PROTOBUF_VERSION "3.4.1")
+set (3RD_PARTY_PROTOBUF_VERSION "3.5.1")
 
 if(PROTOBUF_ROOT)
     set (3RD_PARTY_PROTOBUF_ROOT_DIR "${PROTOBUF_ROOT}")
@@ -40,7 +40,7 @@ if (NOT EXISTS ${3RD_PARTY_PROTOBUF_PKG_DIR})
 endif()
 
 # MSVC 必须用静态库，而且会被用/MT编译。我们要把默认的/MD改为/MT
-# 使用 /MD protobuf有时候会崩溃，/MT依赖较少不容易出问题
+# 使用 /MD protobuf容易跨堆管理数据，容易崩溃，/MT依赖较少不容易出问题
 # 注意protobuf的 RelWithDebInfo 默认使用 /MT 而邮箱工程默认是 /MTd
 if (MSVC)
     set (3RD_PARTY_PROTOBUF_BUILD_SHARED_LIBS -DBUILD_SHARED_LIBS=OFF)

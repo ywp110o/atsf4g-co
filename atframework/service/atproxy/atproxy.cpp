@@ -9,46 +9,46 @@
 
 #include <uv.h>
 
-#include <common/file_system.h>
 #include <atframe/atapp.h>
+#include <common/file_system.h>
 #include <time/time_utility.h>
 
-#include "atproxy_manager.h"
-#include "etcd_v2_module.h"
 
-static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd,
-                                   const atbus::protocol::msg &m) {
+#include "atproxy_manager.h"
+#include "etcd_module.h"
+
+static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
     WLOGERROR("send data from 0x%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
     return 0;
 }
 
 struct app_handle_on_connected {
-    std::reference_wrapper<atframe::proxy::etcd_v2_module> etcd_v2_module;
-    app_handle_on_connected(atframe::proxy::etcd_v2_module &mod) : etcd_v2_module(mod) {}
+    std::reference_wrapper<atframe::proxy::etcd_module> etcd_module;
+    app_handle_on_connected(atframe::proxy::etcd_module &mod) : etcd_module(mod) {}
 
     int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
         WLOGINFO("node 0x%llx connected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
 
-        etcd_v2_module.get().get_proxy_manager().on_connected(app, ep.get_id());
+        etcd_module.get().get_proxy_manager().on_connected(app, ep.get_id());
         return 0;
     }
 };
 
 struct app_handle_on_disconnected {
-    std::reference_wrapper<atframe::proxy::etcd_v2_module> etcd_v2_module;
-    app_handle_on_disconnected(atframe::proxy::etcd_v2_module &mod) : etcd_v2_module(mod) {}
+    std::reference_wrapper<atframe::proxy::etcd_module> etcd_module;
+    app_handle_on_disconnected(atframe::proxy::etcd_module &mod) : etcd_module(mod) {}
 
     int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
         WLOGINFO("node 0x%llx disconnected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
 
-        etcd_v2_module.get().get_proxy_manager().on_disconnected(app, ep.get_id());
+        etcd_module.get().get_proxy_manager().on_disconnected(app, ep.get_id());
         return 0;
     }
 };
 
 int main(int argc, char *argv[]) {
     atapp::app app;
-    std::shared_ptr<atframe::proxy::etcd_v2_module> etcd_mod = std::make_shared<atframe::proxy::etcd_v2_module>();
+    std::shared_ptr<atframe::proxy::etcd_module> etcd_mod = std::make_shared<atframe::proxy::etcd_module>();
     if (!etcd_mod) {
         fprintf(stderr, "create etcd module failed\n");
         return -1;

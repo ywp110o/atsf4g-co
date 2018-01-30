@@ -5,5 +5,5 @@ cd "$SCRIPT_DIR";
 
 source common/common.sh ;
 
-bash stop_all.sh $* ;
+bash stop_all.sh "$@" ;
 

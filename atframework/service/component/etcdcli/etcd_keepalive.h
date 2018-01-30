@@ -26,7 +26,7 @@ namespace atframe {
     namespace component {
         class etcd_cluster;
 
-        class etcd_keepalive {
+        class etcd_keepalive : public std::enable_shared_from_this<etcd_keepalive> {
         public:
             typedef std::function<bool(const std::string &)> checker_fn_t; // the parameter will be base64 of the value
             typedef std::shared_ptr<etcd_keepalive> ptr_t;
@@ -52,9 +52,7 @@ namespace atframe {
             void set_checker(checker_fn_t fn);
 
             inline void set_value(const std::string &str) { value_ = str; }
-#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
-            inline void set_value(std::string &&str) { value_.swap(str); }
-#endif
+
             inline const std::string &get_value() const { return value_; }
 
             const std::string &get_path() const;
@@ -63,6 +61,10 @@ namespace atframe {
 
             etcd_cluster &get_owner() { return *owner_; }
             const etcd_cluster &get_owner() const { return *owner_; }
+
+            inline const bool is_check_run() const { return checker_.is_check_run; }
+            inline const bool is_check_passed() const { return checker_.is_check_passed; }
+            inline const size_t get_check_times() const { return checker_.retry_times; }
 
         private:
             void process();
@@ -85,6 +87,7 @@ namespace atframe {
                 checker_fn_t fn;
                 bool is_check_run;
                 bool is_check_passed;
+                size_t retry_times;
             } checker_t;
             checker_t checker_;
         };

@@ -54,10 +54,41 @@ def set_server_inst(opts, key, index):
     server_cache_id = None
     server_cache_full_name = None
 
+def get_ipv4_level(ip_addr):
+    ip_addrs = [int(x) for x in ip_addr.split('.')]
+    #                   => invalid ipv4 level 99
+    if len(ip_addrs) != 4:
+        return 99
+
+    # 10.0.0.0/8        => private      level 1
+    # 172.16.0.0/12     => private      level 2
+    # 192.168.0.0/16    => private      level 3
+    if ip_addrs[0] == 10:
+        return 1
+    if ip_addrs[0] == 172 and (ip_addrs[1] & 0x10) == 0x10:
+        return 2
+    if ip_addrs[0] == 192 and ip_addrs[1] == 168:
+        return 3
+    # 169.254.0.0/16    => link-local   level 11
+    if ip_addrs[0] == 169 and ip_addrs[1] == 254:
+        return 11
+    # 127.0.0.0/8       => loopback     level 21
+    if ip_addrs[0] == 127:
+        return 21
+    # 224.0.0.0/4       => group-cast   level 31
+    if (ip_addrs[0] & 0xE0) == 0xE0:
+        return 31
+    # 240.0.0.0/4       => for-test     level 32
+    if (ip_addrs[0] & 0xF0) == 0xF0:
+        return 32
+    # 255.255.255.255   => multi-cast   level 51
+    if ip_addrs[0] == 255 and ip_addrs[1] == 255 and ip_addrs[2] == 255 and ip_addrs[3] == 255:
+        return 51
+    # public address    =>              level 0
+    return 0
 
 def is_ipv4_link_local(ip_addr):
-    return ip_addr == "127.0.0.1"
-
+    return get_ipv4_level(ip_addr) >= 11
 
 def is_ipv6_link_local(ip_addr):
     ip_addr = ip_addr.lower()
@@ -94,6 +125,7 @@ def get_ip_list_v4():
                 if res:
                     server_cache_ip['ipv4'].append(res[0])
                 csock.close()
+            server_cache_ip['ipv4'] = sorted(server_cache_ip['ipv4'], key=get_ipv4_level)
         except:
             pass
     return server_cache_ip['ipv4']
@@ -119,7 +151,13 @@ def get_ip_list_v6():
                 csock.connect(('2001:4860:4860::8888', 53))  # use google's DNS
                 res = csock.getsockname()
                 if res:
-                    server_cache_ip['ipv6'].append(res[0])
+                    ip_addr = res[0]
+                    interface_index = ip_addr.find('%')
+                    # remove interface name
+                    if interface_index > 0:
+                        ip_addr = ip_addr[0:interface_index]
+                    if not is_ipv6_link_local(ip_addr):
+                        server_cache_ip['ipv6'].append(ip_addr)
                 csock.close()
         except:
             pass
@@ -349,14 +387,15 @@ def get_calc_listen_port(server_name=None, server_index=None, base_port='port'):
 
     ret = int(get_global_option(
         'server.{0}'.format(server_name), base_port, 0))
-    if 0 == ret:
+    port_offset = int(get_global_option('global', 'port_offset', 0, 'SYSTEM_MACRO_GLOBAL_PORT_OFFSET'))
+    if ret == 0:
         base_port = int(get_global_option(
             'atsystem', 'listen_port', 23000, 'SYSTEM_MACRO_CUSTOM_BASE_PORT'))
         type_step = int(get_global_option('global', 'type_step', 0x100))
         type_id = int(get_global_option('atservice', server_name, 0))
-        return base_port + type_step * server_index + type_id
+        return base_port + type_step * server_index + type_id + port_offset
     else:
-        return ret + server_index
+        return ret + server_index + port_offset
 
 
 def get_server_atbus_port():
@@ -391,7 +430,17 @@ def get_server_atbus_listen():
     if 'support_unix_sock' not in server_cache_ip:
         import socket
         if 'AF_UNIX' in socket.__dict__:
-            server_cache_ip['support_unix_sock'] = True
+            # test unix sock, maybe defined but not available
+            test_file_path = 'project-utils-test-unixx-sock.sock'
+            try:
+                test_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                test_sock.bind(test_file_path)
+                test_sock.close()
+                server_cache_ip['support_unix_sock'] = True
+            except:
+                server_cache_ip['support_unix_sock'] = False
+            if os.path.exists(test_file_path):
+                os.remove(test_file_path)
         else:
             server_cache_ip['support_unix_sock'] = False
     if 0 == len(ret) or False == server_cache_ip['support_unix_sock'] or 'atproxy' == get_server_name():
@@ -443,7 +492,8 @@ def get_server_gateway_port(server_name=None, server_index=None, base_port='atga
         server_index = get_server_index()
     ret = int(get_global_option(
         'server.{0}'.format(server_name), base_port, 0))
+    port_offset = int(get_global_option('global', 'port_offset', 0, 'SYSTEM_MACRO_GLOBAL_PORT_OFFSET'))
     if 0 != ret:
-        return ret + server_index
+        return ret + server_index + port_offset
     ret = int(get_global_option('server.atgateway', 'default_port', 8000))
-    return ret + get_server_gateway_index(server_name, server_index)
+    return ret + get_server_gateway_index(server_name, server_index) + port_offset

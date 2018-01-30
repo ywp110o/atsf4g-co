@@ -57,26 +57,61 @@ namespace atframe {
                 std::chrono::system_clock::duration keepalive_interval;
             };
 
+            struct stats_t {
+                size_t sum_error_requests;
+                size_t continue_error_requests;
+                size_t sum_success_requests;
+                size_t continue_success_requests;
+
+                size_t sum_create_requests;
+            };
+
         public:
             etcd_cluster();
             ~etcd_cluster();
 
             void init(const util::network::http_request::curl_m_bind_ptr_t &curl_mgr);
-            void set_hosts(const std::vector<std::string> &hosts);
 
-            void close(bool wait = false);
+            util::network::http_request::ptr_t close(bool wait = false);
             void reset();
             int tick();
 
             inline bool check_flag(uint32_t f) const { return 0 != (flags_ & f); };
             void set_flag(flag_t::type f, bool v);
 
-            time_t get_http_timeout() const;
+            inline const stats_t &get_stats() const { return stats_; };
+            // ====================== apis for configure ==================
+            inline const std::vector<std::string> &get_available_hosts() const { return conf_.hosts; }
+            inline const std::string &get_selected_host() const { return conf_.path_node; }
 
+            inline int64_t get_keepalive_lease() const { return get_lease(); }
+
+            inline void set_conf_hosts(const std::vector<std::string> &hosts) { conf_.conf_hosts = hosts; }
+            inline const std::vector<std::string> &get_conf_hosts() const { return conf_.conf_hosts; }
+
+            inline void set_conf_http_timeout(std::chrono::system_clock::duration v) { conf_.http_cmd_timeout = v; }
+            inline void set_conf_http_timeout_sec(time_t v) { set_conf_http_timeout(std::chrono::seconds(v)); }
+            inline const std::chrono::system_clock::duration &get_conf_http_timeout() const { return conf_.http_cmd_timeout; }
+            time_t get_http_timeout_ms() const;
+
+            inline void set_conf_etcd_members_update_interval(std::chrono::system_clock::duration v) { conf_.etcd_members_update_interval = v; }
+            inline void set_conf_etcd_members_update_interval_min(time_t v) { set_conf_etcd_members_update_interval(std::chrono::minutes(v)); }
+            inline const std::chrono::system_clock::duration &get_conf_etcd_members_update_interval() const { return conf_.etcd_members_update_interval; }
+
+            inline void set_conf_keepalive_timeout(std::chrono::system_clock::duration v) { conf_.keepalive_timeout = v; }
+            inline void set_conf_keepalive_timeout_sec(time_t v) { set_conf_keepalive_timeout(std::chrono::seconds(v)); }
+            inline const std::chrono::system_clock::duration &get_conf_keepalive_timeout() const { return conf_.keepalive_timeout; }
+
+            inline void set_conf_keepalive_interval(std::chrono::system_clock::duration v) { conf_.keepalive_interval = v; }
+            inline void set_conf_keepalive_interval_sec(time_t v) { set_conf_keepalive_interval(std::chrono::seconds(v)); }
+            inline const std::chrono::system_clock::duration &get_conf_keepalive_interval() const { return conf_.keepalive_interval; }
+
+            // ================== apis for sub-services ==================
             bool add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
+            bool add_retry_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
             bool add_watcher(const std::shared_ptr<etcd_watcher> &watcher);
 
-            // ================== apis of create request for key-value operation
+            // ================== apis of create request for key-value operation ==================
         public:
             /**
              * @brief               create request for range get key-value data
@@ -118,6 +153,7 @@ namespace atframe {
              * @brief                   create request for watch
              * @param key	            key is the first key for the range. If range_end is not given, the request only looks up key.
              * @param range_end	        range_end is the upper bound on the requested range [key, range_end). just like etcd_packer::pack_key_range
+             * @param start_revision	start_revision is an optional revision to watch from (inclusive). No start_revision or 0 is "now".
              * @param prev_kv	        If prev_kv is set, created watcher gets the previous KV before the event happens. If the previous KV is already
              *                          compacted, nothing will be returned.
              * @param progress_notify   progress_notify is set so that the etcd server will periodically send a WatchResponse with no events to the new watcher
@@ -125,11 +161,13 @@ namespace atframe {
              *                          known revision. The etcd server may decide how often it will send notifications based on current load.
              * @return http request
              */
-            util::network::http_request::ptr_t create_request_watch(const std::string &key, const std::string &range_end = "", bool prev_kv = false,
-                                                                    bool progress_notify = true);
+            util::network::http_request::ptr_t create_request_watch(const std::string &key, const std::string &range_end = "", int64_t start_revision = 0,
+                                                                    bool prev_kv = false, bool progress_notify = true);
 
         private:
-            void set_lease(int64_t v);
+            void set_lease(int64_t v, bool force_active_keepalives);
+            inline int64_t get_lease() const { return conf_.lease; }
+
             bool create_request_member_update();
             static int libcurl_callback_on_member_update(util::network::http_request &req);
 
@@ -138,6 +176,10 @@ namespace atframe {
             static int libcurl_callback_on_lease_keepalive(util::network::http_request &req);
             util::network::http_request::ptr_t create_request_lease_revoke();
 
+            void add_stats_error_request();
+            void add_stats_success_request();
+            void add_stats_create_request();
+
         public:
             static void setup_http_request(util::network::http_request::ptr_t &req, rapidjson::Document &doc, time_t timeout);
 
@@ -145,10 +187,12 @@ namespace atframe {
             uint32_t flags_;
             util::random::mt19937 random_generator_;
             conf_t conf_;
+            stats_t stats_;
             util::network::http_request::curl_m_bind_ptr_t curl_multi_;
             util::network::http_request::ptr_t rpc_update_members_;
             util::network::http_request::ptr_t rpc_keepalive_;
             std::vector<std::shared_ptr<etcd_keepalive> > keepalive_actors_;
+            std::vector<std::shared_ptr<etcd_keepalive> > keepalive_retry_actors_;
             std::vector<std::shared_ptr<etcd_watcher> > watcher_actors_;
         };
     } // namespace component

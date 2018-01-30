@@ -45,9 +45,9 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--set", action='append',
                         dest="set_vars", default=[], help="set configures")
     parser.add_argument("-n", "--number", action='store', dest="reset_number",
-                        default=None, type='int', help="set default server numbers")
+                        default=None, type=int, help="set default server numbers")
     parser.add_argument("-i", "--id-offset", action='store', dest="server_id_offset",
-                        default=0, type='int', help="set server id offset(default: 0)")
+                        default=0, type=int, help="set server id offset(default: 0)")
 
     opts = parser.parse_args()
     if python3_mode:
@@ -179,8 +179,7 @@ fi
         all_temp_cfg = all_service_temps[all_svr_temp]
         if 'reverse' in all_temp_cfg and all_temp_cfg['reverse']:
             all_temp_cfg['content'].reverse()
-            open(all_temp_cfg['out'], mode='a').write(
-                os.linesep.join(all_temp_cfg['content']))
+        open(all_temp_cfg['out'], mode='a').write(os.linesep.join(all_temp_cfg['content']))
 
     common.print_color.cprintf_stdout(
         [common.print_color.print_style.FC_YELLOW, common.print_color.print_style.FW_BOLD], 'all jobs done.\r\n')

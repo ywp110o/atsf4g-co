@@ -44,7 +44,7 @@ namespace atframe {
 
 #define ETCD_API_V3_MEMBER_LIST "/v3alpha/cluster/member/list"
 
-#define ETCD_API_V3_KV_GET "/v3alpha/range"
+#define ETCD_API_V3_KV_GET "/v3alpha/kv/range"
 #define ETCD_API_V3_KV_SET "/v3alpha/kv/put"
 #define ETCD_API_V3_KV_DELETE "/v3alpha/kv/deleterange"
 
@@ -108,6 +108,8 @@ namespace atframe {
             conf_.keepalive_next_update_time = std::chrono::system_clock::from_time_t(0);
             conf_.keepalive_timeout = std::chrono::seconds(16);
             conf_.keepalive_interval = std::chrono::seconds(5);
+
+            memset(&stats_, 0, sizeof(stats_));
         }
 
         etcd_cluster::~etcd_cluster() { reset(); }
@@ -115,11 +117,11 @@ namespace atframe {
         void etcd_cluster::init(const util::network::http_request::curl_m_bind_ptr_t &curl_mgr) {
             curl_multi_ = curl_mgr;
             random_generator_.init_seed(static_cast<util::random::mt19937::result_type>(util::time::time_utility::get_now()));
+
+            set_flag(flag_t::CLOSING, false);
         }
 
-        void etcd_cluster::set_hosts(const std::vector<std::string> &hosts) { conf_.conf_hosts = hosts; }
-
-        void etcd_cluster::close(bool wait) {
+        util::network::http_request::ptr_t etcd_cluster::close(bool wait) {
             set_flag(flag_t::CLOSING, true);
 
             if (rpc_keepalive_) {
@@ -134,32 +136,39 @@ namespace atframe {
                 rpc_update_members_.reset();
             }
 
-            for (size_t i = 0; i < keepalive_actors_.size(); ++ i) {
+            for (size_t i = 0; i < keepalive_actors_.size(); ++i) {
                 if (keepalive_actors_[i]) {
                     keepalive_actors_[i]->close();
                 }
             }
             keepalive_actors_.clear();
 
-            for (size_t i = 0; i < watcher_actors_.size(); ++ i) {
+            for (size_t i = 0; i < watcher_actors_.size(); ++i) {
                 if (watcher_actors_[i]) {
                     watcher_actors_[i]->close();
                 }
             }
             watcher_actors_.clear();
 
+            util::network::http_request::ptr_t ret;
             if (curl_multi_) {
                 if (0 != conf_.lease) {
-                    util::network::http_request::ptr_t tmp_req = create_request_lease_revoke();
+                    ret = create_request_lease_revoke();
 
                     // wait to delete content
-                    if (tmp_req) {
-                        tmp_req->start(util::network::http_request::method_t::EN_MT_POST, wait);
+                    if (ret) {
+                        ret->start(util::network::http_request::method_t::EN_MT_POST, wait);
                     }
 
                     conf_.lease = 0;
                 }
             }
+
+            if (ret && false == ret->is_running()) {
+                ret.reset();
+            }
+
+            return ret;
         }
 
         void etcd_cluster::reset() {
@@ -183,19 +192,27 @@ namespace atframe {
         int etcd_cluster::tick() {
             int ret = 0;
 
+            if (!curl_multi_) {
+                return ret;
+            }
+
+            if (check_flag(flag_t::CLOSING)) {
+                return 0;
+            }
+
             // update members
             if (util::time::time_utility::now() > conf_.etcd_members_next_update_time) {
                 ret += create_request_member_update() ? 1 : 0;
             }
 
             // empty other actions will be delayed
-            if (conf_.hosts.empty()) {
+            if (conf_.path_node.empty()) {
                 return ret;
             }
 
             // keepalive lease
             if (check_flag(flag_t::ENABLE_LEASE)) {
-                if (0 == conf_.lease) {
+                if (0 == get_lease()) {
                     ret += create_request_lease_grant() ? 1 : 0;
                 } else if (util::time::time_utility::now() > conf_.keepalive_next_update_time) {
                     ret += create_request_lease_keepalive() ? 1 : 0;
@@ -203,7 +220,7 @@ namespace atframe {
             }
 
             // reactive watcher
-            for (size_t i = 0; i < watcher_actors_.size(); ++ i) {
+            for (size_t i = 0; i < watcher_actors_.size(); ++i) {
                 if (watcher_actors_[i]) {
                     watcher_actors_[i]->active();
                 }
@@ -239,10 +256,10 @@ namespace atframe {
             }
         }
 
-        time_t etcd_cluster::get_http_timeout() const {
-            time_t ret = static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(conf_.keepalive_timeout).count());
+        time_t etcd_cluster::get_http_timeout_ms() const {
+            time_t ret = static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(get_conf_http_timeout()).count());
             if (ret <= 0) {
-                ret = 20000; // 20s
+                ret = 30000; // 30s
             }
 
             return ret;
@@ -250,6 +267,10 @@ namespace atframe {
 
         bool etcd_cluster::add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive) {
             if (!keepalive) {
+                return false;
+            }
+
+            if (check_flag(flag_t::CLOSING)) {
                 return false;
             }
 
@@ -266,8 +287,34 @@ namespace atframe {
             return true;
         }
 
+        bool etcd_cluster::add_retry_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive) {
+            if (!keepalive) {
+                return false;
+            }
+
+            if (check_flag(flag_t::CLOSING)) {
+                return false;
+            }
+
+            if (keepalive_retry_actors_.end() != std::find(keepalive_retry_actors_.begin(), keepalive_retry_actors_.end(), keepalive)) {
+                return false;
+            }
+
+            if (this != &keepalive->get_owner()) {
+                return false;
+            }
+
+            set_flag(flag_t::ENABLE_LEASE, true);
+            keepalive_retry_actors_.push_back(keepalive);
+            return true;
+        }
+
         bool etcd_cluster::add_watcher(const std::shared_ptr<etcd_watcher> &watcher) {
             if (!watcher) {
+                return false;
+            }
+
+            if (check_flag(flag_t::CLOSING)) {
                 return false;
             }
 
@@ -283,10 +330,19 @@ namespace atframe {
             return true;
         }
 
-        void etcd_cluster::set_lease(int64_t v) {
-            int64_t old_v = conf_.lease;
+        void etcd_cluster::set_lease(int64_t v, bool force_active_keepalives) {
+            int64_t old_v = get_lease();
             conf_.lease = v;
-            if (old_v == v) {
+
+            if (old_v == v && false == force_active_keepalives) {
+                // 仅重试失败项目
+                for (size_t i = 0; i < keepalive_retry_actors_.size(); ++i) {
+                    if (keepalive_retry_actors_[i]) {
+                        keepalive_retry_actors_[i]->active();
+                    }
+                }
+
+                keepalive_retry_actors_.clear();
                 return;
             }
 
@@ -305,6 +361,8 @@ namespace atframe {
                     }
                 }
             }
+
+            keepalive_retry_actors_.clear();
         }
 
         bool etcd_cluster::create_request_member_update() {
@@ -342,23 +400,29 @@ namespace atframe {
             util::network::http_request::ptr_t req = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (req) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 doc.SetObject();
 
-                setup_http_request(req, doc, get_http_timeout());
+                setup_http_request(req, doc, get_http_timeout_ms());
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_member_update);
 
                 int res = req->start(util::network::http_request::method_t::EN_MT_POST, false);
                 if (res != 0) {
                     req->set_on_complete(NULL);
-                    WLOGERROR("Etcd start keepalive lease %lld request to %s failed, res: %d", static_cast<long long>(conf_.lease), req->get_url().c_str(),
+                    WLOGERROR("Etcd start keepalive lease %lld request to %s failed, res: %d", static_cast<long long>(get_lease()), req->get_url().c_str(),
                               res);
+
+                    add_stats_error_request();
                     return false;
                 }
 
-                WLOGDEBUG("Etcd start keepalive lease %lld request to %s", static_cast<long long>(conf_.lease), req->get_url().c_str());
+                WLOGTRACE("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_update_members_ = req;
+            } else {
+                add_stats_error_request();
             }
 
             return true;
@@ -382,6 +446,7 @@ namespace atframe {
                     self->create_request_member_update();
                 }
                 WLOGERROR("Etcd member list failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(), req.get_error_msg());
+                self->add_stats_error_request();
 
                 // 出错则从host里移除无效数据
                 for (size_t i = 0; i < self->conf_.hosts.size(); ++i) {
@@ -399,46 +464,57 @@ namespace atframe {
 
             std::string http_content;
             req.get_response_stream().str().swap(http_content);
-            WLOGDEBUG("Etcd cluster got http response: %s", http_content.c_str());
+            WLOGTRACE("Etcd cluster got http response: %s", http_content.c_str());
 
-            // unpack
-            rapidjson::Document doc;
-            doc.Parse(http_content.c_str());
+            do {
+                // unpack
+                rapidjson::Document doc;
+                doc.Parse(http_content.c_str());
 
-            rapidjson::Value root = doc.GetObject();
-            rapidjson::Document::MemberIterator members = root.FindMember("members");
-            if (root.MemberEnd() == members) {
-                WLOGERROR("Etcd members not found");
-                return 0;
-            }
-
-            self->conf_.hosts.clear();
-            bool need_select_node = true;
-            rapidjson::Document::Array all_members = members->value.GetArray();
-            for (rapidjson::Document::Array::ValueIterator iter = all_members.Begin(); iter != all_members.End(); ++iter) {
-                rapidjson::Document::MemberIterator client_urls = iter->FindMember("clientURLs");
-                if (client_urls == iter->MemberEnd()) {
-                    continue;
+                // ignore empty data
+                if (false == doc.IsObject()) {
+                    break;
                 }
 
-                rapidjson::Document::Array all_client_urls = client_urls->value.GetArray();
-                for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.Begin(); cli_url_iter != all_client_urls.End(); ++cli_url_iter) {
-                    if (cli_url_iter->GetStringLength() > 0) {
-                        self->conf_.hosts.push_back(cli_url_iter->GetString());
+                rapidjson::Value root = doc.GetObject();
+                rapidjson::Document::MemberIterator members = root.FindMember("members");
+                if (root.MemberEnd() == members) {
+                    WLOGERROR("Etcd members not found");
+                    self->add_stats_error_request();
+                    return 0;
+                }
 
-                        if (self->conf_.path_node == self->conf_.hosts.back()) {
-                            need_select_node = false;
+                self->conf_.hosts.clear();
+                bool need_select_node = true;
+                rapidjson::Document::Array all_members = members->value.GetArray();
+                for (rapidjson::Document::Array::ValueIterator iter = all_members.Begin(); iter != all_members.End(); ++iter) {
+                    rapidjson::Document::MemberIterator client_urls = iter->FindMember("clientURLs");
+                    if (client_urls == iter->MemberEnd()) {
+                        continue;
+                    }
+
+                    rapidjson::Document::Array all_client_urls = client_urls->value.GetArray();
+                    for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.Begin(); cli_url_iter != all_client_urls.End();
+                         ++cli_url_iter) {
+                        if (cli_url_iter->GetStringLength() > 0) {
+                            self->conf_.hosts.push_back(cli_url_iter->GetString());
+
+                            if (self->conf_.path_node == self->conf_.hosts.back()) {
+                                need_select_node = false;
+                            }
                         }
                     }
                 }
-            }
 
-            if (!self->conf_.hosts.empty() && need_select_node) {
-                self->conf_.path_node = self->conf_.hosts[self->random_generator_.random_between<size_t>(0, self->conf_.hosts.size())];
-            }
+                if (!self->conf_.hosts.empty() && need_select_node) {
+                    self->conf_.path_node = self->conf_.hosts[self->random_generator_.random_between<size_t>(0, self->conf_.hosts.size())];
+                }
 
-            // 触发一次tick
-            self->tick();
+                self->add_stats_success_request();
+
+                // 触发一次tick
+                self->tick();
+            } while (false);
 
             return 0;
         }
@@ -467,32 +543,37 @@ namespace atframe {
             util::network::http_request::ptr_t req = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (req) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 doc.SetObject();
-                doc.AddMember("ID", conf_.lease, doc.GetAllocator());
+                doc.AddMember("ID", get_lease(), doc.GetAllocator());
                 doc.AddMember("TTL", std::chrono::duration_cast<std::chrono::seconds>(conf_.keepalive_timeout).count(), doc.GetAllocator());
 
-                setup_http_request(req, doc, get_http_timeout());
+                setup_http_request(req, doc, get_http_timeout_ms());
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_lease_keepalive);
 
                 int res = req->start(util::network::http_request::method_t::EN_MT_POST, false);
                 if (res != 0) {
                     req->set_on_complete(NULL);
-                    WLOGERROR("Etcd start keepalive lease %lld request to %s failed, res: %d", static_cast<long long>(conf_.lease), req->get_url().c_str(),
+                    WLOGERROR("Etcd start keepalive lease %lld request to %s failed, res: %d", static_cast<long long>(get_lease()), req->get_url().c_str(),
                               res);
+                    add_stats_error_request();
                     return false;
                 }
 
-                WLOGDEBUG("Etcd start keepalive lease %lld request to %s", static_cast<long long>(conf_.lease), req->get_url().c_str());
+                WLOGTRACE("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_keepalive_ = req;
+            } else {
+                add_stats_error_request();
             }
 
             return true;
         }
 
         bool etcd_cluster::create_request_lease_keepalive() {
-            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+            if (!curl_multi_ || 0 == get_lease() || conf_.path_node.empty()) {
                 return false;
             }
 
@@ -519,24 +600,29 @@ namespace atframe {
             util::network::http_request::ptr_t req = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (req) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 doc.SetObject();
-                doc.AddMember("ID", conf_.lease, doc.GetAllocator());
+                doc.AddMember("ID", get_lease(), doc.GetAllocator());
 
-                setup_http_request(req, doc, get_http_timeout());
+                setup_http_request(req, doc, get_http_timeout_ms());
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_lease_keepalive);
 
                 int res = req->start(util::network::http_request::method_t::EN_MT_POST, false);
                 if (res != 0) {
                     req->set_on_complete(NULL);
-                    WLOGERROR("Etcd start keepalive lease %lld request to %s failed, res: %d", static_cast<long long>(conf_.lease), req->get_url().c_str(),
+                    WLOGERROR("Etcd start keepalive lease %lld request to %s failed, res: %d", static_cast<long long>(get_lease()), req->get_url().c_str(),
                               res);
+                    add_stats_error_request();
                     return false;
                 }
 
-                WLOGDEBUG("Etcd start keepalive lease %lld request to %s", static_cast<long long>(conf_.lease), req->get_url().c_str());
+                WLOGTRACE("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_keepalive_ = req;
+            } else {
+                add_stats_error_request();
             }
 
             return true;
@@ -559,54 +645,78 @@ namespace atframe {
                 if (0 != req.get_error_code()) {
                     self->create_request_member_update();
                 }
+                self->add_stats_error_request();
+
                 WLOGERROR("Etcd lease keepalive failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(), req.get_error_msg());
                 return 0;
             }
 
             std::string http_content;
             req.get_response_stream().str().swap(http_content);
-            WLOGDEBUG("Etcd cluster got http response: %s", http_content.c_str());
+            WLOGTRACE("Etcd cluster got http response: %s", http_content.c_str());
 
-            // 如果lease不存在（没有TTL）则启动创建流程
-            rapidjson::Document doc;
-            doc.Parse(http_content.c_str());
+            do {
+                // 如果lease不存在（没有TTL）则启动创建流程
+                rapidjson::Document doc;
+                doc.Parse(http_content.c_str());
 
-            bool is_grant = false;
-            rapidjson::Value root = doc.GetObject();
-            rapidjson::Value::MemberIterator result = root.FindMember("result");
-            if (result == root.MemberEnd()) {
-                is_grant = true;
-            } else {
-                root = result->value;
-            }
-
-            if (false == root.IsObject()) {
-                WLOGERROR("Etcd lease grant failed, root is not object.(%s)", http_content.c_str());
-                return 0;
-            }
-
-            if (root.MemberEnd() == root.FindMember("TTL")) {
-                if (is_grant) {
-                    WLOGERROR("Etcd lease grant failed");
-                } else {
-                    WLOGERROR("Etcd lease keepalive failed because not found, try to grant one");
-                    self->create_request_lease_grant();
+                // 忽略空数据
+                if (false == doc.IsObject()) {
+                    break;
                 }
-                return 0;
-            }
 
-            // 更新lease
-            etcd_packer::unpack_int(root, "ID", self->conf_.lease);
-            if (is_grant) {
-                WLOGDEBUG("Etcd lease %lld granted", static_cast<long long>(self->conf_.lease));
-            } else {
-                WLOGDEBUG("Etcd lease %lld keepalive successed", static_cast<long long>(self->conf_.lease));
-            }
+                bool is_grant = false;
+                rapidjson::Value root = doc.GetObject();
+                rapidjson::Value::MemberIterator result = root.FindMember("result");
+                if (result == root.MemberEnd()) {
+                    is_grant = true;
+                } else {
+                    root = result->value;
+                }
+
+                if (false == root.IsObject()) {
+                    WLOGERROR("Etcd lease grant failed, root is not object.(%s)", http_content.c_str());
+                    self->add_stats_error_request();
+                    return 0;
+                }
+
+                if (root.MemberEnd() == root.FindMember("TTL")) {
+                    if (is_grant) {
+                        WLOGERROR("Etcd lease grant failed");
+                    } else {
+                        WLOGERROR("Etcd lease keepalive failed because not found, try to grant one");
+                        self->create_request_lease_grant();
+                    }
+
+                    self->add_stats_error_request();
+                    return 0;
+                }
+
+                // 更新lease
+                int64_t new_lease = 0;
+                etcd_packer::unpack_int(root, "ID", new_lease);
+
+                if (0 == new_lease) {
+                    WLOGERROR("Etcd cluster got a error http response for grant or keepalive lease: %s", http_content.c_str());
+                    self->add_stats_error_request();
+                    break;
+                }
+
+                if (is_grant) {
+                    WLOGDEBUG("Etcd lease %lld granted", static_cast<long long>(new_lease));
+                } else {
+                    WLOGDEBUG("Etcd lease %lld keepalive successed", static_cast<long long>(new_lease));
+                }
+
+                self->add_stats_success_request();
+                self->set_lease(new_lease, is_grant);
+            } while (false);
+
             return 0;
         }
 
         util::network::http_request::ptr_t etcd_cluster::create_request_lease_revoke() {
-            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+            if (!curl_multi_ || 0 == get_lease() || conf_.path_node.empty()) {
                 return util::network::http_request::ptr_t();
             }
 
@@ -615,11 +725,15 @@ namespace atframe {
             util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (ret) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
                 doc.SetObject();
-                doc.AddMember("ID", conf_.lease, doc.GetAllocator());
+                doc.AddMember("ID", get_lease(), doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout());
+                setup_http_request(ret, doc, get_http_timeout_ms());
+            } else {
+                add_stats_error_request();
             }
 
             return ret;
@@ -627,7 +741,7 @@ namespace atframe {
 
         util::network::http_request::ptr_t etcd_cluster::create_request_kv_get(const std::string &key, const std::string &range_end, int64_t limit,
                                                                                int64_t revision) {
-            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+            if (!curl_multi_ || conf_.path_node.empty() || check_flag(flag_t::CLOSING)) {
                 return util::network::http_request::ptr_t();
             }
 
@@ -636,15 +750,18 @@ namespace atframe {
             util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (ret) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
-                doc.SetObject();
-                rapidjson::Value root = doc.GetObject();
+                rapidjson::Value &root = doc.SetObject();
 
                 etcd_packer::pack_key_range(root, key, range_end, doc);
                 doc.AddMember("limit", limit, doc.GetAllocator());
                 doc.AddMember("revision", revision, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout());
+                setup_http_request(ret, doc, get_http_timeout_ms());
+            } else {
+                add_stats_error_request();
             }
 
             return ret;
@@ -652,7 +769,11 @@ namespace atframe {
 
         util::network::http_request::ptr_t etcd_cluster::create_request_kv_set(const std::string &key, const std::string &value, bool assign_lease,
                                                                                bool prev_kv, bool ignore_value, bool ignore_lease) {
-            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+            if (!curl_multi_ || conf_.path_node.empty() || check_flag(flag_t::CLOSING)) {
+                return util::network::http_request::ptr_t();
+            }
+
+            if (assign_lease && 0 == get_lease()) {
                 return util::network::http_request::ptr_t();
             }
 
@@ -661,29 +782,31 @@ namespace atframe {
             util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (ret) {
-                rapidjson::Document doc;
-                doc.SetObject();
+                add_stats_create_request();
 
-                rapidjson::Value root = doc.GetObject();
+                rapidjson::Document doc;
+                rapidjson::Value &root = doc.SetObject();
 
                 etcd_packer::pack_base64(root, "key", key, doc);
                 etcd_packer::pack_base64(root, "value", value, doc);
                 if (assign_lease) {
-                    doc.AddMember("lease", conf_.lease, doc.GetAllocator());    
+                    doc.AddMember("lease", get_lease(), doc.GetAllocator());
                 }
 
                 doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
                 doc.AddMember("ignore_value", ignore_value, doc.GetAllocator());
                 doc.AddMember("ignore_lease", ignore_lease, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout());
+                setup_http_request(ret, doc, get_http_timeout_ms());
+            } else {
+                add_stats_error_request();
             }
 
             return ret;
         }
 
-        util::network::http_request::ptr_t etcd_cluster::create_request_kv_del(const std::string &key, const std::string &range_end, bool prev_kv){
-            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+        util::network::http_request::ptr_t etcd_cluster::create_request_kv_del(const std::string &key, const std::string &range_end, bool prev_kv) {
+            if (!curl_multi_ || conf_.path_node.empty() || check_flag(flag_t::CLOSING)) {
                 return util::network::http_request::ptr_t();
             }
 
@@ -692,22 +815,25 @@ namespace atframe {
             util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (ret) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
-                doc.SetObject();
-                rapidjson::Value root = doc.GetObject();
+                rapidjson::Value &root = doc.SetObject();
 
                 etcd_packer::pack_key_range(root, key, range_end, doc);
                 doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout());
+                setup_http_request(ret, doc, get_http_timeout_ms());
+            } else {
+                add_stats_error_request();
             }
 
             return ret;
         }
 
-        util::network::http_request::ptr_t etcd_cluster::create_request_watch(const std::string &key, const std::string &range_end, bool prev_kv,
-                                                                    bool progress_notify){
-            if (!curl_multi_ || 0 == conf_.lease || conf_.path_node.empty()) {
+        util::network::http_request::ptr_t etcd_cluster::create_request_watch(const std::string &key, const std::string &range_end, int64_t start_revision,
+                                                                              bool prev_kv, bool progress_notify) {
+            if (!curl_multi_ || conf_.path_node.empty() || check_flag(flag_t::CLOSING)) {
                 return util::network::http_request::ptr_t();
             }
 
@@ -716,9 +842,10 @@ namespace atframe {
             util::network::http_request::ptr_t ret = util::network::http_request::create(curl_multi_.get(), ss.str());
 
             if (ret) {
+                add_stats_create_request();
+
                 rapidjson::Document doc;
-                doc.SetObject();
-                rapidjson::Value root = doc.GetObject();
+                rapidjson::Value &root = doc.SetObject();
 
                 rapidjson::Value create_request(rapidjson::kObjectType);
 
@@ -732,15 +859,37 @@ namespace atframe {
                     create_request.AddMember("progress_notify", progress_notify, doc.GetAllocator());
                 }
 
-                doc.AddMember("create_request", create_request, doc.GetAllocator());
+                if (0 != start_revision) {
+                    create_request.AddMember("start_revision", start_revision, doc.GetAllocator());
+                }
 
-                setup_http_request(ret, doc, get_http_timeout());
+                root.AddMember("create_request", create_request, doc.GetAllocator());
+
+                setup_http_request(ret, doc, get_http_timeout_ms());
                 ret->set_opt_keepalive(75, 150);
                 // 不能共享socket
                 ret->set_opt_reuse_connection(false);
+            } else {
+                add_stats_error_request();
             }
 
             return ret;
+        }
+
+        void etcd_cluster::add_stats_error_request() {
+            ++ stats_.sum_error_requests;
+            ++ stats_.continue_error_requests;
+            stats_.continue_success_requests = 0;
+        }
+
+        void etcd_cluster::add_stats_success_request() {
+            ++ stats_.sum_success_requests;
+            ++ stats_.continue_success_requests;
+            stats_.continue_error_requests = 0;
+        }
+
+        void etcd_cluster::add_stats_create_request() {
+            stats_.sum_create_requests = 0;
         }
 
         void etcd_cluster::setup_http_request(util::network::http_request::ptr_t &req, rapidjson::Document &doc, time_t timeout) {
@@ -760,6 +909,7 @@ namespace atframe {
             doc.Accept(writer);
 
             req->post_data().assign(buffer.GetString(), buffer.GetSize());
+            WLOGTRACE("Etcd cluster setup request %p to %s, post data: %s", req.get(), req->get_url().c_str(), req->post_data().c_str());
         }
 
     } // namespace component

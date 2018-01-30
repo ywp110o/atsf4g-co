@@ -35,8 +35,8 @@ namespace atframe {
 
         struct etcd_watch_event {
             enum type {
-                PUT = 0,   // put
-                DELETE = 1 // delete
+                EN_WEVT_PUT = 0,   // put
+                EN_WEVT_DELETE = 1 // delete
             };
         };
     } // namespace component
