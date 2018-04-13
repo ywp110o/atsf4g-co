@@ -249,7 +249,7 @@ function WaitProcessStarted() {
 	while [ ! -f "$PROC_NAME" ]; do
 		if [ $WAIT_TIME -gt 0 ]; then
 			WaitForMS 100;
-			let WAIT_TIME=$WAIT_TIME-1;
+			let WAIT_TIME=$WAIT_TIME-100;
 		else
 			return 2;
 		fi
@@ -306,7 +306,7 @@ function WaitProcessStoped() {
 		
 		if [ $WAIT_TIME -gt 0 ]; then
 			WaitForMS 100;
-			let WAIT_TIME=$WAIT_TIME-1;
+			let WAIT_TIME=$WAIT_TIME-100;
 		else
 			return 2;
 		fi
