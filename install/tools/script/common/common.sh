@@ -277,8 +277,8 @@ function CheckProcessRunning() {
 		SYSFLAGS=" -W";
 	fi
 	if [ -f "$PROC_NAME" ]; then
-		PROC_PID=$(cat "$PROC_NAME" 2 > /dev/null);
-		if [ ! -z "$(ps -p $PROC_PID $SYSFLAGS 2>&1 | grep $PROC_PID)" ]; then
+		PROC_PID=$(cat "$PROC_NAME" 2>/dev/null);
+		if [ ! -z "$PROC_PID" ] && [ ! -z "$(ps -p $PROC_PID $SYSFLAGS 2>&1 | grep $PROC_PID)" ]; then
 			return 1;
 		fi
 	fi
