@@ -231,12 +231,14 @@ def get_hostname():
     if 'hostname' not in server_cache_ip:
         server_cache_ip['hostname'] = get_global_option(
             'atsystem', 'hostname', '', 'SYSTEM_MACRO_HOSTNAME')
+        server_cache_ip['hostname_is_uuid'] = False
         if server_cache_ip['hostname'] is None or len(server_cache_ip['hostname']) == 0:
             # using uuid module to find physic address
             import uuid
             server_cache_ip['hostname'] = uuid.UUID(
                 int=uuid.getnode()).hex[-12:]
-    return server_cache_ip['hostname']
+            server_cache_ip['hostname_is_uuid'] = True
+    return server_cache_ip['hostname'], server_cache_ip['hostname_is_uuid']
 
 
 def str_to_list(val):
