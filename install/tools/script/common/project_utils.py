@@ -227,6 +227,7 @@ def get_global_option(section, key, default_val, env_name=None):
 
 
 def get_hostname():
+    global server_cache_ip
     if 'hostname' not in server_cache_ip:
         server_cache_ip['hostname'] = get_global_option(
             'atsystem', 'hostname', '', 'SYSTEM_MACRO_HOSTNAME')
@@ -378,6 +379,9 @@ def get_server_atbus_shm():
         get_server_group_inner_id(get_server_name(), get_server_index())
     return 'shm://{0}'.format(hex(shm_key))
 
+def disable_server_atbus_shm():
+    global environment_check_shm
+    environment_check_shm = False
 
 def get_calc_listen_port(server_name=None, server_index=None, base_port='port'):
     if server_name is None:
@@ -422,6 +426,7 @@ def get_server_atbus_unix():
 
 
 def get_server_atbus_listen():
+    global server_cache_ip
     ret = []
     res = get_server_atbus_shm()
     if not res is None:
@@ -449,6 +454,9 @@ def get_server_atbus_listen():
         ret.append(get_server_atbus_unix())
     return ret
 
+def disable_server_atbus_unix_sock():
+    global server_cache_ip
+    server_cache_ip['support_unix_sock'] = False
 
 def get_server_proxy():
     global server_proxy_addr
