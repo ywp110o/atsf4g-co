@@ -2,6 +2,8 @@
 
 EchoWithColor(COLOR GREEN "-- Configure ${CMAKE_CURRENT_LIST_DIR}")
 
+include ("${CMAKE_CURRENT_LIST_DIR}/sample.custom-macro.cmake")
+
 # ============ sample - [...] ============
 file(GLOB SAMPLE_BIN_LIST LIST_DIRECTORIES true "${CMAKE_CURRENT_LIST_DIR}/*")
 

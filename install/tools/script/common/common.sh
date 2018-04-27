@@ -249,7 +249,7 @@ function WaitProcessStarted() {
 	while [ ! -f "$PROC_NAME" ]; do
 		if [ $WAIT_TIME -gt 0 ]; then
 			WaitForMS 100;
-			let WAIT_TIME=$WAIT_TIME-1;
+			let WAIT_TIME=$WAIT_TIME-100;
 		else
 			return 2;
 		fi
@@ -277,8 +277,8 @@ function CheckProcessRunning() {
 		SYSFLAGS=" -W";
 	fi
 	if [ -f "$PROC_NAME" ]; then
-		PROC_PID=$(cat "$PROC_NAME");
-		if [ ! -z "$(ps -p $PROC_PID $SYSFLAGS 2>&1 | grep $PROC_PID)" ]; then
+		PROC_PID=$(cat "$PROC_NAME" 2>/dev/null);
+		if [ ! -z "$PROC_PID" ] && [ ! -z "$(ps -p $PROC_PID $SYSFLAGS 2>&1 | grep $PROC_PID)" ]; then
 			return 1;
 		fi
 	fi
@@ -306,7 +306,7 @@ function WaitProcessStoped() {
 		
 		if [ $WAIT_TIME -gt 0 ]; then
 			WaitForMS 100;
-			let WAIT_TIME=$WAIT_TIME-1;
+			let WAIT_TIME=$WAIT_TIME-100;
 		else
 			return 2;
 		fi

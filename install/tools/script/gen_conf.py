@@ -48,6 +48,10 @@ if __name__ == '__main__':
                         default=None, type=int, help="set default server numbers")
     parser.add_argument("-i", "--id-offset", action='store', dest="server_id_offset",
                         default=0, type=int, help="set server id offset(default: 0)")
+    parser.add_argument("--disable-shm", action='store_true', dest="disable_shm",
+                        default=False, help="disable shared memory address")
+    parser.add_argument("--disable-unix-sock", action='store_true', dest="disable_unix_sock",
+                        default=False, help="disable unix sock/pipe address")
 
     opts = parser.parse_args()
     if python3_mode:
@@ -58,6 +62,12 @@ if __name__ == '__main__':
         config.read(opts.config)
 
     project.set_global_opts(config, opts.server_id_offset)
+
+    # function switcher
+    if opts.disable_shm:
+        project.disable_server_atbus_shm()
+    if opts.disable_unix_sock:
+        project.disable_server_atbus_unix_sock()
 
     # all custon environment start with SYSTEM_MACRO_CUSTOM_
     # reset all servers's number
