@@ -22,6 +22,34 @@ task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_t COPP_MA
 
 task_action_ss_req_base::~task_action_ss_req_base() {}
 
+int task_action_ss_req_base::hook_run() {
+    // TODO 路由对象系统支持
+    if (get_request().head().has_router()) {
+        do {
+            // TODO find router manager in router set
+            // TODO 如果正在迁移，追加到pending队列，本task直接退出
+            // TODO 如果和本地的路由缓存匹配则break直接开始消息处理
+            // TODO 如果本地版本号低于来源服务器，刷新一次路由表
+
+            // TODO mutable路由对象，检查是否成功
+
+            // TODO 如果本地路由版本号大于来源，通知来源更新路由表
+
+            // TODO 如果和本地的路由缓存匹配则break直接开始消息处理
+
+            // TODO 路由消息转发
+            // TODO 如果路由转发成功，需要禁用掉回包和通知事件
+            disable_rsp_msg();
+            disable_finish_evt();
+
+            // TODO 如果路由对象不在任何节点上，返回错误
+            set_rsp_code(hello::err::EN_ROUTER_NOT_IN_SERVER);
+        } while (false);
+    }
+
+    return base_type::hook_run();
+}
+
 uint64_t task_action_ss_req_base::get_request_bus_id() const {
     msg_cref_type msg = get_request();
     return msg.head().bus_id();

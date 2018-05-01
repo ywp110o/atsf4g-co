@@ -36,6 +36,8 @@ public:
     task_action_ss_req_base(dispatcher_start_data_t COPP_MACRO_RV_REF start_param);
     virtual ~task_action_ss_req_base();
 
+    virtual int hook_run() UTIL_CONFIG_OVERRIDE;
+
     uint64_t get_request_bus_id() const;
 
     msg_ref_type add_rsp_msg(uint64_t dst_pd = 0);

@@ -33,11 +33,16 @@ message SSPlayerKickOffRsp {}
 /////////////////////////////////////////////////////
 ////  此处开始是对象路由系统协议协议
 /////////////////////////////////////////////////////
+enum EnRouterObjectType {
+    EN_ROT_INVALID = 0;
+    EN_ROT_PLAYER  = 1;
+}
+
 message SSRouterHead {
     uint64 router_src_bus_id = 1; // 路由协议原始发起者的BUS ID
     uint64 router_version    = 2;
 
-    int32 message_body_case = 11; // 消息的body_case缓存
+    int32 message_type = 11; // 消息的body_case缓存
     // 因为如果发生消息转发则不需要解析body内容，所以这里缓存body_case以便知道要启用哪一个task
 
     // 路由对象信息
@@ -67,6 +72,9 @@ message SSMsgHead {
     uint64 bus_id      = 11;
     uint64 src_task_id = 12;
     uint64 dst_task_id = 13;
+
+    // 路由系统信息
+    SSRouterHead router = 21;
 
     // 玩家标识
     uint64 player_user_id = 101; // 如果涉及玩家此项必需

@@ -19,7 +19,6 @@
 #include <protocol/pbdesc/svr.protocol.pb.h>
 #include <utility/protobuf_mini_dumper.h>
 
-
 ss_msg_dispatcher::ss_msg_dispatcher() {}
 ss_msg_dispatcher::~ss_msg_dispatcher() {}
 
@@ -38,6 +37,12 @@ ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw
     hello::SSMsg *real_msg = get_protobuf_msg<hello::SSMsg>(raw_msg);
     if (NULL == real_msg) {
         return 0;
+    }
+
+    // 路由对象系统支持，允许从SSRouterHead中读取
+    if (!real_msg->body_bin().empty() && (!real_msg->has_body() || hello::SSMsgBody::BODY_ONEOF_NOT_SET == real_msg->body().body_oneof_case()) &&
+        real_msg->head().has_router()) {
+        return static_cast<msg_type_t>(real_msg->head().router().message_type());
     }
 
     return static_cast<msg_type_t>(real_msg->body().body_oneof_case());

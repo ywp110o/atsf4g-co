@@ -23,8 +23,16 @@ enum EnSysErrorType {
     EN_SYS_RPC_CALL        = -1000021; // 通用调用错误
     EN_SYS_RPC_NO_TASK     = -1000022; // 不在协程任务中
     EN_SYS_RPC_SEND_FAILED = -1000023; // 发送消息失败
+    EN_SYS_SIGN_VERIFY     = -1000031; // 签名校检失败
 
-    EN_SYS_SIGN_VERIFY = -1000031; // 签名校检失败
+    EN_ROUTER_NOT_FOUND       = -10000081; // 路由信息找不到
+    EN_ROUTER_TTL_EXTEND      = -10000082; // TTL超出限制
+    EN_ROUTER_NOT_IN_SERVER   = -10000083; // 不在任何节点上
+    EN_ROUTER_TYPE_INVALID    = -10000084; // 路由数据类型未被注册
+    EN_ROUTER_TYPE_CONFLICT   = -10000085; // 路由数据类型已经被注册
+    EN_ROUTER_NOT_WRITABLE    = -10000086; // 不可写(不是实体)
+    EN_ROUTER_IN_OTHER_SERVER = -10000087; // 在其他节点上
+    EN_ROUTER_TRANSFER        = -10000088; // 转移失败
 
     EN_DB_RECORD_NOT_FOUND = -1000101;
     EN_DB_SEND_FAILED      = -1000102;

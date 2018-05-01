@@ -2,14 +2,29 @@
 // Created by owt50 on 2016/9/23.
 //
 
-#include <sstream>
 #include <common/string_oprs.h>
+#include <sstream>
 #include <std/foreach.h>
 #include <time/time_utility.h>
 
+
 #include "logic_config.h"
 
-logic_config::logic_config(): bus_id_(0){}
+template <typename TINT, typename TVAL>
+static void load_int_compare(util::config::ini_loader &loader, const char *key, TINT &v, TVAL default_val, TVAL cmp_val = 0) {
+    v = static_cast<TINT>(default_val);
+    loader.dump_to(key, v, false);
+    if (v <= static_cast<TINT>(cmp_val)) {
+        v = static_cast<TINT>(default_val);
+    }
+}
+
+template <typename TINT, typename TVAL, size_t ARRSZ>
+static void load_int_compare(util::config::ini_loader &loader, const char key[ARRSZ], TINT &v, TVAL default_val, TVAL cmp_val = 0) {
+    load_int_compare(loader, (const char *)key, v, default_val, cmp_val);
+}
+
+logic_config::logic_config() : bus_id_(0) {}
 logic_config::~logic_config() {}
 
 
@@ -18,8 +33,8 @@ int logic_config::init(uint64_t bus_id) {
     return 0;
 }
 
-int logic_config::reload(util::config::ini_loader& cfg_set) {
-    const util::config::ini_value::node_type& children = cfg_set.get_root_node().get_children();
+int logic_config::reload(util::config::ini_loader &cfg_set) {
+    const util::config::ini_value::node_type &children = cfg_set.get_root_node().get_children();
     if (children.find("logic") != children.end()) {
         _load_logic(cfg_set);
     }
@@ -39,11 +54,9 @@ int logic_config::reload(util::config::ini_loader& cfg_set) {
     return 0;
 }
 
-uint64_t logic_config::get_self_bus_id() const {
-    return bus_id_;
-}
+uint64_t logic_config::get_self_bus_id() const { return bus_id_; }
 
-void logic_config::_load_logic(util::config::ini_loader& loader) {
+void logic_config::_load_logic(util::config::ini_loader &loader) {
     cfg_logic_.zone_id = 0;
     cfg_logic_.zone_step = 256;
     loader.dump_to("logic.zone.id", cfg_logic_.zone_id);
@@ -64,7 +77,7 @@ void logic_config::_load_logic(util::config::ini_loader& loader) {
     cfg_logic_.player_auto_save_interval = 0;
     cfg_logic_.player_auto_save_limit = 0;
 
-    cfg_logic_.player_cache_expire_time = 1200; // 20m for expired of cache
+    cfg_logic_.player_cache_expire_time = 1200;  // 20m for expired of cache
     cfg_logic_.player_cache_max_retry_times = 3; // retry 3 times
 
     loader.dump_to("logic.player.max_online", cfg_logic_.player_max_online_number);
@@ -74,37 +87,49 @@ void logic_config::_load_logic(util::config::ini_loader& loader) {
     loader.dump_to("logic.player.cache.expire_time", cfg_logic_.player_cache_expire_time);
     loader.dump_to("logic.player.cache.max_retry_times", cfg_logic_.player_cache_max_retry_times);
 
-    cfg_logic_.session_login_code_protect = 1200; // 20m for expired of bad token protect
+    cfg_logic_.session_login_code_protect = 1200;  // 20m for expired of bad token protect
     cfg_logic_.session_login_code_valid_sec = 600; // 10m for expired of token
-    cfg_logic_.session_login_ban_time = 10800; // 3 hours when ban by anti cheating
-    cfg_logic_.session_tick_sec = 60; // session event tick interval(for example: online number)
+    cfg_logic_.session_login_ban_time = 10800;     // 3 hours when ban by anti cheating
+    cfg_logic_.session_tick_sec = 60;              // session event tick interval(for example: online number)
     loader.dump_to("logic.session.login_code_protect", cfg_logic_.session_login_code_protect);
     loader.dump_to("logic.session.login_code_valid_sec", cfg_logic_.session_login_code_valid_sec);
     loader.dump_to("logic.session.login_ban_time", cfg_logic_.session_login_ban_time);
     loader.dump_to("logic.session.tick_sec", cfg_logic_.session_tick_sec);
 
     cfg_logic_.task_stack_size = 1024 * 1024; // 默认1MB
-    cfg_logic_.task_csmsg_timeout = 5; // 5s
-    cfg_logic_.task_nomsg_timeout = 1800; // 1800s for auto task
-    cfg_logic_.task_paymsg_timeout = 300; // 300s for pay task
+    cfg_logic_.task_csmsg_timeout = 5;        // 5s
+    cfg_logic_.task_nomsg_timeout = 1800;     // 1800s for auto task
+    cfg_logic_.task_paymsg_timeout = 300;     // 300s for pay task
     loader.dump_to("logic.task.stack.size", cfg_logic_.task_stack_size);
     loader.dump_to("logic.task.csmsg.timeout", cfg_logic_.task_csmsg_timeout);
     loader.dump_to("logic.task.nomsg.timeout", cfg_logic_.task_nomsg_timeout);
     loader.dump_to("logic.task.paymsg.timeout", cfg_logic_.task_paymsg_timeout);
 
-    cfg_logic_.heartbeat_interval = 120; // 120s for every ping/pong
-    cfg_logic_.heartbeat_tolerance = 20; // 20s for network latency tolerance
-    cfg_logic_.heartbeat_error_times = 4; // how much times of continue error will cause a kickoff
-    cfg_logic_.heartbeat_ban_error_times = 3; // how much times of continue kickoff will ban account
+    cfg_logic_.heartbeat_interval = 120;         // 120s for every ping/pong
+    cfg_logic_.heartbeat_tolerance = 20;         // 20s for network latency tolerance
+    cfg_logic_.heartbeat_error_times = 4;        // how much times of continue error will cause a kickoff
+    cfg_logic_.heartbeat_ban_error_times = 3;    // how much times of continue kickoff will ban account
     cfg_logic_.heartbeat_ban_time_bound = 10800; // 3 hours of ban time
     loader.dump_to("logic.heartbeat.interval", cfg_logic_.heartbeat_interval);
     loader.dump_to("logic.heartbeat.tolerance", cfg_logic_.heartbeat_tolerance);
     loader.dump_to("logic.heartbeat.error_times", cfg_logic_.heartbeat_error_times);
     loader.dump_to("logic.heartbeat.ban_error_times", cfg_logic_.heartbeat_ban_error_times);
     loader.dump_to("logic.heartbeat.ban_time_bound", cfg_logic_.heartbeat_ban_time_bound);
+
+    // router
+    cfg_logic_.router.cache_update_interval = 1800;
+    cfg_logic_.router.cache_free_timeout = 600;
+    cfg_logic_.router.object_free_timeout = 1500;
+    cfg_logic_.router.retry_max_ttl = 3;
+    loader.dump_to("logic.router.cache_update_interval", cfg_logic_.router.cache_update_interval, false);
+    loader.dump_to("logic.router.cache_free_timeout", cfg_logic_.router.cache_free_timeout, false);
+    loader.dump_to("logic.router.object_free_timeout", cfg_logic_.router.object_free_timeout, false);
+    loader.dump_to("logic.router.retry_max_ttl", cfg_logic_.router.retry_max_ttl, false);
+    load_int_compare(loader, "logic.router.object_save_interval", cfg_logic_.router.object_save_interval, 600, 60);
+    load_int_compare(loader, "logic.router.timer_interval", cfg_logic_.router.timer_interval, 300, 5);
 }
 
-void logic_config::_load_db(util::config::ini_loader& loader) {
+void logic_config::_load_db(util::config::ini_loader &loader) {
     loader.dump_to("db.script.login", cfg_db_.db_script_file[hello::EN_DBSST_LOGIN]);
     loader.dump_to("db.script.player", cfg_db_.db_script_file[hello::EN_DBSST_PLAYER]);
 
@@ -125,18 +150,18 @@ void logic_config::_load_db(util::config::ini_loader& loader) {
     _load_db_hosts(cfg_db_.raw_default, "raw.default", loader);
 }
 
-void logic_config::_load_db_hosts(std::vector<LC_DBCONN>& out, const char* group_name, util::config::ini_loader& loader) {
+void logic_config::_load_db_hosts(std::vector<LC_DBCONN> &out, const char *group_name, util::config::ini_loader &loader) {
     std::stringstream ss;
-    ss<< "db."<< group_name<< ".host";
+    ss << "db." << group_name << ".host";
     std::string path = ss.str();
     std::vector<std::string> urls;
     loader.dump_to(path, urls);
 
-    owent_foreach(std::string& url, urls) {
+    owent_foreach(std::string & url, urls) {
         LC_DBCONN db_conn;
         db_conn.url = url;
         std::string::size_type fn = db_conn.url.find_last_of(":");
-        if(std::string::npos == fn) {
+        if (std::string::npos == fn) {
             db_conn.host = url;
             db_conn.port = 6379;
             out.push_back(db_conn);
@@ -155,9 +180,9 @@ void logic_config::_load_db_hosts(std::vector<LC_DBCONN>& out, const char* group
                 util::string::str2int(begin_port, &url[fn + 1]);
                 util::string::str2int(end_port, &url[minu_pos + 1]);
 
-                for (db_conn.port = begin_port; db_conn.port < end_port; ++ db_conn.port) {
+                for (db_conn.port = begin_port; db_conn.port < end_port; ++db_conn.port) {
                     ss.clear();
-                    ss<< db_conn.host<< ":"<< db_conn.port;
+                    ss << db_conn.host << ":" << db_conn.port;
                     db_conn.url = ss.str();
 
                     out.push_back(db_conn);
@@ -167,7 +192,7 @@ void logic_config::_load_db_hosts(std::vector<LC_DBCONN>& out, const char* group
     }
 }
 
-void logic_config::_load_loginsvr(util::config::ini_loader& loader) {
+void logic_config::_load_loginsvr(util::config::ini_loader &loader) {
     cfg_loginsvr_.version_cfg_file = "../cfg/cfg_version.xml";
     cfg_loginsvr_.strategy_cfg_file = "../cfg/cfg_strategy.xml";
     cfg_loginsvr_.reload_version = static_cast<uint32_t>(util::time::time_utility::get_now());
@@ -192,4 +217,4 @@ void logic_config::_load_loginsvr(util::config::ini_loader& loader) {
     loader.dump_to("loginsvr.debug_platform", cfg_loginsvr_.debug_platform_mode);
 }
 
-void logic_config::_load_gamesvr(util::config::ini_loader& loader) {}
+void logic_config::_load_gamesvr(util::config::ini_loader &loader) {}
