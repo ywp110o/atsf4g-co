@@ -23,7 +23,7 @@
 namespace rpc {
     namespace router {
         namespace robj {
-            int send_update_syn(uint64_t dst_bus_id, hello::SSRouterUpdateSync &req) {
+            int send_update_sync(uint64_t dst_bus_id, hello::SSRouterUpdateSync &req) {
                 hello::SSMsg req_msg;
                 task_action_ss_req_base::init_msg(req_msg, dst_bus_id);
                 req_msg.mutable_head()->set_src_task_id(0);

@@ -68,7 +68,7 @@ int router_manager_base::send_msg_raw(router_object_base &obj, hello::SSMsg &msg
     }
 
     // 尝试打包数据到二进制body，这样如果目标服务器进程是转发消息则不需要解包
-    if (msg.has_body() && msg.body().body_oneof_case() == hello::SSMsgBody::BODY_ONEOF_NOT_SET) {
+    if (msg.has_body() && msg.body().body_oneof_case() != hello::SSMsgBody::BODY_ONEOF_NOT_SET) {
         router_head->set_message_type(msg.body().body_oneof_case());
 
         msg.body().SerializeAsString().swap(*msg.mutable_body_bin());

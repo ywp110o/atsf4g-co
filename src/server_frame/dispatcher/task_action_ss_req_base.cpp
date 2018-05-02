@@ -9,6 +9,14 @@
 
 #include <dispatcher/ss_msg_dispatcher.h>
 
+#include <config/logic_config.h>
+
+#include <router/router_manager_base.h>
+#include <router/router_manager_set.h>
+#include <router/router_object_base.h>
+
+#include <rpc/router/router_object_base.h>
+
 #include "task_action_ss_req_base.h"
 
 task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_t COPP_MACRO_RV_REF start_param) {
@@ -23,27 +31,84 @@ task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_t COPP_MA
 task_action_ss_req_base::~task_action_ss_req_base() {}
 
 int task_action_ss_req_base::hook_run() {
-    // TODO 路由对象系统支持
+    // 路由对象系统支持
     if (get_request().head().has_router()) {
+        const hello::SSRouterHead &router = get_request().head().router();
+
         do {
-            // TODO find router manager in router set
-            // TODO 如果正在迁移，追加到pending队列，本task直接退出
-            // TODO 如果和本地的路由缓存匹配则break直接开始消息处理
-            // TODO 如果本地版本号低于来源服务器，刷新一次路由表
+            // find router manager in router set
+            router_manager_base *mgr = router_manager_set::me()->get_manager(router.object_type_id());
+            if (NULL == mgr) {
+                WLOGERROR("router manager %u not found", router.object_type_id());
+                return hello::err::EN_ROUTER_TYPE_INVALID;
+            }
 
-            // TODO mutable路由对象，检查是否成功
+            router_manager_base::key_t key(router.object_type_id(), router.object_inst_id());
+            std::shared_ptr<router_object_base> obj = mgr->get_base_cache(key);
 
-            // TODO 如果本地路由版本号大于来源，通知来源更新路由表
+            // 如果正在迁移，追加到pending队列，本task直接退出
+            if (obj && obj->check_flag(router_object_base::flag_t::EN_ROFT_TRANSFERING)) {
+                obj->get_transfer_pending_list().push_back(hello::SSMsg());
+                obj->get_transfer_pending_list().back().Swap(&get_request());
 
-            // TODO 如果和本地的路由缓存匹配则break直接开始消息处理
+                return hello::err::EN_SUCCESS;
+            }
 
-            // TODO 路由消息转发
-            // TODO 如果路由转发成功，需要禁用掉回包和通知事件
-            disable_rsp_msg();
-            disable_finish_evt();
+            // 如果和本地的路由缓存匹配则break直接开始消息处理
+            if (obj && (logic_config::me()->get_self_bus_id() == obj->get_router_server_id() || 0 == obj->get_router_server_id())) {
+                break;
+            }
 
-            // TODO 如果路由对象不在任何节点上，返回错误
-            set_rsp_code(hello::err::EN_ROUTER_NOT_IN_SERVER);
+            // 如果本地版本号低于来源服务器，刷新一次路由表
+            if (!obj || obj->get_router_version() < router.router_version()) {
+                mgr->mutable_object(obj, key, NULL);
+            }
+
+            // mutable路由对象，检查是否成功
+            if (!obj) {
+                WLOGERROR("router object key=%u:0x%llx not found", key.type_id, key.object_id_ull());
+                return hello::err::EN_ROUTER_NOT_FOUND;
+            }
+
+            // 如果本地路由版本号大于来源，通知来源更新路由表
+            if (obj->get_router_version() > router.router_version()) {
+                hello::SSRouterUpdateSync sync_msg;
+                hello::SSRouterHead *router_head = sync_msg.mutable_object();
+                if (NULL != router_head) {
+                    router_head->set_router_src_bus_id(obj->get_router_server_id());
+                    router_head->set_router_version(obj->get_router_version());
+                    router_head->set_object_type_id(key.type_id);
+                    router_head->set_object_inst_id(key.object_id);
+                }
+
+                // 只通知直接来源
+                rpc::router::robj::send_update_sync(get_request_bus_id(), sync_msg);
+            }
+
+            // 如果和本地的路由缓存匹配则break直接开始消息处理
+            if (logic_config::me()->get_self_bus_id() == obj->get_router_server_id() || 0 == obj->get_router_server_id()) {
+                break;
+            }
+
+
+            // 路由消息转发
+            if (0 != obj->get_router_server_id()) {
+                int32_t res = mgr->send_msg(*obj, get_request());
+
+                // 如果路由转发成功，需要禁用掉回包和通知事件，也不需要走逻辑处理了
+                if (res >= 0) {
+                    disable_rsp_msg();
+                    disable_finish_evt();
+
+                    return 0;
+                } else {
+                    WLOGERROR("try to transfer router object %u:x0%llx to 0x%llx failed, res: %d", key.type_id, key.object_id_ull(),
+                              static_cast<unsigned long long>(obj->get_router_server_id()), res);
+                }
+            } else {
+                // 如果路由对象不在任何节点上，返回错误
+                set_rsp_code(hello::err::EN_ROUTER_NOT_IN_SERVER);
+            }
         } while (false);
     }
 

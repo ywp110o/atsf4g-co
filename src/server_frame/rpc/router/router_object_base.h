@@ -24,7 +24,7 @@ namespace rpc {
              * @param req 请求包
              * @return 0 or error code
              */
-            int send_update_syn(uint64_t dst_bus_id, hello::SSRouterUpdateSync &req);
+            int send_update_sync(uint64_t dst_bus_id, hello::SSRouterUpdateSync &req);
 
             /**
              * @brief 发送路由转移通知
