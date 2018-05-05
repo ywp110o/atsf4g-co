@@ -15,12 +15,12 @@
 #include <string>
 #include <type_traits>
 
-
-#include <design_pattern/noncopyable.h>
+#include <protocol/pbdesc/svr.protocol.pb.h>
 
 #include <config/compiler_features.h>
+#include <design_pattern/noncopyable.h>
 
-#include <protocol/pbdesc/svr.protocol.pb.h>
+#include <dispatcher/task_manager.h>
 
 class router_manager_base;
 class router_object_base : public ::util::design_pattern::noncopyable {
@@ -83,11 +83,9 @@ public:
     inline bool is_writable() const {
         return check_flag(flag_t::EN_ROFT_WRITABLE) && !check_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT) && !check_flag(flag_t::EN_ROFT_CACHE_REMOVED);
     }
-    inline bool is_pulling_cache() const { return 0 != loading_cache_task_ || 0 != loading_object_task_; }
-    inline bool is_pulling_object() const { return 0 != loading_object_task_; }
+    inline bool is_pulling_cache() const { return pulling_task_ && !pulling_task_->is_exiting(); }
+    inline bool is_pulling_object() const { return pulling_task_ && !pulling_task_->is_exiting(); }
 
-    inline uint64_t get_cache_task() const { return loading_cache_task_ ? loading_cache_task_ : loading_object_task_; }
-    inline uint64_t get_object_task() const { return loading_object_task_; }
     inline time_t get_last_visit_time() const { return last_visit_time_; }
     inline time_t get_last_save_time() const { return last_save_time_; }
 
@@ -198,6 +196,8 @@ public:
     inline const std::list<hello::SSMsg> &get_transfer_pending_list() const { return transfer_pending_; }
 
 private:
+    int await_pull_task(task_manager::task_ptr_t &self_task);
+
     // 内部接口，拉取缓存。会排队读任务
     int pull_cache_inner(void *priv_data);
     // 内部接口，拉取实体。会排队读任务
@@ -207,19 +207,17 @@ private:
 
 private:
     key_t key_;
-    uint64_t loading_cache_task_;
-    uint64_t loading_object_task_;
     time_t last_save_time_;
     time_t last_visit_time_;
     uint64_t router_svr_id_;
     uint32_t router_svr_ver_;
     uint32_t timer_sequence_;
 
-    // TODO 新版排队系统
-    // task_manager::task_ptr_t pulling_task_;
-    // task_manager::task_ptr_t saving_task_;
-    // uint64_t saving_sequence_;
-    // uint64_t saved_sequence_;
+    // 新版排队系统
+    task_manager::task_ptr_t pulling_task_;
+    task_manager::task_ptr_t saving_task_;
+    uint64_t saving_sequence_;
+    uint64_t saved_sequence_;
 
     int flags_;
     std::list<hello::SSMsg> transfer_pending_;

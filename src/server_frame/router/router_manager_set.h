@@ -17,6 +17,7 @@
 #include <protocol/pbdesc/svr.const.pb.h>
 #include <utility/environment_helper.h>
 
+#include <dispatcher/task_manager.h>
 
 class router_object_base;
 class router_manager_base;
@@ -58,11 +59,14 @@ public:
     int unregister_manager(router_manager_base *b);
 
 private:
-    uint64_t save_task_id_;
+    bool is_save_task_running() const;
+
+private:
     std::list<timer_t> timer_list_;
     time_t last_proc_time_;
     router_manager_base *mgrs_[hello::EnRouterObjectType_ARRAYSIZE];
     std::list<auto_save_data_t> save_list_;
+    task_manager::task_ptr_t save_task_;
 
     friend class task_action_auto_save_objects;
 };

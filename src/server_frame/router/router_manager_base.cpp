@@ -17,10 +17,6 @@
 router_manager_base::router_manager_base(uint32_t type_id) : stat_size_(0), type_id_(type_id) { router_manager_set::me()->register_manager(this); }
 router_manager_base::~router_manager_base() { router_manager_set::me()->unregister_manager(this); }
 
-void router_manager_base::setup_cache_task(router_object_base &robj, uint64_t tid) { robj.loading_cache_task_ = tid; }
-
-void router_manager_base::setup_object_task(router_object_base &robj, uint64_t tid) { robj.loading_object_task_ = tid; }
-
 int router_manager_base::send_msg(router_object_base &obj, hello::SSMsg &msg) {
     // 如果正在转移过程中，追加到pending列表
     if (obj.check_flag(router_object_base::flag_t::EN_ROFT_TRANSFERING)) {

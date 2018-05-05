@@ -21,9 +21,6 @@ public:
 protected:
     explicit router_manager_base(uint32_t type_id);
 
-    static void setup_cache_task(router_object_base &, uint64_t tid);
-    static void setup_object_task(router_object_base &, uint64_t tid);
-
 public:
     virtual ~router_manager_base();
     virtual const char *name() const = 0;

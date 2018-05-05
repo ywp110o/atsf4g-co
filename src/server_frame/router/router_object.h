@@ -51,10 +51,6 @@ public:
         }
 
         int ret = save_object_inner(priv_data);
-        if (ret >= 0) {
-            refresh_save_time();
-        }
-
         return ret;
     }
 

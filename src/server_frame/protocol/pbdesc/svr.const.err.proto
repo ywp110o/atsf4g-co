@@ -20,10 +20,11 @@ enum EnSysErrorType {
     EN_SYS_PACK        = -1000008;
     EN_SYS_UNPACK      = -1000009;
 
-    EN_SYS_RPC_CALL        = -1000021; // 通用调用错误
-    EN_SYS_RPC_NO_TASK     = -1000022; // 不在协程任务中
-    EN_SYS_RPC_SEND_FAILED = -1000023; // 发送消息失败
-    EN_SYS_SIGN_VERIFY     = -1000031; // 签名校检失败
+    EN_SYS_RPC_CALL         = -1000021; // 通用调用错误
+    EN_SYS_RPC_NO_TASK      = -1000022; // 不在协程任务中
+    EN_SYS_RPC_SEND_FAILED  = -1000023; // 发送消息失败
+    EN_SYS_RPC_TASK_EXITING = -1000024; // 协程任务正在退出
+    EN_SYS_SIGN_VERIFY      = -1000031; // 签名校检失败
 
     EN_ROUTER_NOT_FOUND       = -10000081; // 路由信息找不到
     EN_ROUTER_TTL_EXTEND      = -10000082; // TTL超出限制

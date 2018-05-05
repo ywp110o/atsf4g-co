@@ -102,49 +102,15 @@ public:
                 }
             }
 
-            task_manager::task_t *task = task_manager::task_t::this_task();
-            if (!task) {
-                WLOGERROR("current not in a task");
-                return hello::err::EN_SYS_RPC_NO_TASK;
-            }
-
-            // wait for object task
-            task_manager::task_ptr_t wait_for;
-            if (0 != out->get_object_task()) {
-                wait_for = task_manager::me()->get_task(out->get_object_task());
-                if (wait_for->is_completed()) {
-                    wait_for.reset();
-                }
-            }
-
-            // wait for cache task
-            if (!wait_for && 0 != out->get_cache_task()) {
-                wait_for = task_manager::me()->get_task(out->get_cache_task());
-                if (wait_for->is_completed()) {
-                    wait_for.reset();
-                }
-            }
-
-            if (wait_for) {
-                wait_for->next(task->shared_from_this());
-                task->yield(nullptr);
-                continue;
-            }
-
             // pull using TYPE's API
-            setup_cache_task(*out, task->get_id());
             int res = out->pull_cache_inner(reinterpret_cast<void *>(priv_data));
-            setup_cache_task(*out, 0);
 
             if (res < 0) {
-                if (cotask::EN_TS_TIMEOUT == task->get_status()) {
-                    return hello::err::EN_SYS_TIMEOUT;
+                if (hello::err::EN_SYS_TIMEOUT == res || hello::err::EN_SYS_RPC_TASK_EXITING == res || hello::err::EN_SYS_RPC_NO_TASK == res) {
+                    return res;
                 }
                 continue;
             }
-
-            // 拉取成功要refresh_save_time
-            out->refresh_save_time();
 
             on_evt_pull_cache(out, priv_data);
             return hello::err::EN_SUCCESS;
@@ -203,57 +169,25 @@ public:
                 }
 
                 if (!insert(key, out)) {
-                    return hello::err::EN_SYS_PARAM;
+                    return hello::err::EN_SYS_MALLOC;
                 }
-            }
-
-            task_manager::task_t *task = task_manager::task_t::this_task();
-            if (!task) {
-                WLOGERROR("current not in a task");
-                return hello::err::EN_SYS_RPC_NO_TASK;
-            }
-
-            // wait for object task
-            task_manager::task_ptr_t wait_for;
-            if (0 != out->get_object_task()) {
-                wait_for = task_manager::me()->get_task(out->get_object_task());
-                if (wait_for->is_completed()) {
-                    wait_for.reset();
-                }
-            }
-
-            if (wait_for) {
-                wait_for->next(task->shared_from_this());
-                task->yield(nullptr);
-                continue;
             }
 
             // pull using TYPE's API
-            setup_object_task(*out, task->get_id());
             out->unset_flag(router_object_base::flag_t::EN_ROFT_OBJECT_REMOVED);
             out->unset_flag(router_object_base::flag_t::EN_ROFT_FORCE_PULL_OBJECT);
             int res = out->pull_object_inner(reinterpret_cast<void *>(priv_data));
-            setup_object_task(*out, 0);
 
             if (res < 0) {
-                if (cotask::EN_TS_TIMEOUT == task->get_status()) {
-                    return hello::err::EN_SYS_TIMEOUT;
+                if (hello::err::EN_SYS_TIMEOUT == res || hello::err::EN_SYS_RPC_TASK_EXITING == res || hello::err::EN_SYS_RPC_NO_TASK == res) {
+                    return res;
                 }
                 continue;
             }
 
-            out->refresh_save_time();
-            if (0 != out->get_router_server_id()) {
-                if (logic_config::me()->get_self_bus_id() != out->get_router_server_id()) {
-                    // 可能某处的缓存过老，这是正常流程，返回错误码即可，不用打错误日志
-                    return hello::err::EN_ROUTER_NOT_WRITABLE;
-                }
-            }
-
-            // 拉取成功要refresh_save_time
             // 如果中途被移除，则降级回缓存
             if (!out->check_flag(router_object_base::flag_t::EN_ROFT_OBJECT_REMOVED)) {
-                out->upgrade(); // 升级为缓存
+                out->upgrade(); // 升级为实体
 
                 on_evt_pull_object(out, priv_data);
                 return hello::err::EN_SUCCESS;

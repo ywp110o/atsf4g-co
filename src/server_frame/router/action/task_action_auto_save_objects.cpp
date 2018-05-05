@@ -83,7 +83,10 @@ int task_action_auto_save_objects::operator()() {
 }
 
 int task_action_auto_save_objects::on_success() {
-    router_manager_set::me()->save_task_id_ = 0;
+    if (router_manager_set::me()->save_task_.get() == task_manager::task_t::this_task()) {
+        router_manager_set::me()->save_task_.reset();
+    }
+
     WLOGINFO("auto save task done.(success save: %d, failed save: %d)", success_count_, failed_count_);
 
     if (0 == success_count_ && 0 == failed_count_) {
@@ -93,13 +96,19 @@ int task_action_auto_save_objects::on_success() {
 }
 
 int task_action_auto_save_objects::on_failed() {
-    router_manager_set::me()->save_task_id_ = 0;
+    if (router_manager_set::me()->save_task_.get() == task_manager::task_t::this_task()) {
+        router_manager_set::me()->save_task_.reset();
+    }
+
     WLOGERROR("auto save task failed.(success save: %d, failed save: %d) ret: %d", success_count_, failed_count_, get_ret_code());
     return get_ret_code();
 }
 
 int task_action_auto_save_objects::on_timeout() {
-    router_manager_set::me()->save_task_id_ = 0;
+    if (router_manager_set::me()->save_task_.get() == task_manager::task_t::this_task()) {
+        router_manager_set::me()->save_task_.reset();
+    }
+
     WLOGWARNING("auto save task timeout, we will continue on next round.");
     return 0;
 }
