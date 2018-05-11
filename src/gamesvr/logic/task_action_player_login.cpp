@@ -19,7 +19,9 @@
 #include <rpc/db/player.h>
 #include <time/time_utility.h>
 
+#include <dispatcher/task_manager.h>
 
+#include "task_action_player_async_jobs.h"
 #include "task_action_player_login.h"
 
 
@@ -110,17 +112,7 @@ int task_action_player_login::operator()() {
         return hello::err::EN_SUCCESS;
     }
 
-    // 3. 写入登入信息
-    tb.set_login_pd(logic_config::me()->get_self_bus_id());
-    tb.set_login_time(util::time::time_utility::get_now());
-
-    res = rpc::db::login::set(msg_body.open_id().c_str(), tb, version);
-    if (res < 0) {
-        WLOGERROR("save login data for %s(%llu) failed, msg:\n%s", msg_body.open_id().c_str(), static_cast<unsigned long long>(msg_body.user_id()),
-                  tb.DebugString().c_str());
-        set_rsp_code(hello::EN_ERR_SYSTEM);
-        return res;
-    }
+    // 3. 写入登入信息和登入信息续期会在路由系统中完成
 
     // 4. 先读本地缓存
     std::shared_ptr<session> my_sess = get_session();
@@ -130,58 +122,42 @@ int task_action_player_login::operator()() {
 
     if (!user || !user->is_inited()) {
         if (!user) {
-            user = player_manager::me()->create(msg_body.user_id(), msg_body.open_id());
-        }
-
-        hello::table_user tbu;
-        // 5. 先尝试从数据库读数据
-        res = rpc::db::player::get_all(msg_body.user_id(), tbu, user->get_version());
-        if (hello::err::EN_DB_RECORD_NOT_FOUND != res && res < 0) {
-            WLOGERROR("load player data for %s(%llu) failed, error code:%d", user->get_open_id().c_str(), user->get_user_id_llu(), res);
-            set_rsp_code(hello::EN_ERR_SYSTEM);
-
-            return res;
-        }
-
-        if (hello::err::EN_DB_RECORD_NOT_FOUND == res) {
-            // 生成name到uuid的映射
-            std::string nick_name = user->get_open_id() + " - Nickname"; // TODO random a name
-            // TODO 如果需要分配并设置数字UUID、随机nickname和建立名字和账号的对应关系， do it here, 注意重名的重试
-
-            user->get_platform_info().set_platform_id(tb.platform().platform_id());
-            user->get_platform_info().set_zone_id(tb.platform().zone_id());
-            user->get_platform_info().set_channel_id(tb.platform().channel_id());
-            user->get_platform_info().set_access(tb.platform().access());
-            user->get_platform_info().set_version_type(tb.platform().version_type());
-            user->get_platform_info().mutable_profile()->set_nick_name(nick_name);
-
-            // 6. 没有数据的话就创建新用户
-            user->create_init(tb.platform().version_type());
-
-            // 7. 然后保存一次数据库
-            tbu.Clear();
-            user->dump(tbu, true);
-
-            res = rpc::db::player::set(user->get_user_id(), tbu, user->get_version());
-            if (res < 0) {
-                WLOGERROR("save player data for %s(%llu) failed, msg:\n%s", user->get_open_id().c_str(), user->get_user_id_llu(), tbu.DebugString().c_str());
-                set_rsp_code(hello::EN_ERR_SYSTEM);
-                return res;
-            }
-
-            is_new_player_ = true;
+            user = player_manager::me()->create(msg_body.user_id(), msg_body.open_id(), tb, version);
+            is_new_player_ = user && user->get_version() == "1";
         } else {
-            user->init_from_table_data(tbu);
+            user->get_login_info().Swap(&tb);
+            user->get_login_version().swap(version);
         }
+        // ============ 在这之后tb不再有效 ============
+
+        if (!user) {
+            set_rsp_code(hello::EN_ERR_USER_NOT_FOUND);
+            return hello::err::EN_SUCCESS;
+        }
+
+        // OSS Log
+        // {
+        //     hello::log::LOGRegister log_data;
+        //     log_data.set_login_pd(logic_config::me()->get_self_bus_id());
+        //     log_data.set_platform_id(user->get_login_info().platform().platform_id());
+        //     log_data.set_register_time(util::time::time_utility::get_now());
+        //     if (msg_body.has_client_info()) {
+        //         log_data.set_system_id(msg_body.client_info().system_id());
+        //     } else {
+        //         log_data.set_system_id(0);
+        //     }
+        //     global_log_manager::me()->log(msg_body.user_id(), msg_body.open_id(), log_data);
+        // }
+    } else {
+        user->get_login_info().Swap(&tb);
+        user->get_login_version().swap(version);
+        // ======== 这里之后tb不再有效 ========
     }
 
-    user->get_platform_info().set_access(tb.platform().access());
-    user->get_platform_info().set_platform_id(tb.platform().platform_id());
-    user->get_platform_info().set_version_type(tb.platform().version_type());
+    user->get_platform_info().set_access(user->get_login_info().platform().access());
+    user->get_platform_info().set_platform_id(user->get_login_info().platform().platform_id());
+    user->get_platform_info().set_version_type(user->get_login_info().platform().version_type());
     user->set_client_info(req.body().mcs_login_req().client_info());
-
-    // 保存登入信息 一定在loginit前面 有些模块会用到loginfo信息
-    user->get_login_info().Swap(&tb);
 
     // 8. 设置和Session互相关联
     user->set_session(my_sess);
@@ -200,6 +176,19 @@ int task_action_player_login::operator()() {
     WLOGDEBUG("player %s(%llu) login curr data version:%s", user->get_open_id().c_str(), user->get_user_id_llu(), user->get_version().c_str());
 
     // 9. 登入成功
+    // OSS Log
+    // {
+    //     hello::log::LogLogin log_data;
+    //     log_data.set_login_pd(logic_config::me()->get_self_bus_id());
+    //     log_data.set_platform_id(user->get_login_info().platform().platform_id());
+    //     log_data.set_register_time(util::time::time_utility::get_now());
+    //     if (msg_body.has_client_info()) {
+    //         log_data.set_system_id(msg_body.client_info().system_id());
+    //     } else {
+    //         log_data.set_system_id(0);
+    //     }
+    //     global_log_manager::me()->log(msg_body.user_id(), msg_body.open_id(), log_data);
+    // }
     return hello::err::EN_SUCCESS;
 }
 
@@ -228,19 +217,38 @@ int task_action_player_login::on_success() {
         return get_ret_code();
     }
     rsp_body->set_zone_id(user->get_zone_id());
-
     rsp_body->set_version_type(user->get_platform_info().version_type());
-
-    // 设置/覆盖定时保存
-    player_manager::me()->update_auto_save(user);
 
     // TODO 断线重连，上次收包序号
     // rsp_body->set_last_sequence(user->get_cache_data());
 
+    user->clear_dirty_cache();
     if (!user->is_inited()) {
         WLOGERROR("player %s login success but user not inited", user->get_open_id().c_str());
         player_manager::me()->remove(user, true);
         return get_ret_code();
+    }
+
+    // 自动启动异步任务
+    {
+        task_manager::id_t tid = 0;
+        task_action_player_async_jobs::ctor_param_t params;
+        params.user = user;
+        task_manager::me()->create_task_with_timeout<task_action_player_async_jobs>(tid, logic_config::me()->get_cfg_logic().task_nomsg_timeout,
+                                                                                    COPP_MACRO_STD_MOVE(params));
+        if (0 == tid) {
+            WLOGERROR("create task_action_player_async_jobs failed");
+        } else {
+            dispatcher_start_data_t start_data;
+            start_data.private_data = NULL;
+            start_data.message.msg_addr = NULL;
+            start_data.message.msg_type = 0;
+
+            int res = task_manager::me()->start_task(tid, start_data);
+            if (res < 0) {
+                WLOGERROR("start task_action_player_async_jobs for player %s(%llu) failed, res: %d", user->get_open_id().c_str(), user->get_user_id_llu(), res);
+            }
+        }
     }
 
     return get_ret_code();
@@ -254,6 +262,7 @@ int task_action_player_login::on_failed() {
         player::ptr_t user = player_manager::me()->find(req.body().mcs_login_req().user_id());
         // 如果创建了未初始化的GameUser对象，则需要移除
         if (user && !user->is_inited()) {
+            user->clear_dirty_cache();
             player_manager::me()->remove(user, true);
         }
     }

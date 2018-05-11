@@ -26,6 +26,8 @@ namespace rpc {
              */
             int get_all(uint64_t user_id, hello::table_user &rsp, std::string &version);
 
+            int get_basic(uint64_t user_id, hello::table_user &rsp);
+
             /**
              * @brief 设置用户表的rpc操作
              * @param openid 登入用户的openid

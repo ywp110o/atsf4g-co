@@ -48,8 +48,7 @@ message login_record {
 }
 
 message player_data {
-    uint32 player_level = 1; // 玩家（主城）等级
-    uint32 vip_level    = 2; // VIP（主城）等级
+    uint32 player_level = 1; // 玩家等级
 }
 
 message player_options {}

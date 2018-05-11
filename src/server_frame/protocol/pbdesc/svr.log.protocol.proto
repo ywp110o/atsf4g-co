@@ -28,6 +28,13 @@ message LOGOnlineUser {
     uint32 online_number = 2; // 在线人数
 }
 
+message LOGLogin {
+    uint32 login_pd      = 1; // 登入server_pd
+    uint32 platform_id   = 2; // 平台id
+    int64  register_time = 3; // 注册时间
+    int32  system_id     = 4; // 系统id，ios or android
+}
+
 // 用户登出
 message LOGLogout {
     uint32 login_pd    = 1; // 登入server_pd

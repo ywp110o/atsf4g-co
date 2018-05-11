@@ -86,11 +86,8 @@ public:
     virtual int mutable_cache(ptr_t &out, const key_t &key, priv_data_t priv_data) {
         size_t left_ttl = logic_config::me()->get_cfg_logic().router.retry_max_ttl;
         for (; left_ttl > 0; --left_ttl) {
+            int res;
             out = get_cache(key);
-            if (out && out->is_cache_available()) {
-                return hello::err::EN_SUCCESS;
-            }
-
             if (!out) {
                 out = std::make_shared<cache_t>(key);
                 if (!out) {
@@ -100,10 +97,20 @@ public:
                 if (!insert(key, out)) {
                     return hello::err::EN_SYS_PARAM;
                 }
+            } else {
+                // 先等待IO任务完成，完成后可能在其他任务里已经拉取完毕了。
+                res = out->await_io_task();
+                if (res < 0) {
+                    return res;
+                }
+
+                if (out->is_cache_available()) {
+                    return hello::err::EN_SUCCESS;
+                }
             }
 
             // pull using TYPE's API
-            int res = out->pull_cache_inner(reinterpret_cast<void *>(priv_data));
+            res = out->pull_cache_inner(reinterpret_cast<void *>(priv_data));
 
             if (res < 0) {
                 if (hello::err::EN_SYS_TIMEOUT == res || hello::err::EN_SYS_RPC_TASK_EXITING == res || hello::err::EN_SYS_RPC_NO_TASK == res) {
@@ -157,11 +164,8 @@ public:
     virtual int mutable_object(ptr_t &out, const key_t &key, priv_data_t priv_data) {
         size_t left_ttl = logic_config::me()->get_cfg_logic().router.retry_max_ttl;
         for (; left_ttl > 0; --left_ttl) {
+            int res;
             out = get_cache(key);
-            if (out && out->is_object_available()) {
-                return hello::err::EN_SUCCESS;
-            }
-
             if (!out) {
                 out = std::make_shared<cache_t>(key);
                 if (!out) {
@@ -171,12 +175,19 @@ public:
                 if (!insert(key, out)) {
                     return hello::err::EN_SYS_MALLOC;
                 }
+            } else {
+                // 先等待IO任务完成，完成后可能在其他任务里已经拉取完毕了。
+                res = out->await_io_task();
+                if (res < 0) {
+                    return res;
+                }
+                if (out->is_object_available()) {
+                    return hello::err::EN_SUCCESS;
+                }
             }
 
             // pull using TYPE's API
-            out->unset_flag(router_object_base::flag_t::EN_ROFT_OBJECT_REMOVED);
-            out->unset_flag(router_object_base::flag_t::EN_ROFT_FORCE_PULL_OBJECT);
-            int res = out->pull_object_inner(reinterpret_cast<void *>(priv_data));
+            res = out->pull_object_inner(reinterpret_cast<void *>(priv_data));
 
             if (res < 0) {
                 if (hello::err::EN_SYS_TIMEOUT == res || hello::err::EN_SYS_RPC_TASK_EXITING == res || hello::err::EN_SYS_RPC_NO_TASK == res) {
@@ -187,8 +198,6 @@ public:
 
             // 如果中途被移除，则降级回缓存
             if (!out->check_flag(router_object_base::flag_t::EN_ROFT_OBJECT_REMOVED)) {
-                out->upgrade(); // 升级为实体
-
                 on_evt_pull_object(out, priv_data);
                 return hello::err::EN_SUCCESS;
             }
@@ -221,6 +230,17 @@ public:
             return hello::err::EN_SUCCESS;
         }
 
+        task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
+        if (!self_task) {
+            return hello::err::EN_SYS_RPC_NO_TASK;
+        }
+
+        // 先等待其他IO任务完成
+        int ret = obj->await_io_task(self_task);
+        if (ret < 0) {
+            return ret;
+        }
+
         // 正在转移中
         router_object_base::flag_guard transfer_flag(*obj, router_object_base::flag_t::EN_ROFT_TRANSFERING);
         if (!transfer_flag) {
@@ -228,22 +248,15 @@ public:
         }
 
         // 保存到数据库
-        uint32_t old_v = obj->get_router_version();
-        obj->set_router_server_id(svr_id, old_v + 1);
-        int ret = obj->save(reinterpret_cast<void *>(priv_data));
-
+        ret = obj->remove_object(reinterpret_cast<void *>(priv_data), svr_id);
         // 数据库失败要强制拉取
         if (ret < 0) {
-            if (old_v + 1 == obj->get_router_version()) {
-                obj->set_router_server_id(logic_config::me()->get_self_bus_id(), old_v);
-            }
-            obj->unset_flag(router_object_base::flag_t::EN_ROFT_WRITABLE);
+            obj->unset_flag(router_object_base::flag_t::EN_ROFT_IS_OBJECT);
 
             // TODO 如果转发不成功，要回发执行失败
             return ret;
         }
 
-        obj->downgrade();
         on_evt_remove_object(obj->get_key(), obj, reinterpret_cast<priv_data_t>(priv_data));
 
         if (0 != svr_id && need_notify) {
@@ -258,7 +271,10 @@ public:
                 router_head->set_object_inst_id(obj->get_key().object_id);
                 router_head->set_object_type_id(get_type_id());
 
+                // 转移通知RPC也需要设置为IO任务，这样如果有其他的读写任务或者转移任务都会等本任务完成
+                obj->io_task_.swap(self_task);
                 ret = rpc::router::robj::send_transfer(svr_id, req, rsp);
+                obj->io_task_.reset();
                 if (ret < 0) {
                     WLOGERROR("transfer router object (type=%u) 0x%llx failed, res: %d", get_type_id(), obj->get_key().object_id_ull(), ret);
                 }
@@ -325,7 +341,7 @@ public:
             return false;
         }
 
-        if (cache->remove_object(reinterpret_cast<priv_data_t>(priv_data)) < 0) {
+        if (cache->remove_object(reinterpret_cast<priv_data_t>(priv_data), 0) < 0) {
             return false;
         }
 

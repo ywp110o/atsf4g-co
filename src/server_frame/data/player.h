@@ -93,18 +93,12 @@ class player : public std::enable_shared_from_this<player> {
 private:
     static const uint32_t PLAYER_DATA_LOGIC_VERSION = 1;
     struct inner_flag {
-        enum type { EN_IFT_FEATURE_INVALID = 0, EN_IFT_IS_INITED, EN_IFT_IS_REMOVING, EN_IFT_MAX };
+        enum type { EN_IFT_FEATURE_INVALID = 0, EN_IFT_IS_INITED, EN_IFT_MAX };
     };
 
 public:
     typedef std::shared_ptr<player> ptr_t;
     friend class player_manager;
-
-    struct schedule_record_t {
-        time_t save_pending_time; // 保存队列里的时间
-        time_t cache_expire_time; // 离线缓存有效期
-        uint32_t cache_sequence;  // 离线缓存执行ID
-    };
 
     struct heartbeat_t {
         time_t last_recv_time;       // 上一次收到心跳包时间
@@ -115,15 +109,20 @@ public:
 
 
     struct cache_t {
-        // moyo_no1::SCPlayerLevelupSyn m_stPlayerLevelUpSyn;
+        // hello::SCPlayerLevelupSyn player_level_up_syn;
     };
 
+private:
+    struct fake_constructor {};
+
 public:
-    player();
+    player(fake_constructor &);
     ~player();
 
     // 初始化，默认数据
     void init(uint64_t user_id, const std::string &openid);
+
+    static ptr_t create(uint64_t user_id, const std::string &openid);
 
     // 创建默认角色数据
     void create_init(uint32_t version_type);
@@ -180,9 +179,6 @@ public:
      */
     void set_inited() { inner_flags_.set(inner_flag::EN_IFT_IS_INITED, true); }
 
-    bool is_removing() const { return inner_flags_.test(inner_flag::EN_IFT_IS_REMOVING); }
-    void set_removing(bool flag) { inner_flags_.set(inner_flag::EN_IFT_IS_REMOVING, flag); }
-
     // 从table数据初始化
     void init_from_table_data(const hello::table_user &stTablePlayer);
 
@@ -222,44 +218,6 @@ public:
      */
     void set_player_level(uint32_t level);
 
-
-    /**
-     * @brief 获取玩家VIP等级
-     * @return 玩家VIP等级
-     */
-    uint32_t get_player_vip_level() const;
-
-    /**
-     * @brief  设置玩家VIP等级
-     * @param level 玩家VIP等级
-     */
-    void set_player_vip_level(uint32_t level);
-
-    /**
-     * @brief 获取玩家是否是VIP
-     * @return 玩家是否是VIP
-     */
-    bool is_vip() const;
-
-    /**
-     * @brief 重置并关闭自动保存信息
-     */
-    void reset_auto_save();
-
-    /**
-     * @brief 获取定时任务数据
-     * @return 定时任务数据
-     */
-    const schedule_record_t &get_schedule_data() const;
-
-    /**
-     * @brief 检查缓存序号
-     * @param seq 序号
-     * @note 用于确认离线缓存是否真的需要过期
-     * @return 序号正确返回true
-     */
-    bool check_logout_cache(uint32_t seq) const;
-
     /**
      * @brief 获取心跳包统计数据
      * @return 心跳包统计数据
@@ -284,17 +242,30 @@ public:
     inline cache_t &get_cache_data() { return cache_data_; }
 
     /**
+     * @brief 开始执行远程命令
+     * @note 远程命令一般用于多写入方，利用数据库插入命令。然后再通知玩家对象，单点执行读入数据。
+     * @note 比如说多个玩家对一个玩家发送消息或邮件，可以插入消息或邮件的command到数据库，然后这里拉取后append到玩家数据里
+     */
+    void start_patch_remote_command();
+
+    /**
      * @brief 下发同步消息
      */
     void send_all_syn_msg();
+    void clear_dirty_cache();
 
     inline const hello::table_login &get_login_info() const { return login_info_; }
     inline hello::table_login &get_login_info() { return login_info_; }
+
+    inline const std::string &get_login_version() const { return login_info_version_; }
+    inline std::string &get_login_version() { return login_info_version_; }
 
     inline const hello::platform_information &get_platform_info() const { return platform_info_; }
     inline hello::platform_information &get_platform_info() { return platform_info_.ref(); }
 
     inline const hello::player_data &get_player_data() const { return player_data_; }
+
+    inline uint32_t get_data_version() const { return data_version_; }
 
 private:
     inline hello::player_data &mutable_player_data() { return player_data_.ref(); }
@@ -303,6 +274,7 @@ private:
     std::string openid_id_;
     uint64_t user_id_;
     hello::table_login login_info_;
+    std::string login_info_version_;
 
     std::string version_;
     uint32_t data_version_;
@@ -317,7 +289,6 @@ private:
     player_dirty_wrapper<hello::player_data> player_data_;
 
     // =======================================================
-    schedule_record_t schedule_data_;
     heartbeat_t heartbeat_data_;
     cache_t cache_data_;
     // -------------------------------------------------------

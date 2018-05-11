@@ -25,10 +25,17 @@ task_action_player_info_get::~task_action_player_info_get() {}
 int task_action_player_info_get::operator()() {
     rsp_ = NULL;
 
-    player::ptr_t user = player_manager::me()->find(get_gateway_info());
+    session::ptr_t sess = get_session();
+    if (!sess) {
+        WLOGERROR("session not found.");
+        return hello::err::EN_SYS_PARAM;
+    }
+
+    player::ptr_t user = sess->get_player();
     if (!user) {
         WLOGERROR("not logined.");
-        return hello::err::EN_SYS_PARAM;
+        set_rsp_code(hello::EN_ERR_LOGIN_NOT_LOGINED);
+        return 0;
     }
 
     msg_cref_type req_msg = get_request();
@@ -53,7 +60,6 @@ int task_action_player_info_get::operator()() {
         hello::DPlayerInfo *rsp_item = rsp_body->mutable_player_info();
         rsp_item->mutable_player()->CopyFrom(user->get_platform_info().profile());
         rsp_item->set_player_level(user->get_player_level());
-        rsp_item->set_vip_level(user->get_player_vip_level());
 
         // uint32_t player_level_func_bound = user->get_player_level();
         // uint32_t player_vip_level_func_bound = user->get_player_vip_level();
@@ -74,21 +80,6 @@ int task_action_player_info_get::operator()() {
         //            moyo_no1::DPlayerLimit *limit = rsp_item->add_limits();
         //            if (NULL != limit) {
         //                limit->set_function_id((*cfg)[j]);
-        //                limit->set_limit_number(1);
-        //            }
-        //        }
-        //    }
-        //}
-
-        //// 额外下发依靠VIP等级解锁的功能
-        // for (uint32_t i = 0; i <= player_vip_level_func_bound; ++i) {
-        //    config_player_vip_exp::value_type cfg = config_player_vip_exp::me()->get(i);
-        //    for (int j = 0; cfg && cfg->has_basic() && j < cfg->basic().function_id_size(); ++j) {
-        //        uint32_t func_id = cfg->basic().function_id(j);
-        //        if (func_id > 0) {
-        //            moyo_no1::DPlayerLimit *limit = rsp_item->add_limits();
-        //            if (NULL != limit) {
-        //                limit->set_function_id(func_id);
         //                limit->set_limit_number(1);
         //            }
         //        }

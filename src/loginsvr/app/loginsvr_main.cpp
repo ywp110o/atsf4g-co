@@ -24,7 +24,6 @@
 #include <config/logic_config.h>
 
 
-#include <logic/player_manager.h>
 #include <logic/session_manager.h>
 
 #include "handle_cs_msg.h"
@@ -40,8 +39,7 @@
             WLOGERROR("initialize %s failed, res: %d", #MOD_NAME, res); \
             return res;                                                 \
         }                                                               \
-    \
-}
+    }
 
 #define RELOAD_CALL(RET_VAR, MOD_NAME, ...)                         \
     {                                                               \
@@ -50,8 +48,7 @@
             WLOGERROR("reload %s failed, res: %d", #MOD_NAME, res); \
             RET_VAR = res;                                          \
         }                                                           \
-    \
-}
+    }
 
 #else
 #define INIT_CALL(MOD_NAME, args...)                                    \
@@ -61,8 +58,7 @@
             WLOGERROR("initialize %s failed, res: %d", #MOD_NAME, res); \
             return res;                                                 \
         }                                                               \
-    \
-}
+    }
 
 #define RELOAD_CALL(RET_VAR, MOD_NAME, args...)                     \
     {                                                               \
@@ -71,8 +67,7 @@
             WLOGERROR("reload %s failed, res: %d", #MOD_NAME, res); \
             RET_VAR = res;                                          \
         }                                                           \
-    \
-}
+    }
 
 #endif
 
@@ -132,7 +127,6 @@ public:
 
         // logic managers
         INIT_CALL(task_manager);
-        INIT_CALL(player_manager);
         INIT_CALL(session_manager);
 
         // register handles
@@ -170,7 +164,6 @@ public:
 
     virtual int tick() {
         int ret = 0;
-        ret += player_manager::me()->proc();
         ret += session_manager::me()->proc();
         ret += task_manager::me()->tick(util::time::time_utility::get_now(), 1000 * util::time::time_utility::get_now_usec());
 

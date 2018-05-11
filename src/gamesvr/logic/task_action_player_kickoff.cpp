@@ -42,14 +42,14 @@ int task_action_player_kickoff::operator()() {
             return hello::err::EN_SUCCESS;
         }
 
-        if (user_lg.login_pd() != logic_config::me()->get_self_bus_id()) {
+        if (user_lg.router_server_id() != logic_config::me()->get_self_bus_id()) {
             WLOGERROR("user %s(%llu) login pd error(expected: 0x%llx, real: 0x%llx)", player_open_id.c_str(), static_cast<unsigned long long>(player_user_id),
-                      static_cast<unsigned long long>(user_lg.login_pd()), static_cast<unsigned long long>(logic_config::me()->get_self_bus_id()));
+                      static_cast<unsigned long long>(user_lg.router_server_id()), static_cast<unsigned long long>(logic_config::me()->get_self_bus_id()));
             set_rsp_code(hello::EN_ERR_SYSTEM);
             return hello::err::EN_SUCCESS;
         }
 
-        user_lg.set_login_pd(0);
+        user_lg.set_router_server_id(0);
         res = rpc::db::login::set(player_open_id.c_str(), user_lg, version);
         if (res < 0) {
             WLOGERROR("user %s(%llu) try load login data failed.", player_open_id.c_str(), static_cast<unsigned long long>(player_user_id));

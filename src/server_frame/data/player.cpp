@@ -12,11 +12,7 @@
 #include <config/logic_config.h>
 
 
-player::player() : user_id_(0), data_version_(0) {
-    schedule_data_.cache_sequence = 0;
-    schedule_data_.save_pending_time = 0;
-    schedule_data_.cache_expire_time = 0;
-
+player::player(fake_constructor &) : user_id_(0), data_version_(0) {
     heartbeat_data_.continue_error_times = 0;
     heartbeat_data_.last_recv_time = 0;
     heartbeat_data_.sum_error_times = 0;
@@ -33,17 +29,34 @@ void player::init(uint64_t user_id, const std::string &openid) {
     // ptr_t self = shared_from_this();
 }
 
+player::ptr_t player::create(uint64_t user_id, const std::string &openid) {
+    fake_constructor ctorp;
+    ptr_t ret = std::make_shared<player>(ctorp);
+    if (ret) {
+        ret->init(user_id, openid);
+    }
+
+    return std::move(ret);
+}
+
 void player::create_init(uint32_t version_type) {
     set_player_level(1);
-    set_player_vip_level(0);
     data_version_ = PLAYER_DATA_LOGIC_VERSION;
 
-    // TODO init items
 
     version_.assign("0");
 
     // TODO all module create init
     // TODO init all interval checkpoint
+
+    // TODO init items
+    // if (hello::EN_VERSION_GM != version_type) {
+    //     excel::player_init_items::me()->foreach ([this](const excel::player_init_items::value_type &v) {
+    //         if (0 != v->id()) {
+    //             add_entity(v->id(), v->number(), hello::EN_ICMT_INIT, hello::EN_ICST_DEFAULT);
+    //         }
+    //     });
+    // }
 }
 
 void player::login_init() {
@@ -78,15 +91,10 @@ void player::set_session(std::shared_ptr<session> session_ptr) {
 
     // 如果为置空Session，则要加入登出缓存排队列表
     if (!session_ptr) {
-        player_manager::me()->set_offline_cache(shared_from_this());
-
         // 移除Session时触发Logout
         if (old_sess) {
             on_logout();
         }
-    } else {
-        // 否则更新缓存序列（让前面的缓存失效）
-        ++schedule_data_.cache_sequence;
     }
 }
 
@@ -142,10 +150,12 @@ player::ptr_t player::get_global_gm_player() {
         return shared_gm_player;
     }
 
-    shared_gm_player = std::make_shared<player>();
+    fake_constructor ctorp;
+    shared_gm_player = std::make_shared<player>(ctorp);
     shared_gm_player->init(0, logic_config::me()->get_cfg_logic().player_default_openid);
-    shared_gm_player->create_init(hello::EN_VERSION_DEFAULT);
-    WLOGINFO("init gm defaule user %s\n", shared_gm_player->get_open_id().c_str());
+    shared_gm_player->create_init(hello::EN_VERSION_GM);
+
+    WLOGINFO("init gm defaule user %s(%llu)\n", shared_gm_player->get_open_id().c_str(), shared_gm_player->get_user_id_llu());
     return shared_gm_player;
 }
 
@@ -171,32 +181,6 @@ void player::set_player_level(uint32_t level) {
     // TODO 任务事件
 }
 
-uint32_t player::get_player_vip_level() const { return player_data_->vip_level(); }
-
-void player::set_player_vip_level(uint32_t level) {
-    // 由0级开始，和玩家等级略有差别
-    uint32_t ori_lv = player_data_->vip_level();
-
-    // 0级也走升级过程
-    if (level && ori_lv > level) {
-        return;
-    }
-
-    // TODO 每一级的触发事件和奖励
-    // TODO 同步协议
-
-    player_data_.ref().set_vip_level(level);
-    // TODO 任务事件
-}
-
-bool player::is_vip() const { return get_player_vip_level() > 0; }
-
-void player::reset_auto_save() { schedule_data_.save_pending_time = 0; }
-
-const player::schedule_record_t &player::get_schedule_data() const { return schedule_data_; };
-
-bool player::check_logout_cache(uint32_t seq) const { return seq == schedule_data_.cache_sequence; }
-
 void player::update_heartbeat() {
     const logic_config::LC_LOGIC &logic_cfg = logic_config::me()->get_cfg_logic();
     time_t heartbeat_interval = logic_cfg.heartbeat_interval;
@@ -218,10 +202,20 @@ void player::update_heartbeat() {
     get_login_info().set_login_code_expired(now_time + logic_cfg.session_login_code_valid_sec);
 }
 
+void player::start_patch_remote_command() {
+    // TODO 队列化，同时只能一个任务执行
+    // TODO 任务执行期间如果又收到通知则需要在任务执行完后再启动一次
+    // TODO 任务完成后需要重新check一次有没有新的通知然后启动任务
+}
+
 void player::send_all_syn_msg() {
     // TODO 升级通知
     // TODO 道具变更通知
     // TODO 任务/成就变更通知
+}
+
+void player::clear_dirty_cache() {
+    // TODO 清理要推送的脏数据
 }
 
 player_cs_syn_msg_holder::player_cs_syn_msg_holder(player::ptr_t u) : owner_(u) {}

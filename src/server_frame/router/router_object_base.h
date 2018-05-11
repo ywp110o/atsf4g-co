@@ -42,11 +42,13 @@ public:
     struct flag_t {
         enum type {
             EN_ROFT_FORCE_PULL_OBJECT = 0x01,
-            EN_ROFT_WRITABLE = 0x02,
+            EN_ROFT_IS_OBJECT = 0x02,
             EN_ROFT_OBJECT_REMOVED = 0x04,
             EN_ROFT_CACHE_REMOVED = 0x08,
             EN_ROFT_SAVING = 0x10,
             EN_ROFT_TRANSFERING = 0x20,
+            EN_ROFT_PULLING_CACHE = 0x40,
+            EN_ROFT_PULLING_OBJECT = 0x80,
         };
     };
 
@@ -81,10 +83,13 @@ public:
     inline bool check_timer_sequence(uint32_t seq) const { return seq == timer_sequence_; }
 
     inline bool is_writable() const {
-        return check_flag(flag_t::EN_ROFT_WRITABLE) && !check_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT) && !check_flag(flag_t::EN_ROFT_CACHE_REMOVED);
+        return check_flag(flag_t::EN_ROFT_IS_OBJECT) && !check_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT) && !check_flag(flag_t::EN_ROFT_CACHE_REMOVED);
     }
-    inline bool is_pulling_cache() const { return pulling_task_ && !pulling_task_->is_exiting(); }
-    inline bool is_pulling_object() const { return pulling_task_ && !pulling_task_->is_exiting(); }
+
+    inline bool is_io_running() const { return io_task_ && !io_task_->is_exiting(); }
+    inline bool is_pulling_cache() const { return check_flag(flag_t::EN_ROFT_PULLING_CACHE); }
+    inline bool is_pulling_object() const { return check_flag(flag_t::EN_ROFT_PULLING_OBJECT); }
+    inline bool is_transfering() const { return check_flag(flag_t::EN_ROFT_TRANSFERING); }
 
     inline time_t get_last_visit_time() const { return last_visit_time_; }
     inline time_t get_last_save_time() const { return last_save_time_; }
@@ -113,7 +118,7 @@ public:
     /**
      * @brief 移除实体，降级为缓存
      */
-    int remove_object(void *priv_data);
+    int remove_object(void *priv_data, uint64_t transfer_to_svr_id);
 
     /**
      * @brief 名字接口
@@ -195,8 +200,10 @@ public:
     inline std::list<hello::SSMsg> &get_transfer_pending_list() { return transfer_pending_; }
     inline const std::list<hello::SSMsg> &get_transfer_pending_list() const { return transfer_pending_; }
 
-private:
-    int await_pull_task(task_manager::task_ptr_t &self_task);
+    int await_io_task();
+
+protected:
+    int await_io_task(task_manager::task_ptr_t &self_task);
 
     // 内部接口，拉取缓存。会排队读任务
     int pull_cache_inner(void *priv_data);
@@ -214,8 +221,7 @@ private:
     uint32_t timer_sequence_;
 
     // 新版排队系统
-    task_manager::task_ptr_t pulling_task_;
-    task_manager::task_ptr_t saving_task_;
+    task_manager::task_ptr_t io_task_;
     uint64_t saving_sequence_;
     uint64_t saved_sequence_;
 
@@ -223,6 +229,8 @@ private:
     std::list<hello::SSMsg> transfer_pending_;
 
     friend class router_manager_base;
+    template <typename TCache, typename TObj, typename TPrivData>
+    friend class router_manager;
 };
 
 

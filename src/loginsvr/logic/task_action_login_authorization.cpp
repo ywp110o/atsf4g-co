@@ -184,11 +184,12 @@ int task_action_login_authorization::operator()() {
         }
 
         // 7. 如果在线则尝试踢出
-        if (0 != login_data_.login_pd()) {
-            int32_t ret = rpc::game::player::send_kickoff(login_data_.login_pd(), login_data_.user_id(), login_data_.open_id(),
+        if (0 != login_data_.router_server_id()) {
+            int32_t ret = rpc::game::player::send_kickoff(login_data_.router_server_id(), login_data_.user_id(), login_data_.open_id(),
                                                           ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
             if (ret) {
-                WLOGERROR("user %s send msg to 0x%llx fail: %d", login_data_.open_id().c_str(), static_cast<unsigned long long>(login_data_.login_pd()), ret);
+                WLOGERROR("user %s send msg to 0x%llx fail: %d", login_data_.open_id().c_str(), static_cast<unsigned long long>(login_data_.router_server_id()),
+                          ret);
                 // 超出定时保存的时间间隔的3倍，视为服务器异常断开。直接允许登入
                 if (util::time::time_utility::get_now() - static_cast<time_t>(login_data_.login_time()) <
                     logic_config::me()->get_cfg_logic().session_login_code_protect) {
@@ -206,7 +207,7 @@ int task_action_login_authorization::operator()() {
                     set_rsp_code(hello::EN_ERR_SYSTEM);
                     return res;
                 }
-                if (0 != login_data_.login_pd()) {
+                if (0 != login_data_.router_server_id()) {
                     WLOGERROR("user %s loginout failed.", msg_body.open_id().c_str());
                     // 踢下线失败的错误码
                     set_rsp_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
@@ -368,7 +369,8 @@ void task_action_login_authorization::init_login_data(hello::table_login &tb, co
     tb.set_open_id(req.open_id());
     tb.set_user_id(static_cast<uint64_t>(player_uid));
 
-    tb.set_login_pd(0);
+    tb.set_router_server_id(0);
+    tb.set_router_version(0);
     tb.set_login_time(0);
     tb.set_register_time(util::time::time_utility::get_now());
 

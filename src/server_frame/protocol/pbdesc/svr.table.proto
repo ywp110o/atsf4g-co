@@ -7,11 +7,12 @@ import "svr.struct.proto";
 package hello;
 
 message table_login {
-    string open_id = 1;
-    uint64 user_id = 2;
+    string open_id          = 1;
+    uint64 user_id          = 2;
+    uint64 router_server_id = 3; // 路由系统 - 登入进程id
+    uint64 router_version   = 4; // 路由系统 - 登入进程变更版本号
 
     // 登入信息
-    uint64 login_pd           = 11; // 登入进程id
     int64  login_time         = 12; // 上次登入时间
     string login_code         = 13; // 认证码
     int64  login_code_expired = 14; // 认证码到期时间

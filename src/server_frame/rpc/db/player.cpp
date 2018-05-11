@@ -89,6 +89,11 @@ namespace rpc {
                 return hello::err::EN_SUCCESS;
             }
 
+            int get_basic(uint64_t user_id, hello::table_user &rsp) {
+                std::string version;
+                return get_all(user_id, rsp, version);
+            }
+
             int set(uint64_t user_id, hello::table_user &store, std::string &version) {
                 task_manager::task_t *task = task_manager::task_t::this_task();
                 if (!task) {

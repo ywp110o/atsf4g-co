@@ -40,12 +40,6 @@ public:
      * @return
      */
     virtual int save(void *priv_data) UTIL_CONFIG_OVERRIDE {
-        flag_guard fg(*this, flag_t::EN_ROFT_SAVING);
-        // 递归保存只应用最外层的
-        if (!fg) {
-            return hello::err::EN_SUCCESS;
-        }
-
         if (!is_writable()) {
             return hello::err::EN_ROUTER_NOT_WRITABLE;
         }

@@ -47,13 +47,13 @@ void router_object_base::refresh_visit_time() { last_visit_time_ = util::time::t
 
 void router_object_base::refresh_save_time() { last_save_time_ = util::time::time_utility::get_now(); }
 
-int router_object_base::remove_object(void *priv_data) {
+int router_object_base::remove_object(void *priv_data, uint64_t transfer_to_svr_id) {
     if (!is_writable()) {
         return hello::EN_SUCCESS;
     }
 
     // 移除实体需要设置路由BUS ID为0并保存一次
-    set_router_server_id(0, get_router_version() + 1);
+    set_router_server_id(transfer_to_svr_id, get_router_version() + 1);
     refresh_visit_time();
 
     int ret = save(priv_data);
@@ -62,11 +62,7 @@ int router_object_base::remove_object(void *priv_data) {
         return ret;
     }
 
-    unset_flag(flag_t::EN_ROFT_WRITABLE);
-    if (is_pulling_object()) {
-        set_flag(flag_t::EN_ROFT_OBJECT_REMOVED);
-    }
-
+    downgrade();
     return ret;
 }
 
@@ -97,59 +93,74 @@ bool router_object_base::is_object_available() const {
 int router_object_base::pull_cache(void *priv_data) { return pull_object(priv_data); }
 
 int router_object_base::upgrade() {
-    if (check_flag(flag_t::EN_ROFT_WRITABLE)) {
+    if (check_flag(flag_t::EN_ROFT_IS_OBJECT)) {
         return 0;
     }
 
     refresh_visit_time();
-    set_flag(flag_t::EN_ROFT_WRITABLE);
+    set_flag(flag_t::EN_ROFT_IS_OBJECT);
     unset_flag(flag_t::EN_ROFT_OBJECT_REMOVED);
     return 0;
 }
 
 int router_object_base::downgrade() {
-    if (!check_flag(flag_t::EN_ROFT_WRITABLE)) {
+    if (!check_flag(flag_t::EN_ROFT_IS_OBJECT)) {
         return 0;
     }
 
     refresh_visit_time();
-    unset_flag(flag_t::EN_ROFT_WRITABLE);
+    unset_flag(flag_t::EN_ROFT_IS_OBJECT);
     return 0;
 }
 
-int router_object_base::await_pull_task(task_manager::task_ptr_t &self_task) {
+int router_object_base::await_io_task() {
+    if (!io_task_) {
+        return 0;
+    }
+
+    if (io_task_->is_exiting()) {
+        io_task_.reset();
+        return 0;
+    }
+
+    task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
     if (!self_task) {
         return hello::err::EN_SYS_RPC_NO_TASK;
     }
 
-    size_t left_ttl = logic_config::me()->get_cfg_logic().router.retry_max_ttl;
-    // 默认retry 5 次
-    if (0 == left_ttl) {
-        left_ttl = 5;
+    return await_io_task(self_task);
+}
+
+int router_object_base::await_io_task(task_manager::task_ptr_t &self_task) {
+    if (!self_task) {
+        return hello::err::EN_SYS_RPC_NO_TASK;
     }
 
-    for (; left_ttl > 0; --left_ttl) {
-        if (!pulling_task_ || pulling_task_ == self_task) {
-            return 0;
+    int ret = 0;
+    while (true) {
+        if (self_task->is_timeout()) {
+            ret = hello::err::EN_SYS_TIMEOUT;
+            break;
+        } else if (self_task->is_exiting()) {
+            ret = hello::err::EN_SYS_RPC_TASK_EXITING;
+            break;
         }
 
-        if (pulling_task_->is_exiting()) {
-            pulling_task_.reset();
+        if (!io_task_ || io_task_ == self_task) {
+            break;
+        }
+
+        if (io_task_->is_exiting()) {
+            io_task_.reset();
             continue;
         }
 
-        pulling_task_->next(self_task);
+        io_task_->next(self_task);
         self_task->yield(NULL);
-
-        if (self_task->is_timeout()) {
-            return hello::err::EN_SYS_TIMEOUT;
-        } else if (self_task->is_exiting()) {
-            return hello::err::EN_SYS_RPC_TASK_EXITING;
-        }
     }
 
     // 超出重试次数限制
-    return hello::err::EN_ROUTER_TTL_EXTEND;
+    return ret;
 }
 
 int router_object_base::pull_cache_inner(void *priv_data) {
@@ -158,15 +169,18 @@ int router_object_base::pull_cache_inner(void *priv_data) {
         return hello::err::EN_SYS_RPC_NO_TASK;
     }
 
-    int ret = await_pull_task(self_task);
+    int ret = await_io_task(self_task);
     if (ret < 0) {
         return ret;
     }
 
+    // 先等待之前的任务完成再设置flag
+    flag_guard fg(*this, flag_t::EN_ROFT_PULLING_CACHE);
+
     // 执行读任务
-    pulling_task_.swap(self_task);
+    io_task_.swap(self_task);
     ret = pull_cache(priv_data);
-    pulling_task_.reset();
+    io_task_.reset();
 
     if (ret < 0) {
         return ret;
@@ -184,15 +198,21 @@ int router_object_base::pull_object_inner(void *priv_data) {
         return hello::err::EN_SYS_RPC_NO_TASK;
     }
 
-    int ret = await_pull_task(self_task);
+    int ret = await_io_task(self_task);
     if (ret < 0) {
         return ret;
     }
 
+    // 先等待之前的任务完成再设置flag
+    flag_guard fg(*this, flag_t::EN_ROFT_PULLING_OBJECT);
+
+    unset_flag(flag_t::EN_ROFT_OBJECT_REMOVED);
+    unset_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT);
+
     // 执行读任务
-    pulling_task_.swap(self_task);
+    io_task_.swap(self_task);
     ret = pull_object(priv_data);
-    pulling_task_.reset();
+    io_task_.reset();
 
     if (ret < 0) {
         return ret;
@@ -208,6 +228,8 @@ int router_object_base::pull_object_inner(void *priv_data) {
         }
     }
 
+    // 升级为实体
+    upgrade();
     return ret;
 }
 
@@ -222,54 +244,28 @@ int router_object_base::save_object_inner(void *priv_data) {
     }
 
     // 如果有其他任务正在保存，需要等待那个任务结束
-    // 因为可能叠加和倍其他任务抢占，所以这里需要重试到有结果（失败或等待）
-    while (true) {
-        // 当前任务不可执行
-        if (self_task->is_exiting()) {
-            if (self_task->is_timeout()) {
-                return hello::err::EN_SYS_TIMEOUT;
-            } else {
-                return hello::err::EN_SYS_RPC_TASK_EXITING;
-            }
-        }
-
-        if (!is_writable()) {
-            return hello::err::EN_ROUTER_NOT_WRITABLE;
-        }
-
-        // 如果其他任务的保存涵盖了自己的数据变化，则直接成功返回
-        if (saved_sequence_ >= this_saving_seq) {
-            return 0;
-        }
-
-        // 自己是保存任务
-        if (!saving_task_) {
-            break;
-        }
-
-        if (saving_task_ != self_task) {
-            // fallback，理论上不会出现这个，下面会reset的
-            if (saving_task_->is_exiting()) {
-                saving_task_.reset();
-            } else {
-                saving_task_->next(self_task);
-                self_task->yield(NULL);
-
-                if (self_task->is_timeout()) {
-                    return hello::err::EN_SYS_TIMEOUT;
-                } else if (self_task->is_exiting()) {
-                    return hello::err::EN_SYS_RPC_TASK_EXITING;
-                }
-            }
-        } else {
-            break;
-        }
+    int ret = await_io_task(self_task);
+    if (ret < 0) {
+        return ret;
     }
 
+    if (!is_writable()) {
+        return hello::err::EN_ROUTER_NOT_WRITABLE;
+    }
+
+    // 因为可能叠加和被其他任务抢占，所以这里需要核查一遍保存序号
+    // 如果其他任务的保存涵盖了自己的数据变化，则直接成功返回
+    if (saved_sequence_ >= this_saving_seq) {
+        return 0;
+    }
+
+    // 先等待之前的任务完成再设置flag
+    flag_guard fg(*this, flag_t::EN_ROFT_SAVING);
+
     uint64_t real_saving_seq = saving_sequence_;
-    saving_task_.swap(self_task);
-    int ret = save_object(priv_data);
-    saving_task_.reset();
+    io_task_.swap(self_task);
+    ret = save_object(priv_data);
+    io_task_.reset();
 
     if (ret >= 0 && real_saving_seq > saved_sequence_) {
         saved_sequence_ = real_saving_seq;

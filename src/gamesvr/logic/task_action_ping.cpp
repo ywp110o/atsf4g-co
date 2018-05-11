@@ -10,6 +10,7 @@
 #include <data/player.h>
 #include <data/session.h>
 #include <logic/player_manager.h>
+#include <logic/session_manager.h>
 
 
 #include <config/logic_config.h>
@@ -23,10 +24,17 @@ task_action_ping::task_action_ping(dispatcher_start_data_t COPP_MACRO_RV_REF par
 task_action_ping::~task_action_ping() {}
 
 int task_action_ping::operator()() {
-    player::ptr_t user = player_manager::me()->find(get_gateway_info());
+    session::ptr_t sess = get_session();
+    if (!sess) {
+        WLOGERROR("session not found.");
+        return hello::err::EN_SYS_PARAM;
+    }
+
+    player::ptr_t user = sess->get_player();
     if (!user) {
         WLOGERROR("not logined.");
-        return hello::err::EN_SYS_PARAM;
+        set_rsp_code(hello::EN_ERR_LOGIN_NOT_LOGINED);
+        return 0;
     }
 
     // 添加Pong包

@@ -99,9 +99,9 @@ int router_manager_set::tick() {
         }
 
         bool cache_expired = false;
-        if (obj->is_writable()) {
-            // 正在拉取数据则不需要启动保存流程
-            if (false == obj->is_pulling_object()) {
+        // 正在执行IO任务则不需要任何流程,因为IO任务结束后可能改变状态
+        if (false == obj->is_io_running()) {
+            if (obj->check_flag(router_object_base::flag_t::EN_ROFT_IS_OBJECT)) {
                 // 实体过期
                 if (obj->get_last_visit_time() + object_expire < last_proc_time_) {
                     save_list_.push_back(auto_save_data_t());
@@ -117,16 +117,16 @@ int router_manager_set::tick() {
                     auto_save.action = EN_ASA_SAVE;
                     obj->refresh_save_time();
                 }
-            }
-        } else {
-            // 缓存过期
-            if (false == obj->is_pulling_cache() && false == obj->is_pulling_object() && obj->get_last_visit_time() + cache_expire < last_proc_time_) {
-                cache_expired = true;
-                save_list_.push_back(auto_save_data_t());
-                auto_save_data_t &auto_save = save_list_.back();
-                auto_save.object = obj;
-                auto_save.type_id = cache.type_id;
-                auto_save.action = EN_ASA_REMOVE_CACHE;
+            } else {
+                // 缓存过期
+                if (obj->get_last_visit_time() + cache_expire < last_proc_time_) {
+                    cache_expired = true;
+                    save_list_.push_back(auto_save_data_t());
+                    auto_save_data_t &auto_save = save_list_.back();
+                    auto_save.object = obj;
+                    auto_save.type_id = cache.type_id;
+                    auto_save.action = EN_ASA_REMOVE_CACHE;
+                }
             }
         }
 
