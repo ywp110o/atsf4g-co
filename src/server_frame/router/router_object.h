@@ -48,6 +48,11 @@ public:
         return ret;
     }
 
+    // =========================== 子类需要实现以下接口 ===========================
+    // virtual int pull_cache(void *priv_data);     // 可选 - 不接入的话会调用pull_object(void *priv_data)
+    // virtual int pull_object(void *priv_data);    // 必需 - 注意事项见 router_object_base::pull_cache
+    // virtual int save_object(void *priv_data);    // 必需 - 注意事项见 router_object_base::save_object
+
 protected:
     inline const object_ptr_t &object() const { return obj_; }
 

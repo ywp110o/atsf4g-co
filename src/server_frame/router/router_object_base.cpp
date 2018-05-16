@@ -9,6 +9,9 @@
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+#include <dispatcher/ss_msg_dispatcher.h>
+#include <dispatcher/task_action_ss_req_base.h>
+
 #include "router_object_base.h"
 
 
@@ -111,6 +114,32 @@ int router_object_base::downgrade() {
     refresh_visit_time();
     unset_flag(flag_t::EN_ROFT_IS_OBJECT);
     return 0;
+}
+
+int router_object_base::send_transfer_msg_failed(
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+    hello::SSMsg &&req
+#else
+    hello::SSMsg &req
+#endif
+) {
+    task_action_ss_req_base::msg_type rsp_msg;
+    uint64_t dst_pd = req.head().bus_id();
+    if (req.head().has_router()) {
+        dst_pd = req.head().router().router_src_bus_id();
+    }
+
+    task_action_ss_req_base::init_msg(rsp_msg, dst_pd, req);
+
+    // 如果没有task_id则要不复制路由信息，防止触发路由转发
+    if (0 == rsp_msg.head().dst_task_id()) {
+        rsp_msg.mutable_head()->clear_router();
+    }
+
+    // 转移失败错误码
+    rsp_msg.mutable_head()->set_error_code(hello::err::EN_ROUTER_TRANSFER);
+
+    return ss_msg_dispatcher::me()->send_to_proc(dst_pd, rsp_msg);
 }
 
 int router_object_base::await_io_task() {

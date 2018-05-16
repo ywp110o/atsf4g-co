@@ -92,23 +92,30 @@ int task_action_ss_req_base::hook_run() {
 
 
             // 路由消息转发
+            int32_t res = 0;
             if (0 != obj->get_router_server_id()) {
                 int32_t res = mgr->send_msg(*obj, get_request());
 
                 // 如果路由转发成功，需要禁用掉回包和通知事件，也不需要走逻辑处理了
-                if (res >= 0) {
-                    disable_rsp_msg();
-                    disable_finish_evt();
-
-                    return 0;
-                } else {
+                if (res < 0) {
                     WLOGERROR("try to transfer router object %u:x0%llx to 0x%llx failed, res: %d", key.type_id, key.object_id_ull(),
                               static_cast<unsigned long long>(obj->get_router_server_id()), res);
                 }
             } else {
                 // 如果路由对象不在任何节点上，返回错误
-                set_rsp_code(hello::err::EN_ROUTER_NOT_IN_SERVER);
+                res = hello::err::EN_ROUTER_NOT_IN_SERVER;
             }
+
+            if (res >= 0) {
+                disable_rsp_msg();
+                disable_finish_evt();
+            } else {
+                // 失败则要回发转发失败
+                set_rsp_code(res);
+                obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(get_request()));
+            }
+
+            return res;
         } while (false);
     }
 

@@ -253,7 +253,16 @@ public:
         if (ret < 0) {
             obj->unset_flag(router_object_base::flag_t::EN_ROFT_IS_OBJECT);
 
-            // TODO 如果转发不成功，要回发执行失败
+            // 如果转发不成功，要回发执行失败
+            if (!obj->get_transfer_pending_list().empty()) {
+                std::list<hello::SSMsg> all_msgs;
+                all_msgs.swap(obj->get_transfer_pending_list());
+
+                for (hello::SSMsg &msg : all_msgs) {
+                    obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
+                }
+            }
+
             return ret;
         }
 
@@ -289,15 +298,27 @@ public:
                 std::list<hello::SSMsg> all_msgs;
                 all_msgs.swap(obj->get_transfer_pending_list());
 
-                for (auto &msg : all_msgs) {
+                for (hello::SSMsg &msg : all_msgs) {
                     int res = send_msg_raw(*obj, msg);
                     if (res < 0) {
                         WLOGERROR("transfer router object (type=%u) 0x%llx message failed, res: %d", get_type_id(), obj->get_key().object_id_ull(), res);
+                    } else {
+                        obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
                     }
                 }
             }
+        } else {
+            // 如果转发不成功，要回发执行失败
+            if (!obj->get_transfer_pending_list().empty()) {
+                std::list<hello::SSMsg> all_msgs;
+                all_msgs.swap(obj->get_transfer_pending_list());
+
+                for (hello::SSMsg &msg : all_msgs) {
+                    obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
+                }
+            }
         }
-        // TODO 如果转发不成功，要回发执行失败
+
         return ret;
     }
 
@@ -371,12 +392,12 @@ public:
         // 先复制出所有的只能指针，防止回掉过程中成员变化带来问题
         std::vector<ptr_t> res;
         res.reserve(caches_.size());
-        for (auto &che : caches_) {
-            res.push_back(che.second);
+        for (typename std::unordered_map<key_t, ptr_t>::iterator iter = caches_.begin(); iter != caches_.end(); ++iter) {
+            res.push_back(iter->second);
         }
 
-        for (auto &p : res) {
-            if (!fn(p)) {
+        for (size_t i = 0; i < res.size(); ++i) {
+            if (!fn(res[i])) {
                 break;
             }
         }

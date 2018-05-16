@@ -130,10 +130,12 @@ public:
      * @brief 启动拉取缓存流程
      * @param priv_data 外部传入的私有数据
      * @note 这个接口如果不是默认实现，则要注意如果异步消息回来以后已经有实体数据了，就要已实体数据为准
-     * @note 必须要填充数据有
-     *          关联的对象的数据
-     *          版本信息(如果有)
-     *          路由BUS ID和版本号
+     * @note 必须要填充数据有：
+     *       * 关联的对象的数据
+     *       * 版本信息(如果有)
+     *       * 路由BUS ID和版本号（调用set_router_server_id）
+     *
+     *       如果需要处理容灾也可以保存时间并忽略过长时间的不匹配路由信息
      * @return 0或错误码
      */
     virtual int pull_cache(void *priv_data);
@@ -141,10 +143,12 @@ public:
     /**
      * @brief 启动拉取实体流程
      * @param priv_data 外部传入的私有数据
-     * @note 必须要填充数据有
-     *          关联的对象的数据
-     *          版本信息(如果有)
-     *          路由BUS ID和版本号
+     * @note 必须要填充数据有：
+     *       * 关联的对象的数据
+     *       * 版本信息(如果有)
+     *       * 路由BUS ID和版本号（调用set_router_server_id）
+     *
+     *       如果需要处理容灾也可以保存时间并忽略过长时间的不匹配路由信息
      * @return 0或错误码
      */
     virtual int pull_object(void *priv_data) = 0;
@@ -152,8 +156,10 @@ public:
     /**
      * @brief 启动保存实体的流程(这个接口不会设置状态)
      * @param priv_data 外部传入的私有数据
-     * @note 这个接口里不能使用get_object接口，因为这回导致缓存呗续期，不能让定时保存机制无限续期缓存
-     * @note 这个接口成功后最好调用一次refresh_save_time，可以减少保存次数
+     * @note
+     *        * 这个接口里不能使用get_object接口，因为这回导致缓存被续期，不能让定时保存机制无限续期缓存
+     *        * 这个接口成功后最好调用一次refresh_save_time，可以减少保存次数
+     *        * 可以保存执行时间用以处理容灾时的过期数据（按需）
      * @return 0或错误码
      */
     virtual int save_object(void *priv_data) = 0;
@@ -199,6 +205,19 @@ public:
 
     inline std::list<hello::SSMsg> &get_transfer_pending_list() { return transfer_pending_; }
     inline const std::list<hello::SSMsg> &get_transfer_pending_list() const { return transfer_pending_; }
+
+    /**
+     * @brief 根据请求包回发转发失败回包
+     * @param req 请求包，在这个接口调用后req的内容将被移入到rsp包。req内容不再可用
+     * @return 0或错误码
+     */
+    int send_transfer_msg_failed(
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+        hello::SSMsg &&req
+#else
+        hello::SSMsg &req
+#endif
+    );
 
     int await_io_task();
 
