@@ -190,29 +190,42 @@ int task_action_login_authorization::operator()() {
             if (ret) {
                 WLOGERROR("user %s send msg to 0x%llx fail: %d", login_data_.open_id().c_str(), static_cast<unsigned long long>(login_data_.router_server_id()),
                           ret);
-                // 超出定时保存的时间间隔的3倍，视为服务器异常断开。直接允许登入
-                if (util::time::time_utility::get_now() - static_cast<time_t>(login_data_.login_time()) <
-                    logic_config::me()->get_cfg_logic().session_login_code_protect) {
+                // 超出最后行为时间，视为服务器异常断开。直接允许登入
+                time_t last_saved_time = static_cast<time_t>(login_data_.login_time());
+                if (last_saved_time < static_cast<time_t>(login_data_.login_code_expired())) {
+                    last_saved_time = static_cast<time_t>(login_data_.login_code_expired());
+                }
+                if (last_saved_time < static_cast<time_t>(login_data_.logout_time())) {
+                    last_saved_time = static_cast<time_t>(login_data_.logout_time());
+                }
+
+                if (util::time::time_utility::get_now() - last_saved_time < logic_config::me()->get_cfg_logic().session_login_code_protect) {
                     set_rsp_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
                     return hello::err::EN_PLAYER_KICKOUT;
                 } else {
                     WLOGWARNING("user %s send kickoff failed, but login time timeout, conitnue login.", login_data_.open_id().c_str());
+                    login_data_.set_router_server_id(0);
                 }
             } else {
                 // 8. 验证踢出后的登入pd
                 login_data_.Clear();
+                uint64_t old_svr_id = login_data_.router_server_id();
                 res = rpc::db::login::get(msg_body.open_id().c_str(), login_data_, version_);
                 if (res < 0) {
                     WLOGERROR("call login rpc method failed, msg: %s", msg_body.DebugString().c_str());
-                    set_rsp_code(hello::EN_ERR_SYSTEM);
+                    set_rsp_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
                     return res;
                 }
-                if (0 != login_data_.router_server_id()) {
+
+                // 可能目标服务器重启后没有这个玩家的数据而直接忽略请求直接返回成功
+                // 这时候走故障恢复流程，直接把router_server_id设成0即可
+                if (0 != login_data_.router_server_id() && old_svr_id != login_data_.router_server_id()) {
                     WLOGERROR("user %s loginout failed.", msg_body.open_id().c_str());
                     // 踢下线失败的错误码
                     set_rsp_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
                     return hello::err::EN_PLAYER_KICKOUT;
                 }
+                login_data_.set_router_server_id(0);
             }
         }
     } while (false);

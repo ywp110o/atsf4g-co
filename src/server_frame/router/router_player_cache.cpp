@@ -134,9 +134,11 @@ int router_player_cache::pull_object(router_player_private_type &priv_data) {
     uint64_t self_bus_id = logic_config::me()->get_self_bus_id();
     // 如果router server id是0则设置为本地的登入地址
     if (0 == get_router_server_id()) {
+        uint64_t old_router_server_id = obj->get_login_info().router_server_id();
+        uint32_t old_router_ver = obj->get_login_info().router_version();
+
         obj->get_login_info().set_router_server_id(self_bus_id);
-        obj->get_login_info().set_router_version(get_router_version() + 1);
-        set_router_server_id(self_bus_id, obj->get_login_info().router_version());
+        obj->get_login_info().set_router_version(old_router_ver + 1);
 
         // 新登入则设置登入时间
         obj->get_login_info().set_login_time(util::time::time_utility::get_now());
@@ -144,8 +146,13 @@ int router_player_cache::pull_object(router_player_private_type &priv_data) {
         int ret = rpc::db::login::set(obj->get_open_id().c_str(), obj->get_login_info(), obj->get_login_version());
         if (ret < 0) {
             WLOGERROR("save login data for %s failed, msg:\n%s", obj->get_open_id().c_str(), obj->get_login_info().DebugString().c_str());
+            // 失败则恢复路由信息
+            obj->get_login_info().set_router_server_id(old_router_server_id);
+            obj->get_login_info().set_router_version(old_router_ver);
             return ret;
         }
+
+        set_router_server_id(obj->get_login_info().router_server_id(), obj->get_login_info().router_version());
     } else if (self_bus_id != get_router_server_id()) {
         // 不在这个进程上
         WLOGERROR("player %s(%llu) is in server 0x%llx but try to pull in server 0x%llx", obj->get_open_id().c_str(), obj->get_user_id_llu(),
@@ -173,12 +180,6 @@ int router_player_cache::save_object(void *priv_data) {
                 WLOGERROR("player %s(%llu) try load login data failed.", obj->get_open_id().c_str(), obj->get_user_id_llu());
                 return res;
             }
-
-            if (0 == get_router_server_id()) {
-                set_router_server_id(0, obj->get_login_info().router_version());
-            } else {
-                set_router_server_id(get_router_server_id(), obj->get_login_info().router_version());
-            }
         }
 
         if (0 != get_router_server_id() && 0 != obj->get_login_info().router_server_id() && obj->get_login_info().router_server_id() != self_bus_id) {
@@ -189,61 +190,82 @@ int router_player_cache::save_object(void *priv_data) {
             WLOGERROR("player %s(%llu) login bus id error(expected: 0x%llx, real: 0x%llx)", obj->get_open_id().c_str(), obj->get_user_id_llu(),
                       get_router_server_id_llu(), static_cast<unsigned long long>(obj->get_login_info().router_server_id()));
 
+            uint64_t old_router_server_id = obj->get_login_info().router_server_id();
+            uint32_t old_router_ver = obj->get_login_info().router_version();
+
             obj->get_login_info().set_router_server_id(get_router_server_id());
-            obj->get_login_info().set_router_version(obj->get_login_info().router_version() + 1);
+            obj->get_login_info().set_router_version(old_router_ver + 1);
             // RPC save to db
             res = rpc::db::login::set(obj->get_open_id().c_str(), obj->get_login_info(), obj->get_login_version());
             if (hello::err::EN_DB_OLD_VERSION == res) {
+                obj->get_login_info().set_router_server_id(old_router_server_id);
+                obj->get_login_info().set_router_version(old_router_ver);
                 continue;
             }
 
             if (res < 0) {
                 WLOGERROR("user %s try set login data failed.", obj->get_open_id().c_str());
+                obj->get_login_info().set_router_server_id(old_router_server_id);
+                obj->get_login_info().set_router_version(old_router_ver);
                 return res;
             } else {
-                set_router_server_id(get_router_server_id(), obj->get_login_info().router_version());
+                set_router_server_id(obj->get_login_info().router_server_id(), obj->get_login_info().router_version());
                 break;
             }
         }
 
         // 登出流程
         if (0 == get_router_server_id()) {
+            uint64_t old_router_server_id = obj->get_login_info().router_server_id();
+            uint32_t old_router_ver = obj->get_login_info().router_version();
+
             obj->get_login_info().set_router_server_id(0);
-            obj->get_login_info().set_router_version(obj->get_login_info().router_version() + 1);
+            obj->get_login_info().set_router_version(old_router_ver + 1);
             obj->get_login_info().set_logout_time(util::time::time_utility::get_now()); // 登出时间
 
             // RPC save to db
             res = rpc::db::login::set(obj->get_open_id().c_str(), obj->get_login_info(), obj->get_login_version());
             if (hello::err::EN_DB_OLD_VERSION == res) {
+                obj->get_login_info().set_router_server_id(old_router_server_id);
+                obj->get_login_info().set_router_version(old_router_ver);
                 continue;
             }
 
             if (res < 0) {
                 WLOGERROR("user %s try set login data failed.", obj->get_open_id().c_str());
+                obj->get_login_info().set_router_server_id(old_router_server_id);
+                obj->get_login_info().set_router_version(old_router_ver);
                 return res;
             } else {
-                set_router_server_id(get_router_server_id(), obj->get_login_info().router_version());
+                set_router_server_id(obj->get_login_info().router_server_id(), obj->get_login_info().router_version());
             }
         } else if (obj->get_session()) { // 续期login code
-            if (get_router_server_id() != obj->get_login_info().router_server_id()) {
+            uint64_t old_router_server_id = obj->get_login_info().router_server_id();
+            uint32_t old_router_ver = obj->get_login_info().router_version();
+
+            if (get_router_server_id() != old_router_server_id) {
                 obj->get_login_info().set_router_server_id(get_router_server_id());
-                obj->get_login_info().set_router_version(obj->get_login_info().router_version() + 1);
+                obj->get_login_info().set_router_version(old_router_ver + 1);
             }
 
+            // 鉴权登入码续期
             obj->get_login_info().set_login_code_expired(util::time::time_utility::get_now() +
                                                          logic_config::me()->get_cfg_logic().session_login_code_valid_sec);
-            obj->get_login_info().set_login_code(obj->get_login_info().login_code());
 
             res = rpc::db::login::set(obj->get_open_id().c_str(), obj->get_login_info(), obj->get_login_version());
             if (hello::err::EN_DB_OLD_VERSION == res) {
+                obj->get_login_info().set_router_server_id(old_router_server_id);
+                obj->get_login_info().set_router_version(old_router_ver);
                 continue;
             }
 
             if (res < 0) {
                 WLOGERROR("call login rpc method set failed, res: %d, msg: %s", res, obj->get_login_info().DebugString().c_str());
+                obj->get_login_info().set_router_server_id(old_router_server_id);
+                obj->get_login_info().set_router_version(old_router_ver);
                 return res;
             } else {
-                set_router_server_id(get_router_server_id(), obj->get_login_info().router_version());
+                set_router_server_id(obj->get_login_info().router_server_id(), obj->get_login_info().router_version());
             }
         }
 

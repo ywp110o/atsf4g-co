@@ -56,12 +56,20 @@ int router_object_base::remove_object(void *priv_data, uint64_t transfer_to_svr_
     }
 
     // 移除实体需要设置路由BUS ID为0并保存一次
-    set_router_server_id(transfer_to_svr_id, get_router_version() + 1);
+    uint64_t old_router_server_id = get_router_server_id();
+    uint32_t old_router_ver = get_router_version();
+
+    if (transfer_to_svr_id != get_router_server_id()) {
+        set_router_server_id(transfer_to_svr_id, old_router_ver + 1);
+    }
     refresh_visit_time();
 
     int ret = save(priv_data);
     if (ret < 0) {
         WLOGERROR("remove router object %u:0x%llx", get_key().type_id, get_key().object_id_ull());
+
+        // 保存失败则恢复原来的路由信息
+        set_router_server_id(old_router_server_id, old_router_ver);
         return ret;
     }
 
