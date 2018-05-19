@@ -23,8 +23,8 @@
 #include <config/excel/config_manager.h>
 #include <config/logic_config.h>
 
-
 #include <logic/session_manager.h>
+#include <router/router_manager_set.h>
 
 #include "handle_cs_msg.h"
 #include "handle_ss_msg.h"
@@ -129,6 +129,12 @@ public:
         INIT_CALL(task_manager);
         INIT_CALL(session_manager);
 
+        {
+            INIT_CALL(router_manager_set);
+            // register all router managers
+            // router_player_manager::me();
+        }
+
         // register handles
         INIT_CALL(app_handle_ss_msg);
         INIT_CALL(app_handle_cs_msg);
@@ -166,6 +172,7 @@ public:
         int ret = 0;
         ret += session_manager::me()->proc();
         ret += task_manager::me()->tick(util::time::time_utility::get_now(), 1000 * util::time::time_utility::get_now_usec());
+        ret += router_manager_set::me()->tick();
 
         return ret;
     }

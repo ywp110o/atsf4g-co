@@ -3,13 +3,15 @@
 #include <protocol/pbdesc/com.protocol.pb.h>
 #include <protocol/pbdesc/svr.table.pb.h>
 
+#include <config/logic_config.h>
+#include <time/time_utility.h>
 
 #include <logic/player_manager.h>
-#include <time/time_utility.h>
+
+#include <logic/action/task_action_player_remote_patch_jobs.h>
 
 #include "player.h"
 #include "session.h"
-#include <config/logic_config.h>
 
 
 player::player(fake_constructor &) : user_id_(0), data_version_(0) {
@@ -99,6 +101,8 @@ void player::set_session(std::shared_ptr<session> session_ptr) {
 }
 
 std::shared_ptr<session> player::get_session() { return session_.lock(); }
+
+bool player::has_session() const { return false == session_.expired(); }
 
 void player::init_from_table_data(const hello::table_user &tb_player) {
     data_version_ = tb_player.data_version();
@@ -203,9 +207,51 @@ void player::update_heartbeat() {
 }
 
 void player::start_patch_remote_command() {
-    // TODO 队列化，同时只能一个任务执行
-    // TODO 任务执行期间如果又收到通知则需要在任务执行完后再启动一次
-    // TODO 任务完成后需要重新check一次有没有新的通知然后启动任务
+    inner_flags_.set(inner_flag::EN_IFT_NEED_PATCH_REMOTE_COMMAND, true);
+
+    try_patch_remote_command();
+}
+
+void player::try_patch_remote_command() {
+    if (remote_command_patch_task_ && remote_command_patch_task_->is_exiting()) {
+        remote_command_patch_task_.reset();
+    }
+
+    if (!inner_flags_.test(inner_flag::EN_IFT_NEED_PATCH_REMOTE_COMMAND)) {
+        return;
+    }
+
+    // 队列化，同时只能一个任务执行
+    if (remote_command_patch_task_) {
+        return;
+    }
+
+    task_manager::id_t tid = 0;
+    task_action_player_remote_patch_jobs::ctor_param_t params;
+    params.user = shared_from_this();
+    params.timeout_duration = logic_config::me()->get_cfg_logic().task_nomsg_timeout;
+    params.timeout_timepoint = util::time::time_utility::get_now() + params.timeout_duration;
+    task_manager::me()->create_task_with_timeout<task_action_player_remote_patch_jobs>(tid, params.timeout_duration, COPP_MACRO_STD_MOVE(params));
+
+    if (0 == tid) {
+        WLOGERROR("create task_action_player_remote_patch_jobs failed");
+    } else {
+        remote_command_patch_task_ = task_manager::me()->get_task(tid);
+
+        dispatcher_start_data_t start_data;
+        start_data.private_data = NULL;
+        start_data.message.msg_addr = NULL;
+        start_data.message.msg_type = 0;
+
+        int res = task_manager::me()->start_task(tid, start_data);
+        if (res < 0) {
+            WLOGERROR("start task_action_player_remote_patch_jobs for player %s(%llu) failed, res: %d", get_open_id().c_str(), get_user_id_llu(), res);
+            remote_command_patch_task_.reset();
+            return;
+        }
+    }
+
+    inner_flags_.set(inner_flag::EN_IFT_NEED_PATCH_REMOTE_COMMAND, false);
 }
 
 void player::send_all_syn_msg() {

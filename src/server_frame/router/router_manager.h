@@ -324,13 +324,17 @@ public:
 
     virtual bool remove_cache(const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) UTIL_CONFIG_OVERRIDE {
         typename std::unordered_map<key_t, ptr_t>::iterator iter;
-        if (!cache) {
-            iter = caches_.find(key);
-        } else {
+        if (cache) {
             iter = caches_.find(cache->get_key());
+        } else {
+            iter = caches_.find(key);
         }
 
         if (iter == caches_.end()) {
+            return false;
+        }
+
+        if (cache && iter->second != cache) {
             return false;
         }
 

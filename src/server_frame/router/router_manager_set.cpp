@@ -2,6 +2,8 @@
 // Created by owent on 2018/05/01.
 //
 
+#include <sstream>
+
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
@@ -47,18 +49,29 @@ int router_manager_set::tick() {
     }
     // 每分钟打印一次统计数据
     if (last_proc_time_ / util::time::time_utility::MINITE_SECONDS != ::util::time::time_utility::get_now() / util::time::time_utility::MINITE_SECONDS) {
-        if (timer_list_.empty()) {
-            WLOGINFO("[STAT] router manager set: timer count 0, save pending list count %llu", static_cast<unsigned long long>(save_list_.size()));
+        std::stringstream ss;
+        ss << "[STAT] router manager set => now: " << ::util::time::time_utility::get_now() << std::endl;
+        ss << "\tdefault timer count: " << timers_.default_timer_list.size() << ", next active timer: ";
+        if (timers_.default_timer_list.empty()) {
+            ss << 0 << std::endl;
         } else {
-            WLOGINFO("[STAT] router manager set: timer count %llu(next active at %lld), save pending list count %llu",
-                     static_cast<unsigned long long>(timer_list_.size()), static_cast<long long>(timer_list_.front().timeout),
-                     static_cast<unsigned long long>(save_list_.size()));
+            ss << timers_.default_timer_list.front().timeout << std::endl;
         }
+        ss << "\tfast timer count: " << timers_.fast_timer_list.size() << ", next active timer: ";
+        if (timers_.fast_timer_list.empty()) {
+            ss << 0 << std::endl;
+        } else {
+            ss << timers_.fast_timer_list.front().timeout << std::endl;
+        }
+
+
         for (int i = 0; i < hello::EnRouterObjectType_ARRAYSIZE; ++i) {
             if (mgrs_[i]) {
-                WLOGINFO("[STAT] \t%s has %llu caches", mgrs_[i]->name(), static_cast<unsigned long long>(mgrs_[i]->size()));
+                ss << "\t" << mgrs_[i]->name() << " has " << mgrs_[i]->size() << "caches" << std::endl;
             }
         }
+
+        WLOGINFO("%s", ss.str().c_str());
     }
     last_proc_time_ = ::util::time::time_utility::get_now();
 
@@ -66,12 +79,39 @@ int router_manager_set::tick() {
     time_t object_expire = logic_config::me()->get_cfg_logic().router.object_free_timeout;
     time_t object_save = logic_config::me()->get_cfg_logic().router.object_save_interval;
     // 缓存失效定时器
+    ret += tick_timer(cache_expire, object_expire, object_save, timers_.default_timer_list, false);
+    ret += tick_timer(cache_expire, object_expire, object_save, timers_.fast_timer_list, true);
+
+    if (!save_list_.empty() && false == is_save_task_running()) {
+        task_manager::id_t tid = 0;
+        task_manager::me()->create_task_with_timeout<task_action_auto_save_objects>(tid, logic_config::me()->get_cfg_logic().task_nomsg_timeout,
+                                                                                    task_action_auto_save_objects::ctor_param_t());
+        if (0 == tid) {
+            WLOGERROR("create task_action_auto_save_objects failed");
+        } else {
+            dispatcher_start_data_t start_data;
+            start_data.private_data = NULL;
+            start_data.message.msg_addr = NULL;
+            start_data.message.msg_type = 0;
+
+            if (0 == task_manager::me()->start_task(tid, start_data)) {
+                save_task_ = task_manager::me()->get_task(tid);
+            }
+        }
+    }
+
+    return ret;
+}
+
+int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, time_t object_save, std::list<timer_t> &timer_list, bool is_fast) {
+    int ret = 0;
+    // 缓存失效定时器
     do {
-        if (timer_list_.empty()) {
+        if (timer_list.empty()) {
             break;
         }
 
-        timer_t &cache = timer_list_.front();
+        timer_t &cache = timer_list.front();
 
         // 如果没到时间，后面的全没到时间
         if (last_proc_time_ <= cache.timeout) {
@@ -81,24 +121,25 @@ int router_manager_set::tick() {
         // 如果已下线并且缓存失效则跳过
         std::shared_ptr<router_object_base> obj = cache.obj_watcher.lock();
         if (!obj) {
-            timer_list_.pop_front();
+            timer_list.pop_front();
             continue;
         }
 
         // 如果操作序列失效则跳过
         if (false == obj->check_timer_sequence(cache.timer_sequence)) {
-            timer_list_.pop_front();
+            timer_list.pop_front();
             continue;
         }
 
         // 已销毁则跳过
         router_manager_base *mgr = get_manager(cache.type_id);
         if (NULL == mgr) {
-            timer_list_.pop_front();
+            timer_list.pop_front();
             continue;
         }
 
         bool cache_expired = false;
+        bool is_next_timer_fast = is_fast; // 快队列定时器只能进入快队列
         // 正在执行IO任务则不需要任何流程,因为IO任务结束后可能改变状态
         if (false == obj->is_io_running()) {
             if (obj->check_flag(router_object_base::flag_t::EN_ROFT_IS_OBJECT)) {
@@ -128,37 +169,22 @@ int router_manager_set::tick() {
                     auto_save.action = EN_ASA_REMOVE_CACHE;
                 }
             }
+        } else {
+            // 如果IO任务正在执行，则下次进入快队列
+            is_next_timer_fast = true;
         }
 
         if (!cache_expired) {
-            insert_timer(mgr, obj);
+            insert_timer(mgr, obj, is_next_timer_fast);
         }
-        timer_list_.pop_front();
+        timer_list.pop_front();
         ++ret;
     } while (true);
-
-    if (!save_list_.empty() && false == is_save_task_running()) {
-        task_manager::id_t tid = 0;
-        task_manager::me()->create_task_with_timeout<task_action_auto_save_objects>(tid, logic_config::me()->get_cfg_logic().task_nomsg_timeout,
-                                                                                    task_action_auto_save_objects::ctor_param_t());
-        if (0 == tid) {
-            WLOGERROR("create task_action_auto_save_objects failed");
-        } else {
-            dispatcher_start_data_t start_data;
-            start_data.private_data = NULL;
-            start_data.message.msg_addr = NULL;
-            start_data.message.msg_type = 0;
-
-            if (0 == task_manager::me()->start_task(tid, start_data)) {
-                save_task_ = task_manager::me()->get_task(tid);
-            }
-        }
-    }
 
     return ret;
 }
 
-bool router_manager_set::insert_timer(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj) {
+bool router_manager_set::insert_timer(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj, bool is_fast) {
     if (last_proc_time_ <= 0) {
         WLOGERROR("router_manager_set not actived");
     }
@@ -174,12 +200,24 @@ bool router_manager_set::insert_timer(router_manager_base *mgr, const std::share
         return false;
     }
 
-    timer_list_.push_back(timer_t());
-    timer_t &tm = timer_list_.back();
-    tm.obj_watcher = obj;
-    tm.type_id = mgr->get_type_id();
-    tm.timeout = util::time::time_utility::get_now() + logic_config::me()->get_cfg_logic().router.timer_interval;
-    tm.timer_sequence = obj->alloc_timer_sequence();
+    timer_t *tm_inst;
+    if (!is_fast) {
+        timers_.default_timer_list.push_back(timer_t());
+        tm_inst = &timers_.default_timer_list.back();
+    } else {
+        timers_.fast_timer_list.push_back(timer_t());
+        tm_inst = &timers_.fast_timer_list.back();
+    }
+
+    tm_inst->obj_watcher = obj;
+    tm_inst->type_id = mgr->get_type_id();
+    if (!is_fast) {
+        tm_inst->timeout = util::time::time_utility::get_now() + logic_config::me()->get_cfg_logic().router.default_timer_interval;
+    } else {
+        tm_inst->timeout = util::time::time_utility::get_now() + logic_config::me()->get_cfg_logic().router.fast_timer_interval;
+    }
+    tm_inst->timer_sequence = obj->alloc_timer_sequence();
+
     return true;
 }
 

@@ -13,6 +13,8 @@
 #include <protocol/pbdesc/svr.table.pb.h>
 
 
+#include <dispatcher/task_manager.h>
+
 class session;
 
 /**
@@ -93,12 +95,18 @@ class player : public std::enable_shared_from_this<player> {
 private:
     static const uint32_t PLAYER_DATA_LOGIC_VERSION = 1;
     struct inner_flag {
-        enum type { EN_IFT_FEATURE_INVALID = 0, EN_IFT_IS_INITED, EN_IFT_MAX };
+        enum type {
+            EN_IFT_FEATURE_INVALID = 0,
+            EN_IFT_IS_INITED,                 // 是否已初始化
+            EN_IFT_NEED_PATCH_REMOTE_COMMAND, // 是否需要启动远程命令任务
+            EN_IFT_MAX
+        };
     };
 
 public:
     typedef std::shared_ptr<player> ptr_t;
     friend class player_manager;
+    friend class task_action_player_remote_patch_jobs;
 
     struct heartbeat_t {
         time_t last_recv_time;       // 上一次收到心跳包时间
@@ -153,6 +161,8 @@ public:
      * @return 关联的Session
      */
     std::shared_ptr<session> get_session();
+
+    bool has_session() const;
 
     inline const std::string &get_open_id() const { return openid_id_; };
     inline uint64_t get_user_id() const { return user_id_; };
@@ -242,7 +252,7 @@ public:
     inline cache_t &get_cache_data() { return cache_data_; }
 
     /**
-     * @brief 开始执行远程命令
+     * @brief 开始执行远程命令，如果已经有一个命令正在运行中了，会等待那个命令完成后再启动一次
      * @note 远程命令一般用于多写入方，利用数据库插入命令。然后再通知玩家对象，单点执行读入数据。
      * @note 比如说多个玩家对一个玩家发送消息或邮件，可以插入消息或邮件的command到数据库，然后这里拉取后append到玩家数据里
      */
@@ -270,6 +280,11 @@ public:
 private:
     inline hello::player_data &mutable_player_data() { return player_data_.ref(); }
 
+    /**
+     * @brief 尝试开始执行远程命令，如果已经有一个命令正在运行中了，会忽略并返回
+     */
+    void try_patch_remote_command();
+
 private:
     std::string openid_id_;
     uint64_t user_id_;
@@ -291,6 +306,7 @@ private:
     // =======================================================
     heartbeat_t heartbeat_data_;
     cache_t cache_data_;
+    task_manager::task_ptr_t remote_command_patch_task_;
     // -------------------------------------------------------
 };
 

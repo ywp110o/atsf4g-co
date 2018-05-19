@@ -35,8 +35,9 @@ public:
         time_t cache_free_timeout;
         time_t object_free_timeout;
         time_t object_save_interval;
-        time_t timer_interval;
         size_t retry_max_ttl;
+        time_t default_timer_interval;
+        time_t fast_timer_interval;
     };
 
     struct LC_LOGIC {
@@ -54,12 +55,6 @@ public:
 
         size_t player_max_online_number;
         std::string player_default_openid;
-        // 定时任务-自动保存间隔
-        time_t player_auto_save_interval;
-        size_t player_auto_save_limit;
-        // 定时任务-缓存有效期
-        time_t player_cache_expire_time;
-        uint32_t player_cache_max_retry_times;
 
         // 登入码的有效期
         time_t session_login_code_protect;

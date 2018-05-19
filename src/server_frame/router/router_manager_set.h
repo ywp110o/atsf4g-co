@@ -15,6 +15,8 @@
 #include <std/smart_ptr.h>
 
 #include <protocol/pbdesc/svr.const.pb.h>
+#include <protocol/pbdesc/svr.protocol.pb.h>
+
 #include <utility/environment_helper.h>
 
 #include <dispatcher/task_manager.h>
@@ -51,7 +53,7 @@ public:
 
     int tick();
 
-    bool insert_timer(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj);
+    bool insert_timer(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj, bool is_fast = false);
 
     router_manager_base *get_manager(uint32_t type);
 
@@ -61,8 +63,14 @@ public:
 private:
     bool is_save_task_running() const;
 
+    int tick_timer(time_t cache_expire, time_t object_expire, time_t object_save, std::list<timer_t> &timer_list, bool is_fast);
+
 private:
-    std::list<timer_t> timer_list_;
+    struct timer_set_t {
+        std::list<timer_t> default_timer_list;
+        std::list<timer_t> fast_timer_list;
+    };
+    timer_set_t timers_;
     time_t last_proc_time_;
     router_manager_base *mgrs_[hello::EnRouterObjectType_ARRAYSIZE];
     std::list<auto_save_data_t> save_list_;

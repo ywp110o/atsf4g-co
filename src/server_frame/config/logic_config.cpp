@@ -74,18 +74,8 @@ void logic_config::_load_logic(util::config::ini_loader &loader) {
     cfg_logic_.player_max_online_number = 10000;
     cfg_logic_.player_default_openid = "gm://system";
 
-    cfg_logic_.player_auto_save_interval = 0;
-    cfg_logic_.player_auto_save_limit = 0;
-
-    cfg_logic_.player_cache_expire_time = 1200;  // 20m for expired of cache
-    cfg_logic_.player_cache_max_retry_times = 3; // retry 3 times
-
     loader.dump_to("logic.player.max_online", cfg_logic_.player_max_online_number);
     loader.dump_to("logic.player.default_openid", cfg_logic_.player_default_openid);
-    loader.dump_to("logic.player.auto_save.interval", cfg_logic_.player_auto_save_interval);
-    loader.dump_to("logic.player.auto_save.limit", cfg_logic_.player_auto_save_limit);
-    loader.dump_to("logic.player.cache.expire_time", cfg_logic_.player_cache_expire_time);
-    loader.dump_to("logic.player.cache.max_retry_times", cfg_logic_.player_cache_max_retry_times);
 
     cfg_logic_.session_login_code_protect = 1200;  // 20m for expired of bad token protect
     cfg_logic_.session_login_code_valid_sec = 600; // 10m for expired of token
@@ -126,7 +116,8 @@ void logic_config::_load_logic(util::config::ini_loader &loader) {
     loader.dump_to("logic.router.object_free_timeout", cfg_logic_.router.object_free_timeout, false);
     loader.dump_to("logic.router.retry_max_ttl", cfg_logic_.router.retry_max_ttl, false);
     load_int_compare(loader, "logic.router.object_save_interval", cfg_logic_.router.object_save_interval, 600, 60);
-    load_int_compare(loader, "logic.router.timer_interval", cfg_logic_.router.timer_interval, 300, 5);
+    load_int_compare(loader, "logic.router.detault_timer_interval", cfg_logic_.router.default_timer_interval, 300, 5);
+    load_int_compare(loader, "logic.router.fast_timer_interval", cfg_logic_.router.fast_timer_interval, 8, 1);
 }
 
 void logic_config::_load_db(util::config::ini_loader &loader) {
