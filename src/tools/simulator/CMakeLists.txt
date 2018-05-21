@@ -13,22 +13,53 @@ include_directories("${ATFRAMEWORK_BASE_DIR}/service/atgateway/protocols"
     ${ATFRAMEWORK_SERVICE_COMPONENT_DIR}
     "${ATFRAMEWORK_BASE_DIR}/export/atgw_inner_v1_c")
 
+set(SRC_LIST "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 # build libserver_frame.so
-file(GLOB_RECURSE SRC_LIST
-    ${CMAKE_CURRENT_LIST_DIR}/*.h
-    ${CMAKE_CURRENT_LIST_DIR}/*.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/*.c
-    ${CMAKE_CURRENT_LIST_DIR}/*.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/*.cc
+file(GLOB SRC_LIST_LIBSIMULATOR_UV
+    ${CMAKE_CURRENT_LIST_DIR}/libsimulator_uv/*.h
+    ${CMAKE_CURRENT_LIST_DIR}/libsimulator_uv/*.c
+    ${CMAKE_CURRENT_LIST_DIR}/libsimulator_uv/*.cpp
 )
+list(APPEND SRC_LIST ${SRC_LIST_LIBSIMULATOR_UV})
 
-source_group_by_dir(SRC_LIST)
+file(GLOB SRC_LIST_UTILITY
+    ${CMAKE_CURRENT_LIST_DIR}/utility/*.h
+    ${CMAKE_CURRENT_LIST_DIR}/utility/*.cpp
+)
+list(APPEND SRC_LIST ${SRC_LIST_UTILITY})
+
+file(GLOB_RECURSE SRC_LIST_PROTO
+    ${CMAKE_CURRENT_LIST_DIR}/proto/*.h
+    ${CMAKE_CURRENT_LIST_DIR}/proto/*.cpp
+)
+list(APPEND SRC_LIST ${SRC_LIST_PROTO})
 
 # these service will use atgateway protocol
 include_directories(
     ${CMAKE_CURRENT_LIST_DIR} ${PROJECT_SERVER_FRAME_INC_DIR} ${ATFRAMEWORK_SERVICE_GATEWAY_PROTOCOL_DIR}
     "${CMAKE_CURRENT_LIST_DIR}/libsimulator_uv"
 )
+
+find_package(Lua)
+if (LUA_FOUND)
+    include_directories(${LUA_INCLUDE_DIR})
+    add_compiler_define(SIMULATOR_ENABLE_LUA=1)
+    file(GLOB_RECURSE SRC_LIST_LUA
+        ${CMAKE_CURRENT_LIST_DIR}/lua/*.h
+        ${CMAKE_CURRENT_LIST_DIR}/lua/*.cpp
+    )
+    list(APPEND SRC_LIST ${SRC_LIST_LUA})
+
+    # copy lua脚本
+    EchoWithColor(COLOR GREEN "-- Install: Copy ${CMAKE_CURRENT_LIST_DIR}/lua/lua ...")
+    file(
+        COPY "${CMAKE_CURRENT_LIST_DIR}/lua/lua"
+        DESTINATION "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lua"
+        USE_SOURCE_PERMISSIONS
+    )
+endif()
+
+source_group_by_dir(SRC_LIST)
 
 # protocol hack
 if (OPENSSL_FOUND)
@@ -44,6 +75,7 @@ add_executable(${SIMULATOR_SRC_BIN_NAME}
 )
 
 target_link_libraries(${SIMULATOR_SRC_BIN_NAME}
+    ${LUA_LIBRARIES}
     ${PROJECT_SERVER_FRAME_LIB_LINK}
     ${EXPORT_LIBATGW_INNER_V1_C_BIN_NAME}
     ${ATFRAMEWORK_ATBUS_LINK_NAME}

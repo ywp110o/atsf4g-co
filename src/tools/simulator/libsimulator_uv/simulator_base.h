@@ -7,15 +7,15 @@
 
 #pragma once
 
-#include <std/smart_ptr.h>
-#include <std/functional.h>
-#include <lock/spin_lock.h>
+#include <bitset>
 #include <config/compiler_features.h>
+#include <fstream>
+#include <list>
+#include <lock/spin_lock.h>
 #include <map>
 #include <set>
-#include <list>
-#include <bitset>
-#include <fstream>
+#include <std/functional.h>
+#include <std/smart_ptr.h>
 
 #include <uv.h>
 
@@ -85,9 +85,13 @@ public:
 
     void setup_signal();
 
+    void setup_timer();
+
     int run(int argc, const char *argv[]);
 
     int stop();
+
+    virtual int tick();
 
     template <typename Ty>
     bool insert_player(std::shared_ptr<Ty> player) {
@@ -169,6 +173,12 @@ private:
     } signal_set_t;
     signal_set_t signals_;
 
+    typedef struct {
+        bool is_used;
+        uv_timer_t timer;
+    } timer_info_t;
+    timer_info_t tick_timer_;
+
     std::map<std::string, player_ptr_t> players_;
     std::set<player_ptr_t> connecting_players_;
     std::shared_ptr<util::cli::cmd_option_ci> cmd_mgr_;
@@ -183,6 +193,7 @@ protected:
         std::string read_file;
         std::vector<std::string> cmds;
         std::vector<unsigned char> buffer_;
+        uint64_t tick_timer_interval;
     } shell_cmd_opts_t;
     shell_cmd_opts_t shell_opts_;
 

@@ -127,7 +127,7 @@ namespace detail {
             owner->dump(std::cout, ss.str()) << std::endl;
         }
     };
-}
+} // namespace detail
 
 
 simulator_base::cmd_wrapper_t::cmd_wrapper_t(const std::string &n) : parent(NULL), name(n) {}
@@ -210,8 +210,10 @@ simulator_base::simulator_base() : is_closing_(false), exec_path_(NULL) {
     shell_opts_.protocol_log = "protocol.log";
     shell_opts_.no_interactive = false;
     shell_opts_.buffer_.resize(65536);
+    shell_opts_.tick_timer_interval = 1000; // 1000 ms for default
 
     signals_.is_used = false;
+    tick_timer_.is_used = false;
 
     g_last_simulator = this;
 }
@@ -254,6 +256,8 @@ int simulator_base::init() {
     args_mgr_->bind_cmd("-ni, --no-interactive", util::cli::phoenix::set_const(shell_opts_.no_interactive, true))->set_help_msg("disable interactive mode");
     args_mgr_->bind_cmd("-f, --rf, --read-file", util::cli::phoenix::assign<std::string>(shell_opts_.read_file))->set_help_msg("read from file");
     args_mgr_->bind_cmd("-c, --cmd", util::cli::phoenix::push_back(shell_opts_.cmds))->set_help_msg("[cmd ...] add cmd to run");
+    args_mgr_->bind_cmd("-t, --timer-interval", util::cli::phoenix::assign(shell_opts_.tick_timer_interval))
+        ->set_help_msg("<timer interval> set timer interval in miliseconds");
 
     reg_req()["!, sh"]
         .bind(detail::on_sys_cmd_exec(this), "<command> [parameters...] execute a external command")
@@ -296,6 +300,30 @@ void simulator_base::setup_signal() {
 #endif
 }
 
+static void simulator_base_timer_cb(uv_timer_t *handle) {
+    if (NULL == handle) {
+        return;
+    }
+
+    simulator_base *self = reinterpret_cast<simulator_base *>(handle->data);
+    if (NULL == self) {
+        return;
+    }
+
+    self->tick();
+}
+
+void simulator_base::setup_timer() {
+    if (tick_timer_.is_used && 0 == shell_opts_.tick_timer_interval) {
+        return;
+    }
+    tick_timer_.is_used = true;
+
+    uv_timer_init(&loop_, &tick_timer_.timer);
+    tick_timer_.timer.data = this;
+    uv_timer_start(&tick_timer_.timer, simulator_base_timer_cb, 1000, shell_opts_.tick_timer_interval);
+}
+
 int simulator_base::run(int argc, const char *argv[]) {
     util::time::time_utility::update(NULL);
     if (argc > 0) {
@@ -307,6 +335,7 @@ int simulator_base::run(int argc, const char *argv[]) {
     }
 
     setup_signal();
+    setup_timer();
 
     // startup interactive thread
     uv_thread_create(&thd_cmd_, linenoise_thd_main, this);
@@ -325,6 +354,14 @@ int simulator_base::run(int argc, const char *argv[]) {
 
         uv_signal_stop(&signals_.sigterm);
         uv_close((uv_handle_t *)&signals_.sigterm, NULL);
+    }
+
+    if (tick_timer_.is_used) {
+        tick_timer_.is_used = false;
+
+        tick_timer_.timer.data = NULL;
+        uv_timer_stop(&tick_timer_.timer);
+        uv_close((uv_handle_t *)&tick_timer_.timer, NULL);
     }
 
     uv_thread_join(&thd_cmd_);
@@ -351,6 +388,8 @@ int simulator_base::stop() {
     uv_stop(&loop_);
     return 0;
 }
+
+int simulator_base::tick() { return 0; }
 
 bool simulator_base::insert_player(player_ptr_t player) {
     util::time::time_utility::update(NULL);
