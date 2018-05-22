@@ -36,6 +36,7 @@ namespace atframe {
             struct conf_t {
                 std::string path_prefix;
                 std::string path_node;
+                std::chrono::system_clock::duration etcd_init_timeout;
                 std::chrono::system_clock::duration watcher_retry_interval;
                 std::chrono::system_clock::duration watcher_request_timeout;
             };

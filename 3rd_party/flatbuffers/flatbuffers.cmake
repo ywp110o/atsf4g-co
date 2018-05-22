@@ -5,7 +5,7 @@ if(NOT 3RD_PARTY_FLATBUFFER_BASE_DIR)
 endif()
 
 set (3RD_PARTY_FLATBUFFER_REPO_DIR "${3RD_PARTY_FLATBUFFER_BASE_DIR}/repo")
-set (3RD_PARTY_FLATBUFFER_VERSION v1.8.0)
+set (3RD_PARTY_FLATBUFFER_VERSION v1.9.0)
 set (3RD_PARTY_FLATBUFFER_HEADERS
     "include/flatbuffers/flatbuffers.h"
     "include/flatbuffers/base.h"
