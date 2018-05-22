@@ -12,6 +12,7 @@ return {
         INFO        = 4,
         NOTICE      = 5,
         DEBUG       = 6,
+        TRACE       = 7,
     },
     log_min_level = 1,
     log_max_level = 6,

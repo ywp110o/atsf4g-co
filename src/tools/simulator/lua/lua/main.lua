@@ -14,16 +14,3 @@ end
 math.randomseed(os.time())
 
 local loader = require('utils.loader')
-require('utils.event')
-
--- 那啥cocos2d会关闭标准输入输出函数, 会导致vardump无输出
-do
-    -- _G.vardump_default.ostream = log_stream(0, logc_fatal)
-end
-
--- 加载bootstrap
-loader.load_list('bootstrap')
-
-
---require "script/testunit/mainMenu"
-log_info('============================= Load Lua End =============================')
