@@ -1,5 +1,7 @@
 #include <assert.h>
 
+#include <std/explicit_declare.h>
+
 #include <common/string_oprs.h>
 
 #include <log/log_wrapper.h>
@@ -14,33 +16,33 @@
 
 namespace atframe {
     namespace component {
-    /**
-     * @note APIs just like this
-     * @see https://coreos.com/etcd/docs/latest/dev-guide/api_reference_v3.html
-     * @see https://coreos.com/etcd/docs/latest/dev-guide/apispec/swagger/rpc.swagger.json
-     * @note KeyValue: { "key": "KEY", "create_revision": "number", "mod_revision": "number", "version": "number", "value": "", "lease": "number" }
-     *   Get data => curl http://localhost:2379/v3alpha/range -X POST -d '{"key": "KEY", "range_end": ""}'
-     *       # Response {"kvs": [{...}], "more": "bool", "count": "COUNT"}
-     *   Set data => curl http://localhost:2379/v3alpha/kv/put -X POST -d '{"key": "KEY", "value": "", "lease": "number", "prev_kv": "bool"}'
-     *   Renew data => curl http://localhost:2379/v3alpha/kv/put -X POST -d '{"key": "KEY", "value": "", "prev_kv": "bool", "ignore_lease": true}'
-     *       # Response {"header":{...}, "prev_kv": {...}}
-     *   Delete data => curl http://localhost:2379/v3alpha/kv/deleterange -X POST -d '{"key": "KEY", "range_end": "", "prev_kv": "bool"}'
-     *       # Response {"header":{...}, "deleted": "number", "prev_kvs": [{...}]}
-     *
-     *   Watch => curl http://localhost:2379/v3alpha/watch -XPOST -d '{"create_request":  {"key": "WATCH KEY", "range_end": "", "prev_kv": true} }'
-     *       # Response {"header":{...},"watch_id":"ID","created":"bool", "canceled": "bool", "compact_revision": "REVISION", "events": [{"type":
-     *                  "PUT=0|DELETE=1", "kv": {...}, prev_kv": {...}"}]}
-     *
-     *   Allocate Lease => curl http://localhost:2379/v3alpha/lease/grant -XPOST -d '{"TTL": 5, "ID": 0}'
-     *       # Response {"header":{...},"ID":"ID","TTL":"5"}
-     *   Keepalive Lease => curl http://localhost:2379/v3alpha/lease/keepalive -XPOST -d '{"ID": 0}'
-     *       # Response {"header":{...},"ID":"ID","TTL":"5"}
-     *   Revoke Lease => curl http://localhost:2379/v3alpha/kv/lease/revoke -XPOST -d '{"ID": 0}'
-     *       # Response {"header":{...}}
-     *
-     *   List members => curl http://localhost:2379/v3alpha/cluster/member/list
-     *       # Response {"header":{...},"members":[{"ID":"ID","name":"NAME","peerURLs":["peer url"],"clientURLs":["client url"]}]}
-     */
+        /**
+         * @note APIs just like this
+         * @see https://coreos.com/etcd/docs/latest/dev-guide/api_reference_v3.html
+         * @see https://coreos.com/etcd/docs/latest/dev-guide/apispec/swagger/rpc.swagger.json
+         * @note KeyValue: { "key": "KEY", "create_revision": "number", "mod_revision": "number", "version": "number", "value": "", "lease": "number" }
+         *   Get data => curl http://localhost:2379/v3alpha/range -X POST -d '{"key": "KEY", "range_end": ""}'
+         *       # Response {"kvs": [{...}], "more": "bool", "count": "COUNT"}
+         *   Set data => curl http://localhost:2379/v3alpha/kv/put -X POST -d '{"key": "KEY", "value": "", "lease": "number", "prev_kv": "bool"}'
+         *   Renew data => curl http://localhost:2379/v3alpha/kv/put -X POST -d '{"key": "KEY", "value": "", "prev_kv": "bool", "ignore_lease": true}'
+         *       # Response {"header":{...}, "prev_kv": {...}}
+         *   Delete data => curl http://localhost:2379/v3alpha/kv/deleterange -X POST -d '{"key": "KEY", "range_end": "", "prev_kv": "bool"}'
+         *       # Response {"header":{...}, "deleted": "number", "prev_kvs": [{...}]}
+         *
+         *   Watch => curl http://localhost:2379/v3alpha/watch -XPOST -d '{"create_request":  {"key": "WATCH KEY", "range_end": "", "prev_kv": true} }'
+         *       # Response {"header":{...},"watch_id":"ID","created":"bool", "canceled": "bool", "compact_revision": "REVISION", "events": [{"type":
+         *                  "PUT=0|DELETE=1", "kv": {...}, prev_kv": {...}"}]}
+         *
+         *   Allocate Lease => curl http://localhost:2379/v3alpha/lease/grant -XPOST -d '{"TTL": 5, "ID": 0}'
+         *       # Response {"header":{...},"ID":"ID","TTL":"5"}
+         *   Keepalive Lease => curl http://localhost:2379/v3alpha/lease/keepalive -XPOST -d '{"ID": 0}'
+         *       # Response {"header":{...},"ID":"ID","TTL":"5"}
+         *   Revoke Lease => curl http://localhost:2379/v3alpha/kv/lease/revoke -XPOST -d '{"ID": 0}'
+         *       # Response {"header":{...}}
+         *
+         *   List members => curl http://localhost:2379/v3alpha/cluster/member/list
+         *       # Response {"header":{...},"members":[{"ID":"ID","name":"NAME","peerURLs":["peer url"],"clientURLs":["client url"]}]}
+         */
 
 #define ETCD_API_V3_MEMBER_LIST "/v3alpha/cluster/member/list"
 
@@ -96,6 +98,50 @@ namespace atframe {
                 ret = &buffer[0];
 
                 return ret;
+            }
+
+            static int etcd_cluster_trace_porcess_callback(util::network::http_request &req, const util::network::http_request::progress_t &process) {
+                WLOGTRACE("Etcd cluster %p http request %p to %s, process: download %lf/%lf, upload %lf/%lf", req.get_priv_data(), &req, req.get_url().c_str(),
+                          process.dlnow, process.dltotal, process.ulnow, process.ultotal);
+                return 0;
+            }
+
+            EXPLICIT_UNUSED_ATTR static int etcd_cluster_verbose_callback(util::network::http_request &req, curl_infotype type, char *data, size_t size) {
+                if (util::log::log_wrapper::check(WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT), util::log::log_wrapper::level_t::LOG_LW_TRACE)) {
+                    const char *verbose_type = "Unknown Action";
+                    switch (type) {
+                    case CURLINFO_TEXT:
+                        verbose_type = "Text";
+                        break;
+                    case CURLINFO_HEADER_OUT:
+                        verbose_type = "Header Send";
+                        break;
+                    case CURLINFO_DATA_OUT:
+                        verbose_type = "Data Send";
+                        break;
+                    case CURLINFO_SSL_DATA_OUT:
+                        verbose_type = "SSL Data Send";
+                        break;
+                    case CURLINFO_HEADER_IN:
+                        verbose_type = "Header Received";
+                        break;
+                    case CURLINFO_DATA_IN:
+                        verbose_type = "Data Received";
+                        break;
+                    case CURLINFO_SSL_DATA_IN:
+                        verbose_type = "SSL Data Received";
+                        break;
+                    default: /* in case a new one is introduced to shock us */
+                        break;
+                    }
+
+                    util::log::log_wrapper::caller_info_t caller = WDTLOGFILENF(util::log::log_wrapper::level_t::LOG_LW_TRACE, "Trace");
+                    WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)
+                        ->log(caller, "Etcd cluster %p http request %p to %s => Verbose: %s", req.get_priv_data(), &req, req.get_url().c_str(), verbose_type);
+                    WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->write_log(caller, data, size);
+                }
+
+                return 0;
             }
         } // namespace details
 
@@ -412,14 +458,13 @@ namespace atframe {
                 int res = req->start(util::network::http_request::method_t::EN_MT_POST, false);
                 if (res != 0) {
                     req->set_on_complete(NULL);
-                    WLOGERROR("Etcd start keepalive lease %lld request to %s failed, res: %d", static_cast<long long>(get_lease()), req->get_url().c_str(),
-                              res);
+                    WLOGERROR("Etcd start update member %lld request to %s failed, res: %d", static_cast<long long>(get_lease()), req->get_url().c_str(), res);
 
                     add_stats_error_request();
                     return false;
                 }
 
-                WLOGTRACE("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
+                WLOGTRACE("Etcd start update member %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_update_members_ = req;
             } else {
                 add_stats_error_request();
@@ -508,6 +553,7 @@ namespace atframe {
 
                 if (!self->conf_.hosts.empty() && need_select_node) {
                     self->conf_.path_node = self->conf_.hosts[self->random_generator_.random_between<size_t>(0, self->conf_.hosts.size())];
+                    WLOGINFO("Etcd cluster using node %s", self->conf_.path_node.c_str());
                 }
 
                 self->add_stats_success_request();
@@ -554,6 +600,7 @@ namespace atframe {
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_lease_keepalive);
 
+                // req->set_on_verbose(details::etcd_cluster_verbose_callback);
                 int res = req->start(util::network::http_request::method_t::EN_MT_POST, false);
                 if (res != 0) {
                     req->set_on_complete(NULL);
@@ -563,7 +610,7 @@ namespace atframe {
                     return false;
                 }
 
-                WLOGTRACE("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
+                WLOGDEBUG("Etcd start keepalive lease %lld request to %s", static_cast<long long>(get_lease()), req->get_url().c_str());
                 rpc_keepalive_ = req;
             } else {
                 add_stats_error_request();
@@ -877,20 +924,18 @@ namespace atframe {
         }
 
         void etcd_cluster::add_stats_error_request() {
-            ++ stats_.sum_error_requests;
-            ++ stats_.continue_error_requests;
+            ++stats_.sum_error_requests;
+            ++stats_.continue_error_requests;
             stats_.continue_success_requests = 0;
         }
 
         void etcd_cluster::add_stats_success_request() {
-            ++ stats_.sum_success_requests;
-            ++ stats_.continue_success_requests;
+            ++stats_.sum_success_requests;
+            ++stats_.continue_success_requests;
             stats_.continue_error_requests = 0;
         }
 
-        void etcd_cluster::add_stats_create_request() {
-            stats_.sum_create_requests = 0;
-        }
+        void etcd_cluster::add_stats_create_request() { stats_.sum_create_requests = 0; }
 
         void etcd_cluster::setup_http_request(util::network::http_request::ptr_t &req, rapidjson::Document &doc, time_t timeout) {
             if (!req) {
@@ -899,9 +944,17 @@ namespace atframe {
 
             req->set_opt_follow_location(true);
             req->set_opt_ssl_verify_peer(false);
+            req->set_opt_accept_encoding("");
             req->set_opt_http_content_decoding(true);
             req->set_opt_timeout(timeout);
             req->set_user_agent(details::get_default_user_agent());
+            req->set_opt_reuse_connection(false);
+
+            // req->set_on_verbose(details::etcd_cluster_verbose_callback);
+
+            if (util::log::log_wrapper::check(WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT), util::log::log_wrapper::level_t::LOG_LW_TRACE)) {
+                req->set_on_progress(details::etcd_cluster_trace_porcess_callback);
+            }
 
             // Stringify the DOM
             rapidjson::StringBuffer buffer;

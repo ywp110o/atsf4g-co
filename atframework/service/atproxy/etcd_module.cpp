@@ -26,10 +26,32 @@ namespace atframe {
                 ret += std::chrono::nanoseconds(src.nsec);
                 return ret;
             }
+
+            static void init_timer_timeout_callback(uv_timer_t *handle) {
+                assert(handle);
+                assert(handle->data);
+                assert(handle->loop);
+
+                bool *is_timeout = reinterpret_cast<bool *>(handle->data);
+                *is_timeout = true;
+                uv_stop(handle->loop);
+            }
+
+            void init_timer_closed_callback(uv_handle_t *handle) {
+                assert(handle);
+                assert(handle->data);
+                assert(handle->loop);
+
+                bool *is_timeout = reinterpret_cast<bool *>(handle->data);
+                *is_timeout = false;
+                uv_stop(handle->loop);
+            }
+
         } // namespace detail
 
         etcd_module::etcd_module() {
             conf_.path_prefix = "/";
+            conf_.etcd_init_timeout = std::chrono::seconds(5);       // 初始化超时5秒
             conf_.watcher_retry_interval = std::chrono::seconds(15); // 重试间隔15秒
             conf_.watcher_request_timeout = std::chrono::hours(1);   // 一小时超时时间，相当于每小时重新拉取数据
         }
@@ -111,9 +133,21 @@ namespace atframe {
 
             // 执行到首次检测结束
             bool is_failed = false;
-            while (true) {
+            bool is_timeout = false;
+
+            // setup timer for timeout
+            uv_timer_t timeout_timer;
+            uv_timer_init(get_app()->get_bus_node()->get_evloop(), &timeout_timer);
+            timeout_timer.data = &is_timeout;
+
+            uint64_t timeout_ms = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(conf_.etcd_init_timeout).count());
+            uv_timer_start(&timeout_timer, detail::init_timer_timeout_callback, timeout_ms, 0);
+
+            int ticks = 0;
+            while (false == is_failed && false == is_timeout) {
                 util::time::time_utility::update();
                 etcd_ctx_.tick();
+                ++ticks;
 
                 if (keepalive_actor->is_check_run()) {
                     if (!keepalive_actor->is_check_passed()) {
@@ -133,10 +167,29 @@ namespace atframe {
                     if (etcd_ctx_.get_stats().continue_error_requests > retry_times) {
                         retry_times = etcd_ctx_.get_stats().continue_error_requests > retry_times;
                     }
-                    WLOGERROR("etcd_keepalive request %s for %llu times failed.", conf_.path_node.c_str(), static_cast<unsigned long long>(retry_times));
+                    WLOGERROR("etcd_keepalive request %s for %llu times (with %d ticks) failed.", conf_.path_node.c_str(),
+                              static_cast<unsigned long long>(retry_times), ticks);
                     is_failed = true;
                     break;
                 }
+            }
+
+            if (is_timeout) {
+                is_failed = true;
+                size_t retry_times = keepalive_actor->get_check_times();
+                if (etcd_ctx_.get_stats().continue_error_requests > retry_times) {
+                    retry_times = etcd_ctx_.get_stats().continue_error_requests > retry_times;
+                }
+                WLOGERROR("etcd_keepalive request %s timeout, retry %llu times (with %d ticks).", conf_.path_node.c_str(),
+                          static_cast<unsigned long long>(retry_times), ticks);
+            }
+
+            // close timer for timeout
+            uv_timer_stop(&timeout_timer);
+            is_timeout = true;
+            uv_close((uv_handle_t *)&timeout_timer, detail::init_timer_closed_callback);
+            while (is_timeout) {
+                uv_run(get_app()->get_bus_node()->get_evloop(), UV_RUN_ONCE);
             }
 
             // 初始化失败则回收资源
@@ -196,6 +249,14 @@ namespace atframe {
                 cfg.dump_to("atproxy.etcd.keepalive.ttl", dur, true);
                 if (0 != dur.sec || 0 != dur.nsec) {
                     etcd_ctx_.set_conf_keepalive_interval(detail::convert(dur));
+                }
+            }
+
+            {
+                util::config::duration_value dur;
+                cfg.dump_to("atproxy.etcd.init.timeout", dur, true);
+                if (0 != dur.sec || 0 != dur.nsec) {
+                    conf_.etcd_init_timeout = detail::convert(dur);
                 }
             }
 
