@@ -13,9 +13,9 @@ if(NOT EXISTS ${3RD_PARTY_LIBUV_PKG_DIR})
 endif()
 
 # force to use prebuilt when using mingw
-if (MINGW)
-    set(LIBUV_ROOT ${3RD_PARTY_LIBUV_ROOT_DIR})
-endif()
+# if (MINGW)
+#     set(LIBUV_ROOT ${3RD_PARTY_LIBUV_ROOT_DIR})
+# endif()
 
 FindConfigurePackage(
     PACKAGE Libuv
