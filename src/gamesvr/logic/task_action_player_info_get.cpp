@@ -87,6 +87,11 @@ int task_action_player_info_get::operator()() {
         //}
     }
 
+    // 自定义选项
+    if (req_body.need_player_options()) {
+        rsp_body->mutable_player_options()->CopyFrom(user->get_player_options().custom_options());
+    }
+
     return hello::err::EN_SUCCESS;
 }
 

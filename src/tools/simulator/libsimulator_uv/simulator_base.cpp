@@ -91,6 +91,22 @@ namespace detail {
         }
     };
 
+    struct on_sys_cmd_sleep {
+        simulator_base *owner;
+        on_sys_cmd_sleep(simulator_base *s) : owner(s) {}
+
+        void operator()(util::cli::callback_param params) {
+            time_t sec = 1;
+            if (params.get_params_number() > 0) {
+                sec = params[0]->to_int32();
+            }
+
+            if (sec > 0) {
+                owner->sleep(sec);
+            }
+        }
+    };
+
     struct on_sys_cmd_unknown {
         simulator_base *owner;
         on_sys_cmd_unknown(simulator_base *s) : owner(s) {}
@@ -214,6 +230,7 @@ simulator_base::simulator_base() : is_closing_(false), exec_path_(NULL) {
 
     signals_.is_used = false;
     tick_timer_.is_used = false;
+    sleep_timer_.is_used = false;
 
     g_last_simulator = this;
 }
@@ -265,6 +282,7 @@ int simulator_base::init() {
     reg_req()["?, help"].bind(detail::on_sys_cmd_help(this), "show help message");
     reg_req()["exit, quit"].bind(detail::on_sys_cmd_exit(this), "exit");
     reg_req()["set_player"].bind(detail::on_sys_cmd_set_player(this), "<player id> set current player");
+    reg_req()["sleep"].bind(detail::on_sys_cmd_sleep(this), "<second> sleep timeout");
     cmd_mgr_->bind_cmd("@OnError", detail::on_sys_cmd_unknown(this));
 
     // register all protocol callbacks
@@ -340,6 +358,9 @@ int simulator_base::run(int argc, const char *argv[]) {
     // startup interactive thread
     uv_thread_create(&thd_cmd_, linenoise_thd_main, this);
 
+    uv_timer_init(&loop_, &sleep_timer_.timer);
+    sleep_timer_.timer.data = this;
+
     int ret = uv_run(&loop_, UV_RUN_DEFAULT);
     uv_close((uv_handle_t *)&async_cmd_, NULL);
 
@@ -363,6 +384,17 @@ int simulator_base::run(int argc, const char *argv[]) {
         uv_timer_stop(&tick_timer_.timer);
         uv_close((uv_handle_t *)&tick_timer_.timer, NULL);
     }
+
+
+    sleep_timer_.timer.data = NULL;
+    if (sleep_timer_.is_used) {
+        sleep_timer_.is_used = false;
+
+        // reactive async cmd, in case of cmd breaking
+        uv_async_send(&async_cmd_);
+    }
+    uv_timer_stop(&sleep_timer_.timer);
+    uv_close((uv_handle_t *)&sleep_timer_.timer, NULL);
 
     uv_thread_join(&thd_cmd_);
     while (UV_EBUSY == uv_loop_close(&loop_)) {
@@ -462,6 +494,40 @@ simulator_base::player_ptr_t simulator_base::get_player_by_id(const std::string 
     return iter->second;
 }
 
+void simulator_base::libuv_on_sleep_timeout(uv_timer_t *handle) {
+    if (NULL == handle) {
+        return;
+    }
+
+    simulator_base *self = reinterpret_cast<simulator_base *>(handle->data);
+    if (NULL == self) {
+        return;
+    }
+
+    // uv_timer_stop(handle);
+    self->sleep_timer_.is_used = false;
+    uv_async_send(&self->async_cmd_);
+}
+
+bool simulator_base::sleep(time_t sec) {
+    if (sec <= 0) {
+        return false;
+    }
+
+    if (sleep_timer_.is_used) {
+        return false;
+    }
+
+    if (0 != uv_timer_start(&sleep_timer_.timer, libuv_on_sleep_timeout, sec * 1000, 0)) {
+        uv_close((uv_handle_t *)&sleep_timer_.timer, NULL);
+        sleep_timer_.timer.data = NULL;
+        return false;
+    }
+
+    sleep_timer_.is_used = true;
+    return true;
+}
+
 int simulator_base::insert_cmd(player_ptr_t player, const std::string &cmd) {
     // must be thread-safe
     util::lock::lock_holder<util::lock::spin_lock> holder(shell_cmd_manager_.lock);
@@ -476,6 +542,11 @@ void simulator_base::libuv_on_async_cmd(uv_async_t *handle) {
 
     while (true) {
         util::time::time_utility::update(NULL);
+        // sleeping skip running
+        if (self->sleep_timer_.is_used) {
+            return;
+        }
+
         std::pair<player_ptr_t, std::string> cmd;
         {
             util::lock::lock_holder<util::lock::spin_lock> holder(self->shell_cmd_manager_.lock);
@@ -492,6 +563,23 @@ void simulator_base::libuv_on_async_cmd(uv_async_t *handle) {
     if (!self->shell_opts_.no_interactive) {
         uv_mutex_trylock(&self->async_cmd_lock_);
         uv_mutex_unlock(&self->async_cmd_lock_);
+    }
+
+    if (self->shell_cmd_manager_.read_file_ios.is_open() && !self->shell_cmd_manager_.read_file_ios.eof()) {
+        std::string cmd;
+        while (std::getline(self->shell_cmd_manager_.read_file_ios, cmd)) {
+            size_t space_cnt = 0;
+            for (size_t i = 0; i < cmd.size(); ++i) {
+                if (' ' == cmd[i] || '\t' == cmd[i] || '\r' == cmd[i] || '\n' == cmd[i]) {
+                    ++space_cnt;
+                }
+            }
+
+            if (space_cnt != cmd.size()) {
+                self->insert_cmd(self->cmd_player_, cmd);
+                break;
+            }
+        }
     }
 }
 
@@ -678,13 +766,11 @@ void simulator_base::linenoise_thd_main(void *arg) {
     }
 
     if (!self->shell_opts_.read_file.empty()) {
-        std::fstream fin;
-        fin.open(self->shell_opts_.read_file.c_str(), std::ios::in);
-        std::string cmd;
-        while (std::getline(fin, cmd)) {
-            self->insert_cmd(self->cmd_player_, cmd);
-        }
+        g_last_simulator->shell_cmd_manager_.read_file_ios.open(self->shell_opts_.read_file.c_str(), std::ios::in);
     }
+
+    uv_mutex_lock(&g_last_simulator->async_cmd_lock_);
+    uv_async_send(&g_last_simulator->async_cmd_);
 
     if (self->shell_opts_.no_interactive) {
         return;

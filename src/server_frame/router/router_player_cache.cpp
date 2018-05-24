@@ -102,8 +102,16 @@ int router_player_cache::pull_object(router_player_private_type &priv_data) {
     if (res < 0) {
         if (hello::err::EN_DB_RECORD_NOT_FOUND != res) {
             WLOGERROR("load player data for %llu failed, error code:%d", get_key().object_id_ull(), res);
+            return res;
+        } else if (NULL != priv_data.login_tb) {
+            // 创建用户走这里的流程
+            tbu.set_open_id(priv_data.login_tb->open_id());
+            tbu.set_user_id(priv_data.login_tb->user_id());
+            tbu.mutable_platform()->CopyFrom(priv_data.login_tb->platform());
+            res = 0;
+        } else {
+            return res;
         }
-        return res;
     }
 
     player::ptr_t obj = get_object();

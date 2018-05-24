@@ -91,12 +91,14 @@ message SCPongRsp {}
 
 // 请求用户数据
 message CSPlayerGetInfoReq {
-    bool need_player_info = 1; // 标记为true 回包才有会有玩家数据
+    bool need_player_info    = 1; // 标记为true 回包才有会有玩家基本数据
+    bool need_player_options = 2; // 标记为true 回包才有会有玩家选项数据
 }
 
 // 用户数据返回
 message SCPlayerGetInfoRsp {
-    DPlayerInfo player_info = 1; // 玩家数据
+    DPlayerInfo    player_info    = 1; // 玩家数据
+    DPlayerOptions player_options = 2; // 玩家自定义选项
 }
 
 // 协议包头

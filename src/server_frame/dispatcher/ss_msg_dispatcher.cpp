@@ -122,7 +122,7 @@ int32_t ss_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
     return ret;
 }
 
-int32_t ss_msg_dispatcher::notify_send_failed(const atbus::protocol::msg &msg, const void *buffer, size_t len) {
+int32_t ss_msg_dispatcher::notify_send_failed(const atbus::protocol::msg &msg) {
     if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.head.type) {
         WLOGERROR("message type %d invalid", msg.head.type);
         return hello::err::EN_SYS_PARAM;
@@ -132,6 +132,9 @@ int32_t ss_msg_dispatcher::notify_send_failed(const atbus::protocol::msg &msg, c
         WLOGERROR("send a message from unknown source");
         return hello::err::EN_SYS_PARAM;
     }
+
+    const void *buffer = msg.body.forward->content.ptr;
+    size_t len = msg.body.forward->content.size;
 
     hello::SSMsg ss_msg;
     start_data_t callback_data;
@@ -147,6 +150,7 @@ int32_t ss_msg_dispatcher::notify_send_failed(const atbus::protocol::msg &msg, c
     // 转移要恢复的任务ID
     ss_msg.mutable_head()->set_dst_task_id(ss_msg.head().src_task_id());
     ss_msg.mutable_head()->set_src_task_id(0);
+    ss_msg.mutable_head()->set_error_code(hello::err::EN_SYS_RPC_SEND_FAILED);
 
     ret = on_send_msg_failed(callback_data.message, msg.head.ret);
     if (ret < 0) {

@@ -273,6 +273,9 @@ public:
     inline const hello::platform_information &get_platform_info() const { return platform_info_; }
     inline hello::platform_information &get_platform_info() { return platform_info_.ref(); }
 
+    inline const hello::player_options &get_player_options() const { return player_options_; }
+    inline hello::player_options &get_player_options() { return player_options_.ref(); }
+
     inline const hello::player_data &get_player_data() const { return player_data_; }
 
     inline uint32_t get_data_version() const { return data_version_; }
@@ -302,6 +305,7 @@ private:
 
     player_dirty_wrapper<hello::platform_information> platform_info_;
     player_dirty_wrapper<hello::player_data> player_data_;
+    player_dirty_wrapper<hello::player_options> player_options_;
 
     // =======================================================
     heartbeat_t heartbeat_data_;

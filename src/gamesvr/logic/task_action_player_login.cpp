@@ -154,9 +154,6 @@ int task_action_player_login::operator()() {
         // ======== 这里之后tb不再有效 ========
     }
 
-    user->get_platform_info().set_access(user->get_login_info().platform().access());
-    user->get_platform_info().set_platform_id(user->get_login_info().platform().platform_id());
-    user->get_platform_info().set_version_type(user->get_login_info().platform().version_type());
     user->set_client_info(req.body().mcs_login_req().client_info());
 
     // 8. 设置和Session互相关联

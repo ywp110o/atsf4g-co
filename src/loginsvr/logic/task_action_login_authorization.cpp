@@ -241,6 +241,8 @@ int task_action_login_authorization::operator()() {
             return res;
         }
 
+        player_uid += hello::config::EN_GCC_START_PLAYER_ID;
+
         init_login_data(login_data_, msg_body, player_uid, channel_id);
 
         // 注册日志

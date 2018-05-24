@@ -57,12 +57,12 @@ static int proto_inner_callback_on_close(libatgw_inner_v1_c_context ctx, int32_t
 
     if ((reason < 0 || reason > 0x10000) && ::atframe::gateway::close_reason_t::EN_CRT_EOF != reason) {
         GTCLI2PLAYER(ctx).close();
-        ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << GTCLI2PLAYER(ctx).get_id() << GTCLI2PLAYER(ctx).get_user_id()
-             << " closed for reason " << reason << std::endl;
+        ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << GTCLI2PLAYER(ctx).get_id() << "(" << GTCLI2PLAYER(ctx).get_user_id()
+             << ") closed for reason " << reason << std::endl;
     } else {
         GTCLI2PLAYER(ctx).close_net(GTCLI2PLAYER(ctx).find_network(ctx));
-        ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << GTCLI2PLAYER(ctx).get_id() << GTCLI2PLAYER(ctx).get_user_id()
-             << " closed for reason " << reason << ", we will reconnect soon." << std::endl;
+        ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << GTCLI2PLAYER(ctx).get_id() << "(" << GTCLI2PLAYER(ctx).get_user_id()
+             << ") closed for reason " << reason << ", we will reconnect soon." << std::endl;
     }
     return 0;
 }

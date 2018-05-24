@@ -44,8 +44,6 @@ player::ptr_t player::create(uint64_t user_id, const std::string &openid) {
 void player::create_init(uint32_t version_type) {
     set_player_level(1);
     data_version_ = PLAYER_DATA_LOGIC_VERSION;
-
-
     version_.assign("0");
 
     // TODO all module create init
@@ -62,6 +60,18 @@ void player::create_init(uint32_t version_type) {
 }
 
 void player::login_init() {
+    // refresh platform parameters
+    {
+        hello::platform_information &platform = get_platform_info();
+        platform.set_access(get_login_info().platform().access());
+        platform.set_platform_id(get_login_info().platform().platform_id());
+        platform.set_version_type(get_login_info().platform().version_type());
+
+        // 冗余的key字段
+        platform.mutable_profile()->set_open_id(get_open_id());
+        platform.mutable_profile()->set_user_id(get_user_id());
+    }
+
     // TODO check all interval checkpoint
 
     // TODO all module login init
@@ -125,6 +135,10 @@ void player::init_from_table_data(const hello::table_user &tb_player) {
         player_data_.ref().CopyFrom(src_tb->player());
     }
 
+    if (src_tb->has_options()) {
+        player_options_.ref().CopyFrom(src_tb->options());
+    }
+
     // TODO all modules load from DB
 }
 
@@ -139,6 +153,10 @@ int player::dump(hello::table_user &user, bool always) {
 
     if (always || platform_info_.is_dirty()) {
         user.mutable_platform()->CopyFrom(platform_info_);
+    }
+
+    if (always || player_options_.is_dirty()) {
+        user.mutable_options()->CopyFrom(player_options_);
     }
 
     return 0;
@@ -226,6 +244,8 @@ void player::try_patch_remote_command() {
         return;
     }
 
+    inner_flags_.set(inner_flag::EN_IFT_NEED_PATCH_REMOTE_COMMAND, false);
+
     task_manager::id_t tid = 0;
     task_action_player_remote_patch_jobs::ctor_param_t params;
     params.user = shared_from_this();
@@ -250,8 +270,6 @@ void player::try_patch_remote_command() {
             return;
         }
     }
-
-    inner_flags_.set(inner_flag::EN_IFT_NEED_PATCH_REMOTE_COMMAND, false);
 }
 
 void player::send_all_syn_msg() {

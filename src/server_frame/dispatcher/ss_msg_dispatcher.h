@@ -67,7 +67,7 @@ public:
      * @param len data length
      * @return 0 or error code
      */
-    int32_t notify_send_failed(const atbus::protocol::msg &msg, const void *buffer, size_t len);
+    int32_t notify_send_failed(const atbus::protocol::msg &msg);
 
 public:
     int32_t send_to_proc(uint64_t bus_id, const hello::SSMsg &ss_msg);

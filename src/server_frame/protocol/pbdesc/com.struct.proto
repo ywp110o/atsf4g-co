@@ -77,9 +77,11 @@ message DPlayerStat {
 message DPlayerInfo {
     DPlayerProfile player       = 1;
     uint32         player_level = 2; // 玩家（主城）等级
-    uint32         vip_level    = 3; // VIP（主城）等级
     DPlayerStat    player_stat  = 4;
 }
+
+// 用户自定义选项
+message DPlayerOptions {}
 
 /////////////////////////////////////////////////////////////////////////
 // 好友数据

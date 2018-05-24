@@ -67,7 +67,7 @@ int router_manager_set::tick() {
 
         for (int i = 0; i < hello::EnRouterObjectType_ARRAYSIZE; ++i) {
             if (mgrs_[i]) {
-                ss << "\t" << mgrs_[i]->name() << " has " << mgrs_[i]->size() << "caches" << std::endl;
+                ss << "\t" << mgrs_[i]->name() << " has " << mgrs_[i]->size() << " cache(s)" << std::endl;
             }
         }
 

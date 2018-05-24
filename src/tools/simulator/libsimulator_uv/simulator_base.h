@@ -105,6 +105,8 @@ public:
 
     inline bool is_closing() const { return is_closing_; }
 
+    bool sleep(time_t sec);
+
     template <typename Ty>
     std::shared_ptr<Ty> create_player(const std::string &host, int port) {
         if (is_closing_) {
@@ -157,6 +159,9 @@ public:
     }
 
 private:
+    static void libuv_on_sleep_timeout(uv_timer_t *handle);
+
+private:
     bool is_closing_;
     const char *exec_path_;
     uv_loop_t loop_;
@@ -178,6 +183,7 @@ private:
         uv_timer_t timer;
     } timer_info_t;
     timer_info_t tick_timer_;
+    timer_info_t sleep_timer_;
 
     std::map<std::string, player_ptr_t> players_;
     std::set<player_ptr_t> connecting_players_;
@@ -200,6 +206,7 @@ protected:
     typedef struct {
         util::lock::spin_lock lock;
         std::list<std::pair<player_ptr_t, std::string> > cmds;
+        std::fstream read_file_ios;
     } shell_cmd_data_t;
     shell_cmd_data_t shell_cmd_manager_;
 };

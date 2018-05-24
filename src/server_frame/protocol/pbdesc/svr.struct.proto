@@ -51,4 +51,6 @@ message player_data {
     uint32 player_level = 1; // 玩家等级
 }
 
-message player_options {}
+message player_options {
+    DPlayerOptions custom_options = 1; // 用户自定义选项
+}

@@ -102,9 +102,20 @@ struct app_handle_on_msg {
     }
 };
 
-static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
+static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atapp::app::msg_t &msg) {
     WLOGERROR("send data from 0x%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
-    return 0;
+
+    int ret = 0;
+    switch (msg.head.type) {
+    case ::atframe::component::message_type::EN_ATST_SS_MSG: {
+        ret = ss_msg_dispatcher::me()->notify_send_failed(msg);
+        break;
+    }
+
+    default: { break; }
+    }
+
+    return ret;
 }
 
 static int app_handle_on_connected(atapp::app &app, atbus::endpoint &ep, int status) {
