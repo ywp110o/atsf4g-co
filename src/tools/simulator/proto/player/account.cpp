@@ -82,7 +82,8 @@ namespace proto {
 
             player->set_user_id(msg.body().msc_login_auth_rsp().user_id());
             player->set_gamesvr_addr(msg.body().msc_login_auth_rsp().login_address(index));
-            player->insert_cmd("Player LoginGame");
+
+            player->get_owner()->exec_cmd(player, "Player LoginGame");
         }
 
         void on_cmd_login(util::cli::callback_param params) {
@@ -140,6 +141,8 @@ namespace proto {
         }
 
         void on_cmd_ping(util::cli::callback_param params) {
+            SIMULATOR_CHECK_PLAYER_PARAMNUM(params, 0);
+
             client_simulator::msg_t &req = client_simulator::add_req(params);
             req.mutable_body()->mutable_mcs_ping_req();
         }

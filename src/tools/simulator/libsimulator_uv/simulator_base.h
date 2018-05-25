@@ -105,7 +105,7 @@ public:
 
     inline bool is_closing() const { return is_closing_; }
 
-    bool sleep(time_t sec);
+    bool sleep(time_t msec);
 
     template <typename Ty>
     std::shared_ptr<Ty> create_player(const std::string &host, int port) {

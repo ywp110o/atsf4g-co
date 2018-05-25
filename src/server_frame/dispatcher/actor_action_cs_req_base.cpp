@@ -7,6 +7,9 @@
 #include <logic/session_manager.h>
 #include <time/time_utility.h>
 
+// #include <router/router_player_cache.h>
+#include <router/router_player_manager.h>
+
 #include <dispatcher/cs_msg_dispatcher.h>
 
 #include "actor_action_cs_req_base.h"
@@ -97,5 +100,14 @@ void actor_action_cs_req_base::send_rsp_msg() {
     // sync messages
     if (owner_player) {
         owner_player->send_all_syn_msg();
+
+        // refresh visit time if success
+        if (0 == get_rsp_code()) {
+            router_player_manager::ptr_t router_cache =
+                router_player_manager::me()->get_cache(router_player_manager::key_t(router_player_manager::me()->get_type_id(), owner_player->get_user_id()));
+            if (router_cache && router_cache->is_object_equal(owner_player)) {
+                router_cache->refresh_visit_time();
+            }
+        }
     }
 }

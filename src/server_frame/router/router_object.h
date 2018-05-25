@@ -30,6 +30,8 @@ public:
 
     router_object(const object_ptr_t &data, key_t &&k) : router_object_base(k), obj_(data) { assert(obj_); }
 
+    inline bool is_object_equal(const object_ptr_t &checked) const { return checked == obj_; }
+
     const object_ptr_t &get_object() {
         refresh_visit_time();
         return obj_;

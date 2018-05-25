@@ -72,6 +72,8 @@ public:
 
     void connect_done(libatgw_inner_v1_c_context ctx);
 
+    inline bool is_connecting() const { return is_connecting_; }
+
 private:
     std::map<uint32_t, libatgw_inner_v1_c_context> proto_handles_;
     hello::DPlatformData platform_;
