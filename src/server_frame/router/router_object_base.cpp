@@ -46,7 +46,12 @@ router_object_base::router_object_base(key_t &&k)
 
 router_object_base::~router_object_base() {}
 
-void router_object_base::refresh_visit_time() { last_visit_time_ = util::time::time_utility::get_now(); }
+void router_object_base::refresh_visit_time() {
+    last_visit_time_ = util::time::time_utility::get_now();
+
+    // 刷新访问事件要取消移除缓存的计划任务
+    unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
+}
 
 void router_object_base::refresh_save_time() { last_save_time_ = util::time::time_utility::get_now(); }
 
@@ -57,7 +62,7 @@ int router_object_base::remove_object(void *priv_data, uint64_t transfer_to_svr_
 
     // 移除实体需要设置路由BUS ID为0并保存一次
     uint64_t old_router_server_id = get_router_server_id();
-    uint32_t old_router_ver = get_router_version();
+    uint32_t old_router_ver       = get_router_version();
 
     if (transfer_to_svr_id != get_router_server_id()) {
         set_router_server_id(transfer_to_svr_id, old_router_ver + 1);
@@ -110,7 +115,11 @@ int router_object_base::upgrade() {
 
     refresh_visit_time();
     set_flag(flag_t::EN_ROFT_IS_OBJECT);
-    unset_flag(flag_t::EN_ROFT_OBJECT_REMOVED);
+    unset_flag(flag_t::EN_ROFT_CACHE_REMOVED);
+
+    // 升级操作要取消移除缓存和降级的计划任务
+    unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
+    unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
     return 0;
 }
 
@@ -201,6 +210,9 @@ int router_object_base::await_io_task(task_manager::task_ptr_t &self_task) {
 }
 
 int router_object_base::pull_cache_inner(void *priv_data) {
+    // 触发拉取缓存时要取消移除缓存的计划任务
+    unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
+
     task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
     if (!self_task) {
         return hello::err::EN_SYS_RPC_NO_TASK;
@@ -230,6 +242,10 @@ int router_object_base::pull_cache_inner(void *priv_data) {
 }
 
 int router_object_base::pull_object_inner(void *priv_data) {
+    // 触发拉取实体时要取消移除缓存和降级的计划任务
+    unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
+    unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
+
     task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
     if (!self_task) {
         return hello::err::EN_SYS_RPC_NO_TASK;
@@ -243,7 +259,7 @@ int router_object_base::pull_object_inner(void *priv_data) {
     // 先等待之前的任务完成再设置flag
     flag_guard fg(*this, flag_t::EN_ROFT_PULLING_OBJECT);
 
-    unset_flag(flag_t::EN_ROFT_OBJECT_REMOVED);
+    unset_flag(flag_t::EN_ROFT_CACHE_REMOVED);
     unset_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT);
 
     // 执行读任务

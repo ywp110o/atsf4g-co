@@ -45,6 +45,11 @@ int task_action_auto_save_objects::operator()() {
             break;
         }
         case router_manager_set::EN_ASA_REMOVE_OBJECT: {
+            // 有可能在一系列异步流程后又被mutable_object()了，这时候要放弃降级
+            if (false == auto_save.object->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT)) {
+                break;
+            }
+
             router_manager_base *mgr = router_manager_set::me()->get_manager(auto_save.type_id);
             if (UTIL_CONFIG_NULLPTR != mgr) {
                 mgr->remove_object(auto_save.object->get_key(), auto_save.object, UTIL_CONFIG_NULLPTR);
@@ -52,6 +57,11 @@ int task_action_auto_save_objects::operator()() {
             break;
         }
         case router_manager_set::EN_ASA_REMOVE_CACHE: {
+            // 有可能在一系列异步流程后缓存被续期了，这时候要放弃移除缓存
+            if (false == auto_save.object->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE)) {
+                break;
+            }
+
             router_manager_base *mgr = router_manager_set::me()->get_manager(auto_save.type_id);
             if (UTIL_CONFIG_NULLPTR != mgr) {
                 mgr->remove_cache(auto_save.object->get_key(), auto_save.object, UTIL_CONFIG_NULLPTR);

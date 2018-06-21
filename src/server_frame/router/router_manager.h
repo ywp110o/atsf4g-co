@@ -79,7 +79,7 @@ public:
     virtual int mutable_cache(std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) UTIL_CONFIG_OVERRIDE {
         ptr_t outc;
         int ret = mutable_cache(outc, key, reinterpret_cast<priv_data_t>(priv_data));
-        out = std::dynamic_pointer_cast<router_object_base>(outc);
+        out     = std::dynamic_pointer_cast<router_object_base>(outc);
         return ret;
     }
 
@@ -105,6 +105,8 @@ public:
                 }
 
                 if (out->is_cache_available()) {
+                    // 触发拉取实体并命中cache时要取消移除缓存和降级的计划任务
+                    out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
                     return hello::err::EN_SUCCESS;
                 }
             }
@@ -157,7 +159,7 @@ public:
     virtual int mutable_object(std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) UTIL_CONFIG_OVERRIDE {
         ptr_t outc;
         int ret = mutable_object(outc, key, reinterpret_cast<priv_data_t>(priv_data));
-        out = std::dynamic_pointer_cast<router_object_base>(outc);
+        out     = std::dynamic_pointer_cast<router_object_base>(outc);
         return ret;
     }
 
@@ -182,6 +184,9 @@ public:
                     return res;
                 }
                 if (out->is_object_available()) {
+                    // 触发拉取实体并命中cache时要取消移除缓存和降级的计划任务
+                    out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
+                    out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
                     return hello::err::EN_SUCCESS;
                 }
             }
@@ -197,7 +202,7 @@ public:
             }
 
             // 如果中途被移除，则降级回缓存
-            if (!out->check_flag(router_object_base::flag_t::EN_ROFT_OBJECT_REMOVED)) {
+            if (!out->check_flag(router_object_base::flag_t::EN_ROFT_CACHE_REMOVED)) {
                 on_evt_pull_object(out, priv_data);
                 return hello::err::EN_SUCCESS;
             }
@@ -355,7 +360,7 @@ public:
             }
 
             cache_child = iter->second;
-            cache = std::dynamic_pointer_cast<router_object_base>(iter->second);
+            cache       = std::dynamic_pointer_cast<router_object_base>(iter->second);
             assert(!!cache);
         } else {
             cache_child = std::dynamic_pointer_cast<cache_t>(cache);
@@ -419,7 +424,7 @@ private:
         }
 
         caches_[key] = d;
-        stat_size_ = caches_.size();
+        stat_size_   = caches_.size();
         return true;
     }
 

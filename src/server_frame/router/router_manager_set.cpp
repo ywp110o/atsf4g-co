@@ -75,9 +75,9 @@ int router_manager_set::tick() {
     }
     last_proc_time_ = ::util::time::time_utility::get_now();
 
-    time_t cache_expire = logic_config::me()->get_cfg_logic().router.cache_free_timeout;
+    time_t cache_expire  = logic_config::me()->get_cfg_logic().router.cache_free_timeout;
     time_t object_expire = logic_config::me()->get_cfg_logic().router.object_free_timeout;
-    time_t object_save = logic_config::me()->get_cfg_logic().router.object_save_interval;
+    time_t object_save   = logic_config::me()->get_cfg_logic().router.object_save_interval;
     // 缓存失效定时器
     ret += tick_timer(cache_expire, object_expire, object_save, timers_.default_timer_list, false);
     ret += tick_timer(cache_expire, object_expire, object_save, timers_.fast_timer_list, true);
@@ -90,7 +90,7 @@ int router_manager_set::tick() {
             WLOGERROR("create task_action_auto_save_objects failed");
         } else {
             dispatcher_start_data_t start_data;
-            start_data.private_data = NULL;
+            start_data.private_data     = NULL;
             start_data.message.msg_addr = NULL;
             start_data.message.msg_type = 0;
 
@@ -138,7 +138,12 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
             continue;
         }
 
-        bool cache_expired = false;
+        // 管理器中的对象已被替换或移除则跳过
+        if (mgr->get_base_cache(obj->get_key()) != obj) {
+            timer_list.pop_front();
+            continue;
+        }
+
         bool is_next_timer_fast = is_fast; // 快队列定时器只能进入快队列
         // 正在执行IO任务则不需要任何流程,因为IO任务结束后可能改变状态
         if (false == obj->is_io_running()) {
@@ -147,26 +152,32 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
                 if (obj->get_last_visit_time() + object_expire < last_proc_time_) {
                     save_list_.push_back(auto_save_data_t());
                     auto_save_data_t &auto_save = save_list_.back();
-                    auto_save.object = obj;
-                    auto_save.type_id = cache.type_id;
-                    auto_save.action = EN_ASA_REMOVE_OBJECT;
+                    auto_save.object            = obj;
+                    auto_save.type_id           = cache.type_id;
+                    auto_save.action            = EN_ASA_REMOVE_OBJECT;
+
+                    obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
                 } else if (obj->get_last_save_time() + object_save < last_proc_time_) { // 实体保存
                     save_list_.push_back(auto_save_data_t());
                     auto_save_data_t &auto_save = save_list_.back();
-                    auto_save.object = obj;
-                    auto_save.type_id = cache.type_id;
-                    auto_save.action = EN_ASA_SAVE;
+                    auto_save.object            = obj;
+                    auto_save.type_id           = cache.type_id;
+                    auto_save.action            = EN_ASA_SAVE;
                     obj->refresh_save_time();
                 }
             } else {
                 // 缓存过期
                 if (obj->get_last_visit_time() + cache_expire < last_proc_time_) {
-                    cache_expired = true;
                     save_list_.push_back(auto_save_data_t());
                     auto_save_data_t &auto_save = save_list_.back();
-                    auto_save.object = obj;
-                    auto_save.type_id = cache.type_id;
-                    auto_save.action = EN_ASA_REMOVE_CACHE;
+                    auto_save.object            = obj;
+                    auto_save.type_id           = cache.type_id;
+                    auto_save.action            = EN_ASA_REMOVE_CACHE;
+
+                    obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
+
+                    // 移除任务可以在快队列里复查
+                    is_next_timer_fast = true;
                 }
             }
         } else {
@@ -174,9 +185,8 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
             is_next_timer_fast = true;
         }
 
-        if (!cache_expired) {
-            insert_timer(mgr, obj, is_next_timer_fast);
-        }
+        // 无论什么事件，都需要插入下一个定时器做检查，以防异步流程异常结束
+        insert_timer(mgr, obj, is_next_timer_fast);
         timer_list.pop_front();
         ++ret;
     } while (true);
@@ -210,7 +220,7 @@ bool router_manager_set::insert_timer(router_manager_base *mgr, const std::share
     }
 
     tm_inst->obj_watcher = obj;
-    tm_inst->type_id = mgr->get_type_id();
+    tm_inst->type_id     = mgr->get_type_id();
     if (!is_fast) {
         tm_inst->timeout = util::time::time_utility::get_now() + logic_config::me()->get_cfg_logic().router.default_timer_interval;
     } else {
